@@ -1,0 +1,21 @@
+{
+  "name": "@pi-console/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --import ../../packages/coding-agent/src/experimental/source-resolver.ts src/main.ts",
+    "check": "tsc --noEmit",
+    "test:unit": "node --import ../../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^1.1.0",
+    "@earendil-works/pi-coding-agent": "^1.1.0",
+    "@fastify/static": "10.1.5",
+    "@fastify/websocket": "11.2.0",
+    "fastify": "5.12.5",
+    "zod": "4.1.11"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.1"
+  }
+}

@@ -1,0 +1,545 @@
+import Editor, { loader } from "@monaco-editor/react";
+import {
+	Alert,
+	Button,
+	Chip,
+	Dialog,
+	DialogActions,
+	DialogContent,
+	DialogTitle,
+	IconButton,
+	Tab,
+	Tabs,
+	TextField,
+	Tooltip,
+	useMediaQuery,
+} from "@mui/material";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, FileCode, Folder, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
+import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
+import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
+import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution";
+import "monaco-editor/esm/vs/basic-languages/css/css.contribution";
+import "monaco-editor/esm/vs/basic-languages/html/html.contribution";
+import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
+import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { FileContent, FileEntry, SessionDetail, Workspace } from "../../../shared/src/protocol.ts";
+import { useSpringLayout } from "../hooks/useSpringLayout.ts";
+import { api } from "../services/api.ts";
+import { usePreferences } from "../stores/preferences.ts";
+import { motionTokens, SpringValue } from "../theme/motion.ts";
+import { SpringPages } from "./SpringPages.tsx";
+import { ToolCard } from "./ToolCard.tsx";
+
+// Bundle Monaco locally; loading an editor must not contact a public CDN.
+self.MonacoEnvironment = { getWorker: () => new editorWorker() };
+loader.config({ monaco });
+monaco.editor.defineTheme("pi-light", {
+	base: "vs",
+	inherit: true,
+	rules: [],
+	colors: {
+		"editor.background": "#f7f4f8",
+		"editor.foreground": "#25232a",
+		"editorGutter.background": "#f7f4f8",
+		"editorLineNumber.foreground": "#8b8592",
+		"editorLineNumber.activeForeground": "#51496a",
+		"editor.lineHighlightBackground": "#efebf2",
+		"editor.selectionBackground": "#dcd3eb",
+	},
+});
+monaco.editor.defineTheme("pi-dark", {
+	base: "vs-dark",
+	inherit: true,
+	rules: [],
+	colors: {
+		"editor.background": "#211f26",
+		"editor.foreground": "#e6e0e9",
+		"editorGutter.background": "#211f26",
+		"editorLineNumber.foreground": "#938f99",
+		"editorLineNumber.activeForeground": "#d0bcff",
+		"editor.lineHighlightBackground": "#29262f",
+		"editor.selectionBackground": "#4a4458",
+	},
+});
+
+export function WorkspacePanel({
+	workspace,
+	session,
+	panelWidth,
+	onPanelWidthChange,
+	onResizeStateChange,
+	onFileOpen,
+	onReference,
+	close,
+}: {
+	workspace: Workspace;
+	session: SessionDetail;
+	panelWidth: number;
+	onPanelWidthChange: (width: number) => void;
+	onResizeStateChange: (resizing: boolean) => void;
+	onFileOpen: () => void;
+	onReference: (path: string) => void;
+	close: () => void;
+}) {
+	const [tab, setTab] = useState(0);
+	const [directory, setDirectory] = useState(".");
+	const [search, setSearch] = useState("");
+	const [file, setFile] = useState<FileContent>();
+	const [previewOpen, setPreviewOpen] = useState(false);
+	const [draft, setDraft] = useState("");
+	const [error, setError] = useState("");
+	const [confirmSave, setConfirmSave] = useState(false);
+	const [confirmDiscard, setConfirmDiscard] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [fileMaximized, setFileMaximized] = useState(false);
+	const previewOpenRef = useRef(previewOpen);
+	const previewTransitionId = useRef(0);
+	previewOpenRef.current = previewOpen;
+	const resizePointer = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+	const panelElement = useRef<HTMLElement>(null);
+	const widthSpring = useRef(new SpringValue());
+	const widthInitialized = useRef(false);
+	const fileContentElement = useRef<HTMLDivElement>(null);
+	const browserShareTarget = fileMaximized && previewOpen ? 0 : previewOpen ? 0.36 : 1;
+	const browserShareSpring = useRef(new SpringValue());
+	const browserShareInitialized = useRef(false);
+	if (!browserShareInitialized.current) {
+		browserShareSpring.current.set(browserShareTarget);
+		browserShareInitialized.current = true;
+	}
+	const previousBrowserShareTarget = useRef(browserShareTarget);
+	const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+	const resizing = useRef(false);
+	const visualWidth = widthInitialized.current ? widthSpring.current.position : panelWidth;
+	const client = useQueryClient();
+	const dark = usePreferences((state) => state.dark);
+	const files = useQuery({
+		queryKey: ["files", workspace.id, directory],
+		queryFn: () => api<FileEntry[]>(`/workspaces/${workspace.id}/files?path=${encodeURIComponent(directory)}`),
+		refetchInterval: 10_000,
+	});
+	const visibleFiles = files.data?.filter((entry) => entry.name.toLowerCase().includes(search.toLowerCase())) ?? [];
+	const fileList = useRef<HTMLDivElement>(null);
+	useSpringLayout(fileList, visibleFiles.map((entry) => entry.path).join("\0"));
+	const setFileContentElement = useCallback((element: HTMLDivElement | null) => {
+		fileContentElement.current = element;
+		if (element)
+			element.style.setProperty("--workspace-browser-share", `${browserShareSpring.current.position * 100}%`);
+	}, []);
+	useLayoutEffect(() => {
+		if (previousBrowserShareTarget.current === browserShareTarget && !reducedMotion) return;
+		previousBrowserShareTarget.current = browserShareTarget;
+		const transitionId = previewTransitionId.current;
+		const element = fileContentElement.current;
+		browserShareSpring.current.animate(
+			browserShareTarget,
+			motionTokens.transition.pageSlide.preset,
+			(share) => element?.style.setProperty("--workspace-browser-share", `${share * 100}%`),
+			() => {
+				if (
+					browserShareTarget === 1 &&
+					!previewOpen &&
+					!previewOpenRef.current &&
+					transitionId === previewTransitionId.current
+				) {
+					setFile(undefined);
+					setDraft("");
+				}
+			},
+			reducedMotion,
+		);
+		return () => browserShareSpring.current.stop();
+	}, [browserShareTarget, previewOpen, reducedMotion]);
+	useLayoutEffect(() => {
+		const element = panelElement.current;
+		if (!element) return;
+		if (!widthInitialized.current) {
+			widthInitialized.current = true;
+			widthSpring.current.set(panelWidth);
+			element.style.setProperty("--workspace-panel-width", `${panelWidth}px`);
+			return;
+		}
+		if (resizing.current) {
+			widthSpring.current.set(panelWidth);
+			element.style.setProperty("--workspace-panel-width", `${panelWidth}px`);
+			return;
+		}
+		widthSpring.current.animate(
+			panelWidth,
+			"gentle",
+			(position) => element.style.setProperty("--workspace-panel-width", `${position}px`),
+			() => {},
+			reducedMotion,
+		);
+		return () => widthSpring.current.stop();
+	}, [panelWidth, reducedMotion]);
+	const open = async (path: string) => {
+		try {
+			const content = await api<FileContent>(`/workspaces/${workspace.id}/file?path=${encodeURIComponent(path)}`);
+			previewTransitionId.current += 1;
+			previewOpenRef.current = true;
+			setFile(content);
+			setDraft(content.content);
+			setFileMaximized(false);
+			setPreviewOpen(true);
+			onFileOpen();
+			setError("");
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		}
+	};
+	const save = async () => {
+		if (!file) return;
+		setSaving(true);
+		try {
+			const updated = await api<FileContent>(
+				`/workspaces/${workspace.id}/file`,
+				{ path: file.path, content: draft, revision: file.revision },
+				"PUT",
+			);
+			setFile(updated);
+			setConfirmSave(false);
+			setError("");
+			void client.invalidateQueries({ queryKey: ["files", workspace.id] });
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setSaving(false);
+		}
+	};
+	const closePreview = () => {
+		if (!file) return;
+		if (draft !== file.content) {
+			setConfirmDiscard(true);
+			return;
+		}
+		setPreviewOpen(false);
+		previewOpenRef.current = false;
+		setFileMaximized(false);
+	};
+	const discardPreview = () => {
+		setPreviewOpen(false);
+		previewOpenRef.current = false;
+		setFileMaximized(false);
+		setConfirmDiscard(false);
+	};
+	const extension = file?.path.split(".").pop() ?? "";
+	const directoryDepth = directory === "." ? 0 : directory.split("/").length;
+	const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		resizing.current = true;
+		onResizeStateChange(true);
+		resizePointer.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: panelWidth };
+		event.currentTarget.setPointerCapture(event.pointerId);
+	};
+	const resize = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const activePointer = resizePointer.current;
+		if (!activePointer || activePointer.pointerId !== event.pointerId) return;
+		const maximum = maximumPanelWidth();
+		onPanelWidthChange(
+			Math.min(maximum, Math.max(360, activePointer.startWidth + activePointer.startX - event.clientX)),
+		);
+	};
+	const stopResize = () => {
+		if (!resizing.current) return;
+		resizing.current = false;
+		resizePointer.current = null;
+		onResizeStateChange(false);
+	};
+	const maximumPanelWidth = () => {
+		const layoutWidth = document.querySelector<HTMLElement>(".console-layout")?.clientWidth ?? window.innerWidth;
+		const sidebarWidth = document.querySelector<HTMLElement>(".console-layout > .sidebar-slot")?.offsetWidth ?? 0;
+		return Math.max(360, Math.min(960, layoutWidth - sidebarWidth - 552));
+	};
+	const language =
+		(
+			{
+				ts: "typescript",
+				tsx: "typescript",
+				js: "javascript",
+				jsx: "javascript",
+				py: "python",
+				md: "markdown",
+				yml: "yaml",
+			} as Record<string, string>
+		)[extension] ?? extension;
+	return (
+		<aside
+			ref={panelElement}
+			className={`workspace-panel${file ? " is-file-open" : ""}${fileMaximized ? " is-file-maximized" : ""}`}
+			style={{ "--workspace-panel-width": `${visualWidth}px` } as CSSProperties}
+		>
+			<hr
+				className="workspace-resize-handle"
+				aria-label="调整工作区宽度"
+				aria-orientation="vertical"
+				aria-valuemin={360}
+				aria-valuemax={960}
+				aria-valuenow={panelWidth}
+				tabIndex={0}
+				onPointerDown={startResize}
+				onPointerMove={resize}
+				onPointerUp={stopResize}
+				onPointerCancel={stopResize}
+				onLostPointerCapture={stopResize}
+				onKeyDown={(event) => {
+					if (event.key === "ArrowLeft") onPanelWidthChange(Math.min(maximumPanelWidth(), panelWidth + 24));
+					if (event.key === "ArrowRight") onPanelWidthChange(Math.max(360, panelWidth - 24));
+				}}
+			/>
+			<div className="panel-heading">
+				{fileMaximized && file ? (
+					<>
+						<Tooltip title="返回工作区面板">
+							<IconButton aria-label="返回文件列表" onClick={() => setFileMaximized(false)}>
+								<ArrowLeft size={18} />
+							</IconButton>
+						</Tooltip>
+						<div className="panel-heading-file-copy">
+							<span>{workspace.name}</span>
+							<strong>{file.path.split("/").pop() ?? file.path}</strong>
+						</div>
+						<span className="grow" />
+					</>
+				) : (
+					<>
+						<span>工作区</span>
+						<span className="grow" />
+					</>
+				)}
+				<Tooltip title="隐藏面板">
+					<IconButton aria-label="隐藏工作区面板" onClick={close}>
+						<X size={17} />
+					</IconButton>
+				</Tooltip>
+			</div>
+			<Tabs
+				value={tab}
+				onChange={(_, value: number) => {
+					setTab(value);
+					if (value !== 0) setFileMaximized(false);
+				}}
+				variant="fullWidth"
+				aria-label="工作区面板"
+			>
+				<Tab label="文件" />
+				<Tab label="工具" />
+				<Tab label="活动" />
+			</Tabs>
+			<div className="panel-content">
+				{error && (
+					<Alert severity="error" onClose={() => setError("")}>
+						{error}
+					</Alert>
+				)}
+				<SpringPages className="workspace-tab-pages" pageKey={`tab-${tab}`} pageIndex={tab} axis="horizontal">
+					{tab === 0 ? (
+						<div
+							ref={setFileContentElement}
+							className={`workspace-tab-content panel-content-files${fileMaximized ? " is-file-maximized" : ""}`}
+							style={
+								{
+									"--workspace-browser-share": `${browserShareSpring.current.position * 100}%`,
+								} as CSSProperties
+							}
+						>
+							<SpringPages
+								className="workspace-directory-pages"
+								pageKey={directory}
+								pageIndex={directoryDepth}
+								axis="horizontal"
+							>
+								<div className="workspace-directory-page">
+									<div className="file-toolbar">
+										{directory !== "." && (
+											<Tooltip title="返回上级目录">
+												<IconButton
+													className="directory-back-button"
+													aria-label="返回上级目录"
+													onClick={() => setDirectory(directory.split("/").slice(0, -1).join("/") || ".")}
+												>
+													<ArrowLeft size={17} />
+												</IconButton>
+											</Tooltip>
+										)}
+										<span className="path-label">{directory === "." ? workspace.name : directory}</span>
+										<IconButton aria-label="刷新文件" onClick={() => void files.refetch()}>
+											<RefreshCw size={16} />
+										</IconButton>
+									</div>
+									<TextField
+										fullWidth
+										placeholder="筛选当前目录…"
+										value={search}
+										onChange={(event) => setSearch(event.target.value)}
+										inputProps={{ "aria-label": "筛选文件" }}
+									/>
+									{files.error && <Alert severity="error">{files.error.message}</Alert>}
+									<div ref={fileList} className="file-list">
+										{visibleFiles.map((entry) => (
+											<button
+												type="button"
+												className="file-row"
+												key={entry.path}
+												onClick={() => (entry.directory ? setDirectory(entry.path) : void open(entry.path))}
+											>
+												{entry.directory ? <Folder size={17} /> : <FileCode size={17} />}
+												<span>{entry.name}</span>
+												<small>
+													{entry.directory ? "" : `${Math.max(1, Math.round(entry.size / 1024))} KB`}
+												</small>
+											</button>
+										))}
+									</div>
+									{files.data?.length === 0 && <p className="muted">此目录没有可显示的文件。</p>}
+								</div>
+							</SpringPages>
+							{file && (
+								<div className={`file-preview-transition${previewOpen ? " is-open" : ""}`}>
+									<div className="file-preview-content">
+										<div className="file-preview">
+											<div className="preview-title">
+												<FileCode size={16} />
+												<span className="path-label" title={file.path}>
+													{file.path.split("/").pop() ?? file.path}
+												</span>
+												{draft !== file.content && <Chip size="small" label="未保存" />}
+												<Tooltip title={fileMaximized ? "收起文件预览" : "展开文件预览"}>
+													<IconButton
+														aria-label={fileMaximized ? "收起文件预览" : "展开文件预览"}
+														onClick={() => setFileMaximized((value) => !value)}
+													>
+														{fileMaximized ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+													</IconButton>
+												</Tooltip>
+												<Tooltip title="取消预览">
+													<IconButton aria-label="取消文件预览" onClick={closePreview}>
+														<X size={16} />
+													</IconButton>
+												</Tooltip>
+											</div>
+											<div className="file-editor-frame">
+												<Editor
+													height="100%"
+													path={file.path}
+													language={language}
+													value={draft}
+													theme={dark ? "pi-dark" : "pi-light"}
+													onChange={(value) => setDraft(value ?? "")}
+													options={{
+														minimap: { enabled: false },
+														fontSize: 13,
+														scrollBeyondLastLine: false,
+														wordWrap: "on",
+														automaticLayout: true,
+													}}
+												/>
+											</div>
+											<div className="preview-actions">
+												<Button size="small" onClick={() => onReference(file.path)}>
+													引用文件
+												</Button>
+												<Button
+													size="small"
+													disabled={draft !== file.content}
+													onClick={() => void open(file.path)}
+												>
+													重新加载
+												</Button>
+												<Button
+													size="small"
+													variant="contained"
+													disabled={draft === file.content}
+													onClick={() => setConfirmSave(true)}
+												>
+													保存
+												</Button>
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
+						</div>
+					) : tab === 1 ? (
+						<div className="workspace-tab-content">
+							<span className="eyebrow">真实工具执行 · {session.tools.length}</span>
+							{session.tools.length ? (
+								session.tools.map((tool) => <ToolCard key={tool.id} tool={tool} />)
+							) : (
+								<p className="muted">Agent 调用工具后，输入和结果会显示在这里。</p>
+							)}
+						</div>
+					) : (
+						<div className="workspace-tab-content">
+							<div className="activity-summary">
+								<span className="eyebrow">当前会话</span>
+								<strong>{session.title}</strong>
+								<span>{session.model?.name ?? "尚未配置模型"}</span>
+								<span className="muted">{session.model?.provider ?? ""}</span>
+							</div>
+							{session.tokens && (
+								<div className="token-row">
+									<div>
+										<strong>{session.tokens.input.toLocaleString()}</strong>
+										<small>输入 Token</small>
+									</div>
+									<div>
+										<strong>{session.tokens.output.toLocaleString()}</strong>
+										<small>输出 Token</small>
+									</div>
+								</div>
+							)}
+							<span className="eyebrow">活动时间线</span>
+							<ol className="timeline">
+								{session.activity
+									.filter((item) => item.type !== "message.delta")
+									.slice(-50)
+									.reverse()
+									.map((item) => (
+										<li key={item.id}>
+											<span>{item.description}</span>
+											<small>{new Date(item.timestamp).toLocaleTimeString()}</small>
+										</li>
+									))}
+							</ol>
+						</div>
+					)}
+				</SpringPages>
+			</div>
+			<Dialog open={confirmSave} onClose={() => !saving && setConfirmSave(false)}>
+				<DialogTitle>保存工作区文件？</DialogTitle>
+				<DialogContent>
+					<p>将覆盖 {file?.path}。保存前会检查文件是否被其他操作修改。</p>
+					{error && <Alert severity="error">{error}</Alert>}
+				</DialogContent>
+				<DialogActions>
+					<Button disabled={saving} onClick={() => setConfirmSave(false)}>
+						取消
+					</Button>
+					<Button disabled={saving} onClick={() => void save()}>
+						确认保存
+					</Button>
+				</DialogActions>
+			</Dialog>
+			<Dialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)}>
+				<DialogTitle>放弃未保存的修改？</DialogTitle>
+				<DialogContent>
+					<p>取消预览会丢弃当前文件尚未保存的修改。</p>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={() => setConfirmDiscard(false)}>继续编辑</Button>
+					<Button color="error" onClick={discardPreview}>
+						放弃修改
+					</Button>
+				</DialogActions>
+			</Dialog>
+		</aside>
+	);
+}

@@ -38,6 +38,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "../../shared/src/protocol.ts";
+import { BuildMark } from "./components/BuildMark.tsx";
 import { SpringCollapse } from "./components/SpringCollapse.tsx";
 import { SpringPages } from "./components/SpringPages.tsx";
 import { SpringSize } from "./components/SpringSize.tsx";
@@ -54,9 +55,9 @@ function ServiceUnavailable({ refresh, message }: { refresh: () => void; message
 	return (
 		<div className="login-page">
 			<div className="login-surface">
-				<img className="service-brand-icon" src="/app-icon.png" alt="" />
-				<h1>可构 Kego</h1>
-				<p>连接你的本地 Agent 工作台</p>
+				<BuildMark className="service-brand-icon" />
+				<h1>AllWeave Build · 构序</h1>
+				<p>让想法交织，让代码成序。</p>
 				<Alert severity="error">服务端未连接：{message}</Alert>
 				<Button onClick={refresh}>重新连接</Button>
 			</div>
@@ -378,8 +379,12 @@ function Console() {
 	const sidebar = (
 		<nav className="sidebar" aria-label="主导航">
 			<NavLink to="/" className="brand">
-				<span className="brand-wordmark-frame">
-					<img className="brand-wordmark" src="/brand-logo.png" alt="可构 Kego" />
+				<BuildMark className="brand-symbol" />
+				<span className="brand-copy">
+					<strong>
+						AllWeave <span className="brand-product">Build</span>
+					</strong>
+					<small>构序 / 万象成序</small>
 				</span>
 			</NavLink>
 			<Button
@@ -534,7 +539,7 @@ function Console() {
 					设置
 				</NavLink>
 				<div className="theme-row">
-					<span>本地工作台</span>
+					<span>构序 · 本地工作台</span>
 					<Tooltip title={preferences.dark ? "切换浅色主题" : "切换深色主题"}>
 						<IconButton aria-label="切换主题" onClick={preferences.toggleTheme}>
 							{preferences.dark ? <Sun size={18} /> : <Moon size={18} />}
@@ -716,7 +721,7 @@ function Console() {
 								onChange={(event) => setPath(event.target.value)}
 							/>
 							<Alert severity="warning" className="workspace-picker-warning">
-								授权后，Kego 可读写所选目录及其子目录。可信扩展和获准命令也会以当前 Windows 用户权限运行。
+								授权后，构序可读写所选目录及其子目录。可信扩展和获准命令也会以当前 Windows 用户权限运行。
 							</Alert>
 						</div>
 					</div>
@@ -744,7 +749,7 @@ function Console() {
 						label="项目别名"
 						size="small"
 						value={workspaceName}
-						helperText="只修改 Kego 中显示的名称，不会重命名或移动项目文件夹。"
+						helperText="只修改构序中显示的名称，不会重命名或移动项目文件夹。"
 						onChange={(event) => setWorkspaceName(event.target.value)}
 					/>
 					<div className="workspace-manage-path">
@@ -785,7 +790,7 @@ function Console() {
 				<DialogContent className="workspace-manage-content">
 					<Alert severity="warning" className="workspace-delete-warning">
 						<p>
-							将从 Kego 移除“{workspaceDeleteTarget?.name}”及其 {workspaceDeleteSessions.length} 个聊天。
+							将从构序移除“{workspaceDeleteTarget?.name}”及其 {workspaceDeleteSessions.length} 个聊天。
 						</p>
 						<p>项目文件夹、其中的文件和已保存的会话文件都会保留。</p>
 						{sessions.isPending && <p>正在读取会话状态…</p>}
@@ -907,7 +912,7 @@ export function App() {
 			"--motion-fast": `${motionTokens.duration.fast}ms ${motionTokens.easing.standard}`,
 			"--motion-normal": `${motionTokens.duration.normal}ms ${motionTokens.easing.standard}`,
 			"--wallpaper-image": wallpaper ? `url("${wallpaper}")` : "none",
-			"--wallpaper-overlay": wallpaper ? (dark ? "rgb(20 18 24 / 78%)" : "rgb(255 251 254 / 78%)") : "transparent",
+			"--wallpaper-overlay": wallpaper ? (dark ? "rgb(17 19 24 / 78%)" : "rgb(255 255 255 / 78%)") : "transparent",
 		} as CSSProperties & Record<`--${string}`, string>;
 	}, [dark, accentColor, fontId, wallpaper]);
 	useLayoutEffect(() => {

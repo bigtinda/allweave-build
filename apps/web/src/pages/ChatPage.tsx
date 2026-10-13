@@ -20,6 +20,7 @@ import type { CSSProperties, MutableRefObject } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ModelOption, SessionSummary, Workspace } from "../../../shared/src/protocol.ts";
+import { BuildMark } from "../components/BuildMark.tsx";
 import { Composer } from "../components/Composer.tsx";
 import { Markdown } from "../components/Markdown.tsx";
 import { SpringDisclosure } from "../components/SpringDisclosure.tsx";
@@ -176,17 +177,23 @@ export function ChatPage({
 					<Menu />
 				</IconButton>
 				<div className="welcome-content">
+					<span className="welcome-edition">ALLWEAVE / BUILD</span>
 					<div className="welcome-mark">
-						<Sparkles size={36} />
+						<BuildMark />
 					</div>
-					<span className="eyebrow">可构 Kego</span>
-					<h1>从想法，到完成。</h1>
+					<span className="eyebrow">构序 · AI 编程工作台</span>
+					<h1>
+						让想法交织。
+						<br />
+						让代码成序。
+					</h1>
 					<p>
-						与你的代码工作区协作。
-						<br />让 Kego 阅读文件、执行工具，并完成真实任务。
+						连接模型、项目与工具，把构想写进真实代码。
+						<br />
+						从理解项目到完成修改，每一步执行都清晰可见。
 					</p>
 					<Button variant="contained" size="large" onClick={onNew}>
-						新建会话
+						开始构建
 					</Button>
 					<div className="welcome-capabilities">
 						<span>
@@ -202,6 +209,7 @@ export function ChatPage({
 							可见的执行过程
 						</span>
 					</div>
+					<span className="welcome-signature">一念成潮，万象成序。</span>
 				</div>
 			</main>
 		);
@@ -286,7 +294,7 @@ export function ChatPage({
 						>
 							{!session.messages.length && (
 								<div className="conversation-empty">
-									<Sparkles size={28} />
+									<BuildMark className="conversation-build-mark" />
 									<h2>今天要完成什么？</h2>
 									<p>
 										工作区已连接到 <strong>{workspace?.name}</strong>。<br />
@@ -302,7 +310,7 @@ export function ChatPage({
 										) : (
 											<>
 												<Sparkles size={16} />
-												Kego
+												构序
 											</>
 										)}
 										<time>

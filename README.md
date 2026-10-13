@@ -1,206 +1,196 @@
 <p align="center">
-  <a href="https://pi.dev">
-    <img alt="pi logo" src="https://pi.dev/logo-auto.svg" width="128">
-  </a>
-</p>
-<p align="center">
-  <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
-  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@earendil-works/pi-coding-agent?style=flat-square" /></a>
+  <img src="docs/brand/build-banner.svg" alt="AllWeave Build · 构序 — 一念成潮，万象成序。" width="100%">
 </p>
 
-> New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-# Pi
-
-Pi is a minimal, extensible agent harness that you can make your own.
-
-Adapt Pi to your workflows, not the other way around. Customize Pi with [extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), and [themes](packages/coding-agent/docs/themes.md). Bundle them as [Pi packages](packages/coding-agent/docs/packages.md) and share via npm or git.
-
-Pi ships with powerful defaults but skips features like sub-agents and plan mode. Ask Pi to build what you want, or install a package that does it your way.
-
-Use Pi [interactively](packages/coding-agent/docs/usage.md), automate it in [print or JSON mode](packages/coding-agent/docs/cli.md), control it over [RPC](packages/coding-agent/docs/rpc.md), or build apps with the [Pi TypeScript SDK](packages/coding-agent/docs/sdk.md). See [OpenClaw](https://github.com/OpenClaw/OpenClaw) for a real-world integration.
-
-## Getting started
-
-Install the command-line interface:
-
-```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-On Windows:
-
-```shell
-powershell -c "irm https://pi.dev/install.ps1 | iex"
-```
-
-The installer pins all dependencies and updates Pi with `pi update`. Alternatively, install directly with npm, which does not pin transitive dependencies:
-
-```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-```
-
-Pi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed. Pi does not require dependency lifecycle scripts for a normal npm installation.
-
-Start Pi in the directory where you want it to work:
-
-```bash
-cd /path/to/project
-pi
-```
-
-For a built-in AI provider, run `/login` inside Pi to connect a subscription or API key. Then give Pi a task.
-
-See the [documentation](https://pi.dev/docs/latest) for full setup and usage instructions, or [visit pi.dev](https://pi.dev) for demos.
-
-## Run with Nix
-
-```bash
-nix run github:earendil-works/pi/stable
-```
-
-`stable` points at the latest release. Install it with `nix profile add github:earendil-works/pi/stable` and update with `nix profile upgrade pi`. Use a release tag such as `github:earendil-works/pi/v1.0.0` to pin a version, or `github:earendil-works/pi` for unreleased changes on `main`. Nix builds Pi from source.
-
-Supports ARM64 and x86-64 on Linux and macOS. Use `nix build .` or `nix run .` to build or run your checkout.
-
-Nix builds are offline, so the bundled model data comes from a pi.dev model catalog revision pinned in `nix/model-catalog.json`. At runtime, Pi still overlays newer catalog data from pi.dev as usual. The Nix workflow replaces the pin on `main` when it no longer matches the checkout, for example after a provider is added or gains a new model type. To refresh it by hand:
-
-```bash
-npm run update:model-catalog-pin
-```
-
-## Packages
-
-This monorepo contains the Pi CLI and its supporting libraries.
-
-| Package | Description |
-|---------|-------------|
-| **[@earendil-works/chord](packages/chord)** | Standalone application-composition runtime for services, replicated state, RPC, and plugins |
-| **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
-| **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@earendil-works/pi-durable](packages/durable)** | Durable conversation, task, and document runtime |
-| **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
-
-For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
-
-## Permissions & Containerization
-
-Pi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it.
-
-If you need stronger boundaries, containerize or sandbox Pi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for three patterns:
-
-- **Gondolin extension**: keep `pi` and provider auth on the host while routing built-in tools and `!` commands into a local Linux micro-VM.
-- **Plain Docker**: run the whole `pi` process in a local container for simple isolation.
-- **OpenShell**: run the whole `pi` process in a policy-controlled sandbox.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for Pi can also be found in [RFCs](https://rfc.earendil.com/keyword/pi/).
-
-## Development
-
-```bash
-npm install --ignore-scripts  # Install all dependencies without running lifecycle scripts
-npm run build         # Refresh model data, then build all packages
-npm run build:offline # Rebuild using existing model data without network access
-npm run check         # Lint, format, and type check
-./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./pi-test.sh         # Run pi from sources (can be run from any directory)
-```
-
-### Using local packages outside the monorepo
-
-Build every public package into one coherent local artifact set:
-
-```bash
-npm run pack:packages -- --out .artifacts/pi-packages
-```
-
-This refreshes model data before building `pi-ai`. To avoid network access when
-model data is already hydrated, pass `--offline-model-data`.
-
-Then configure an external project to consume one package and resolve all of
-its Pi dependencies from the same artifact set. npm is the default:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/pi-packages/manifest.json \
-  --consumer ../my-project \
-  --package @earendil-works/pi-durable \
-  --package @earendil-works/pi-agent-core
-cd ../my-project
-npm install --ignore-scripts
-```
-
-For a pnpm project, point `--consumer` at the workspace root:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/pi-packages/manifest.json \
-  --consumer ../my-project \
-  --package @earendil-works/pi-agent-core \
-  --package-manager pnpm
-cd ../my-project
-pnpm install --ignore-scripts
-```
-
-Repeat `--package` for each direct dependency. The command updates the
-consumer's `package.json` with content-addressed local `file:` references. It
-writes transitive overrides to `package.json` for npm or `pnpm-workspace.yaml`
-for pnpm. Keep the artifact directory available while installing or updating
-the consumer. Re-run both commands after changing Pi source.
-
-## Building standalone binaries from release source
-
-GitHub releases include a versioned source archive covered by the release's `SHA256SUMS` file. Extract it and run the same build script used for the official standalone binaries:
-
-```bash
-VERSION="<release-version>"
-tar -xzf "pi-${VERSION}-source.tar.gz"
-cd "pi-${VERSION}"
-./scripts/build-binaries.sh --offline-model-data --platform linux-x64 --out "$PWD/out"
-```
-
-The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the executable with its runtime assets; pass `--skip-install` if dependencies are already provided.
-
-## Supply-chain hardening
-
-We treat npm dependency changes as reviewed code changes.
-
-- Direct external dependencies are pinned to exact versions. Internal workspace packages remain version-ranged.
-- `.npmrc` sets `save-exact=true` and `min-release-age=2` to avoid same-day dependency releases during npm resolution.
-- `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1` is set.
-- `npm run check` verifies pinned direct deps, native TypeScript import compatibility, and the generated coding-agent install lock.
-- The pi.dev installer installs from `packages/coding-agent/install-lock/`, generated from the root lockfile, to pin transitive deps. The npm package does not pin transitive deps.
-- Local release smoke tests and npm publication use the same tarball packer; npm publishes the validated tarballs rather than repacking workspace directories.
-- Local release installs, documented npm installs, and `pi update --self` use `--ignore-scripts` where supported.
-- CI installs with `npm ci --ignore-scripts`, and a scheduled GitHub workflow runs `npm audit --omit=dev` plus `npm audit signatures --omit=dev`.
-- Install lock generation has an explicit allowlist for dependency lifecycle scripts; new lifecycle-script deps fail checks until reviewed.
-
-## Share your OSS coding agent sessions
-
-If you use Pi or other coding agents for open source work, please share your sessions.
-
-Public OSS session data helps improve coding agents with real-world tasks, tool use, failures, and fixes instead of toy benchmarks.
-
-For the full explanation, see [this post on X](https://x.com/badlogicgames/status/2037811643774652911).
-
-To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi-share-hf). Read its README.md for setup instructions. All you need is a Hugging Face account, the Hugging Face CLI, and `pi-share-hf`.
-
-You can also watch [this video](https://x.com/badlogicgames/status/2041151967695634619), where I show how I publish my `pi-mono` sessions.
-
-I regularly publish my own `pi-mono` work sessions here:
-
-- [badlogicgames/pi-mono on Hugging Face](https://huggingface.co/datasets/badlogicgames/pi-mono)
-
-## License
-
-MIT
+<h1 align="center">AllWeave Build · 构序</h1>
 
 <p align="center">
-  <a href="https://pi.dev">pi.dev</a> domain graciously donated by
-  <br /><br />
-  <a href="https://exe.dev"><img src="packages/coding-agent/docs/images/exy.png" alt="Exy mascot" width="48" /><br />exe.dev</a>
+  <strong>让智能形成组织，让协作突破边界。</strong><br>
+  从理解项目、修改代码到执行工具，把开发过程放进一个本地工作台。
+</p>
+
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#工作方式">工作方式</a> ·
+  <a href="#windows-桌面版">桌面版</a> ·
+  <a href="#开发与扩展">开发与扩展</a> ·
+  <a href="#项目来源与许可证">项目来源</a>
+</p>
+
+---
+
+## 从想法到代码
+
+**AllWeave Build** 是 AllWeave「万象成序」品牌体系中的 **Build · 构序**，面向本地项目的 AI 编程工作台。本仓库基于 Pi，提供浏览器工作台、Windows 桌面封装，以及可扩展的编程代理底层。
+
+你可以选定项目目录、连接模型、提出任务，在同一个界面查看回复与工具执行过程，并在需要时批准操作。会话和配置保存在本机，模型请求由本地服务和 Pi 内核发出。
+
+界面与桌面程序统一使用 **AllWeave Build · 构序** 品牌。底层包名保留 `@earendil-works/pi-*`，项目内置 Pi `1.1.0` Windows x64 内核。
+
+Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-build/releases) 下载便携包，解压后运行 `AllWeaveBuild.exe`。包内包含 Node.js 和 Pi 内核；模型凭据仍需自行配置，系统需具备 WebView2 Runtime。
+
+![AllWeave Build 构序工作台](docs/brand/workbench.png)
+
+| 能力 | 使用方式 |
+| --- | --- |
+| 项目工作区 | 添加本机文件夹，为不同项目组织会话 |
+| 编程会话 | 向代理描述任务，查看流式回复与工具执行过程，恢复已有上下文 |
+| 模型与供应商 | 使用 Pi 原生 API Key / OAuth 流程，或添加兼容模型接口 |
+| 工具确认 | 按访问模式处理命令、文件写入及自定义工具操作 |
+| 资源与扩展 | 使用 Skills、Extensions、提示模板和 Pi packages 调整工作流 |
+| Windows 桌面 | 使用 Tauri 封装本地服务，以原生窗口打开工作台 |
+
+## 快速开始
+
+当前 Web 工作台通过 **Windows x64 Pi 内核**运行编程会话。准备 Windows x64、Git 和 **Node.js 24.3 或更新版本**。Pi 底层 CLI 的最低 Node.js 要求为 22.19；Web 工作台使用更高要求。
+
+### 1. 获取项目并安装依赖
+
+```powershell
+git clone https://github.com/bigtinda/allweave-build.git
+cd allweave-build
+npm ci --ignore-scripts
+npm run hydrate:model-data
+Copy-Item apps/server/.env.example .env
+```
+
+`hydrate:model-data` 需要网络连接，用于准备底层模型数据。已有 `.env` 时直接编辑现有文件，保留自己的配置。
+
+### 2. 核对内置 Pi 内核
+
+仓库根目录已包含 `pi-windows-x64.zip`，克隆后无需另行下载 Pi。内核版本为 `1.1.0`，校验值记录在 [pi-windows-x64.zip.sha256](pi-windows-x64.zip.sha256)。
+
+保留原始 ZIP，无需手动解压；首次启动会校验并解压到 `.pi-console/pi-kernel/`。更新时可用 [Pi 上游发行页](https://github.com/earendil-works/pi/releases) 的 Windows x64 ZIP 替换，并同步更新 SHA-256 记录。
+
+如需放在其他位置，在根目录 `.env` 中指定路径：
+
+```dotenv
+PI_CONSOLE_KERNEL_ZIP=D:/tools/pi-windows-x64.zip
+```
+
+### 3. 启动工作台
+
+```powershell
+npm run dev:web
+```
+
+也可以双击根目录的 `start-web.cmd`。打开 **<http://127.0.0.1:5173>**，在“模型与设置”中配置供应商，再选择项目目录并创建会话。
+
+请使用 `127.0.0.1`：本地服务会校验 Host 与请求来源，`localhost` 不能直接替换这个地址。
+
+## 工作方式
+
+1. **选择项目**：添加并授权本机项目文件夹；也可在 `.env` 的 `PI_CONSOLE_ROOTS` 中配置目录，Windows 使用分号分隔。
+2. **连接模型**：配置供应商凭据并选择模型，也可添加兼容接口。
+3. **描述任务**：例如“解释登录流程”“修复这个报错”或“为这个函数补充测试”。
+4. **检查执行**：查看回复与工具事件，按当前访问模式确认操作，再检查实际代码改动。
+5. **继续会话**：回到已有会话，恢复 Pi 保存的上下文。
+
+### 配置与数据
+
+| 位置或变量 | 用途 |
+| --- | --- |
+| `.env` | 本地服务配置；示例见 [apps/server/.env.example](apps/server/.env.example) |
+| `PI_CONSOLE_ROOTS` | 工作区目录，如 `D:/projects/app;D:/projects/library` |
+| `PI_CONSOLE_KERNEL_ZIP` | Pi Windows x64 内核 ZIP 的位置 |
+| `PI_CONSOLE_DATA_DIR` | 控制台数据目录，默认 `.pi-console/` |
+| `.pi-console/console.sqlite` | 会话界面状态 |
+| `.pi-console/sessions/` | Pi 原生 JSONL 会话记录 |
+| `.pi-console/agent/` | 默认 Pi 配置目录，包含供应商认证和自定义模型配置 |
+
+API Key 和 OAuth 凭据由本地服务管理，浏览器不直接调用模型 API。项目内容仍会随请求发送给所选模型供应商；“本地工作台”表示程序和会话数据存储在本机。不要把凭据写入 `VITE_*` 变量或提交到 Git。
+
+### 访问边界
+
+工作台面向本机单用户与可信项目，服务默认只监听 `127.0.0.1`，并校验访问令牌、Host 和 Origin。工具访问会检查授权目录与路径。
+
+Pi 内核、可信扩展和获准命令使用当前 Windows 用户权限。界面中的工具确认不提供操作系统级隔离；需要更强隔离时，参阅 [容器与沙箱说明](packages/coding-agent/docs/containerization.md)。
+
+## Windows 桌面版
+
+桌面版用 Tauri 启动本地 Node.js 服务，并在 Windows 原生窗口中打开工作台。关闭窗口时会停止服务进程树。
+
+自行打包需要 **Rust 1.90 或更新版本**、Visual Studio C++ Build Tools、WebView2 Runtime，以及上述依赖和仓库根目录的 `pi-windows-x64.zip`。
+
+在 PowerShell 中执行：
+
+```powershell
+.\desktop\build-portable.ps1 -BuildWeb
+```
+
+产物为 `desktop/dist/AllWeaveBuildPortable.zip`。解压后运行 `AllWeaveBuild.exe`，无需安装程序。包内自带 Node.js 和 Pi 内核。目录必须可写，会话、模型配置、内核和 WebView 数据保存在程序旁的 `data/` 目录。
+
+默认授权同目录下的 `workspaces/`。在 `workspace-roots.txt` 中逐行加入其他项目目录后重启程序。固定版本 WebView2 的打包方式见 [桌面版说明](desktop/README.md)。
+
+## 开发与扩展
+
+### 仓库结构
+
+```text
+apps/
+  web/          React、Vite、MUI、Monaco 前端
+  server/       Fastify、WebSocket、SQLite 本地服务
+  shared/       前后端共享协议
+desktop/        Tauri Windows 桌面封装与便携包脚本
+packages/       Pi 编程代理与底层库
+scripts/        开发、校验与打包工具
+docs/brand/     AllWeave Build README 品牌资源
+```
+
+浏览器通过 HTTP / WebSocket 连接本地服务，本地服务通过 Pi 的 RPC（进程间请求与事件协议）控制编程内核。模型调用与工具执行在服务端和内核中完成。
+
+### 常用命令
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev:web` | 同时启动 Web 前端与本地服务 |
+| `npm run check:web` | 检查 Web 前后端 TypeScript 类型 |
+| `npm run check` | 仓库格式、静态检查、类型及依赖校验；会写入格式修正 |
+| `npm run build:web` | 构建生产前端 |
+| `npm run build` | 刷新模型数据并构建底层包 |
+| `npm run build:offline` | 使用已有模型数据构建底层包 |
+| `./test.sh` | 在隔离环境中运行非真实模型调用测试；Windows 使用 Git Bash |
+| `.\pi-test.ps1` | 在 PowerShell 中运行 Pi 源码 CLI |
+
+构建生产前端后，可运行 `npm run dev --workspace=@pi-console/server`，由本地服务在 **<http://127.0.0.1:8787>** 提供前端资源。具体配置见 [Web 工作台说明](apps/README.md)。
+
+### 扩展入口
+
+- [Skills](packages/coding-agent/docs/skills.md)：为代理提供可复用的任务说明和资源。
+- [Extensions](packages/coding-agent/docs/extensions.md)：扩展工具、事件与交互行为。
+- [提示模板](packages/coding-agent/docs/prompt-templates.md)：复用常见任务的提示内容。
+- [Pi packages](packages/coding-agent/docs/packages.md)：通过 npm 或 Git 分发扩展资源。
+- [TypeScript SDK](packages/coding-agent/docs/sdk.md)：在自己的应用中使用 Pi 编程代理。
+- [RPC](packages/coding-agent/docs/rpc.md)：从外部进程控制代理。
+- [CLI](packages/coding-agent/docs/cli.md) 与 [终端主题](packages/coding-agent/docs/themes.md)：使用和定制底层命令行界面。
+
+底层包文档：[模型 API](packages/ai/README.md) · [代理运行时](packages/agent/README.md) · [编程 CLI](packages/coding-agent/README.md) · [持久化运行时](packages/durable/README.md) · [终端 UI](packages/tui/README.md) · [应用组合](packages/chord/README.md) · [遥测](packages/telemetry/README.md)。
+
+Pi 原始仓库介绍中的 Nix、独立二进制构建、本地包分发与供应链说明保留在 [README.pi.md](README.pi.md)。开发前请阅读 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 品牌表达
+
+本项目采用 **Build · 构序** 标识：代码括号与无限交织线条结合，表达从想法到实现的持续构建。**Write · 言序** 与 **Team · 共序** 属于同一品牌体系，本仓库的产品范围为 Build。
+
+| 色彩 | 色值 | 角色 |
+| --- | --- | --- |
+| Klein Blue | `#002FA7` | 品牌主色与关键强调 |
+| Graphite | `#111111` | 主要文字 |
+| Gray | `#6B7280` | 辅助文字 |
+| Light Gray | `#E5E7EB` | 分隔与背景 |
+| White | `#FFFFFF` | 基础色与留白 |
+
+README 采用白底、蓝色标识与清晰的阅读层级。页首使用提供的 Build 标识，资源存放在 [docs/brand/](docs/brand/)。
+
+## 项目来源与许可证
+
+本项目基于 [earendil-works/pi](https://github.com/earendil-works/pi)，保留 Pi 底层包与原有版权信息，并在此基础上提供本地 Web 工作台和 Windows 桌面封装。
+
+代码使用 [MIT License](LICENSE)，原始版权声明见许可证文件。
+
+---
+
+<p align="center">
+  <strong>AllWeave Build · 构序</strong><br>
+  一念成潮，万象成序。
 </p>

@@ -149,7 +149,7 @@ export function PersonalizationPanel() {
 							))}
 						</Select>
 					</FormControl>
-					<div className="font-sample">Kego 工作台 · 页面字体预览</div>
+					<div className="font-sample">AllWeave Build · 构序 · 一念成潮，万象成序。</div>
 				</div>
 			</div>
 			{error && (

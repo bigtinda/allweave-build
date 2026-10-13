@@ -227,7 +227,7 @@ export class ProviderManager {
 			},
 		};
 		void runtime
-			.login(providerId, type, interaction, { agentName: "Kego Web Console" })
+			.login(providerId, type, interaction, { agentName: "AllWeave Build" })
 			.then(() => {
 				job.status = "succeeded";
 			})

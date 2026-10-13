@@ -84,7 +84,7 @@ function pickWindowsFolder(): Promise<string | undefined> {
 		"$ErrorActionPreference = 'Stop'",
 		"Add-Type -AssemblyName System.Windows.Forms",
 		"$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
-		"$dialog.Description = '选择要授权给 Kego 的项目文件夹'",
+		"$dialog.Description = '选择要授权给构序的项目文件夹'",
 		"$dialog.ShowNewFolderButton = $false",
 		"$dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer",
 		"try {",

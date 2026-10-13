@@ -169,7 +169,7 @@ export function Composer({
 				)}
 				<textarea
 					ref={textareaRef}
-					aria-label="向 Kego 发送任务"
+					aria-label="向构序发送任务"
 					placeholder="描述你的任务，或引用工作区文件…"
 					value={text}
 					onChange={(event) => setText(event.target.value)}

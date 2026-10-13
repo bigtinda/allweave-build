@@ -1,7 +1,8 @@
-export const DEFAULT_ACCENT_COLOR = "#6750A4";
+export const DEFAULT_ACCENT_COLOR = "#002FA7";
 
 export const accentPresets = [
-	{ name: "紫罗兰", color: DEFAULT_ACCENT_COLOR },
+	{ name: "构序 · 克莱因蓝", color: DEFAULT_ACCENT_COLOR },
+	{ name: "紫罗兰", color: "#6750A4" },
 	{ name: "海蓝", color: "#3F66B5" },
 	{ name: "青绿", color: "#087F72" },
 	{ name: "森林", color: "#4D7852" },
@@ -76,25 +77,28 @@ function relativeLuminance(color: string): number {
 }
 
 function contrastingText(color: string): string {
-	return relativeLuminance(color) > 0.42 ? "#1C1B1F" : "#FFFFFF";
+	const luminance = relativeLuminance(color);
+	const whiteContrast = 1.05 / (luminance + 0.05);
+	const graphiteContrast = (luminance + 0.05) / (relativeLuminance("#111111") + 0.05);
+	return graphiteContrast > whiteContrast ? "#111111" : "#FFFFFF";
 }
 
 export function createThemeColors(dark: boolean, accentColor: string): ThemeColors {
 	const accent = /^#[\da-f]{6}$/iu.test(accentColor) ? accentColor : DEFAULT_ACCENT_COLOR;
-	const primary = dark ? mixColors(accent, "#FFFFFF", 0.38) : accent;
-	const surface = dark ? "#141218" : "#FFFBFE";
+	const primary = dark ? mixColors(accent, "#FFFFFF", 0.58) : accent;
+	const surface = dark ? "#111318" : "#FFFFFF";
 	return {
 		primary,
 		onPrimary: contrastingText(primary),
 		surface,
-		container: dark ? mixColors("#211F26", accent, 0.14) : mixColors("#F3EDF7", accent, 0.06),
-		containerLow: dark ? mixColors("#1D1B20", accent, 0.1) : mixColors("#F7F2FA", accent, 0.04),
-		selected: dark ? mixColors("#4A4458", accent, 0.34) : mixColors("#FFFFFF", accent, 0.18),
-		onSelected: dark ? "#F3EFFA" : "#1D192B",
-		text: dark ? "#E6E0E9" : "#1C1B1F",
-		muted: dark ? "#CAC4D0" : "#49454F",
-		outline: dark ? mixColors("#938F99", accent, 0.12) : mixColors("#79747E", accent, 0.1),
-		line: dark ? mixColors("#49454F", accent, 0.15) : mixColors("#CAC4D0", accent, 0.1),
+		container: dark ? "#1D2028" : "#F3F4F6",
+		containerLow: dark ? "#171A21" : "#F9FAFB",
+		selected: dark ? mixColors("#202735", accent, 0.3) : mixColors("#FFFFFF", accent, 0.08),
+		onSelected: dark ? "#EEF2FF" : "#111111",
+		text: dark ? "#F3F4F6" : "#111111",
+		muted: dark ? "#B1B8C7" : "#6B7280",
+		outline: dark ? "#7B8496" : "#9CA3AF",
+		line: dark ? "#303644" : "#E5E7EB",
 	};
 }
 

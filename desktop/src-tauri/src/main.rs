@@ -254,7 +254,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 			let origin = format!("http://127.0.0.1:{port}");
 			let url = origin.parse()?;
 			WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-				.title("可构 Kego")
+				.title("AllWeave Build · 构序")
 				.inner_size(1440.0, 960.0)
 				.min_inner_size(900.0, 640.0)
 				.center()
@@ -351,7 +351,7 @@ fn wait_for_server(child: &mut Child, port: u16) -> io::Result<()> {
 	while Instant::now() < deadline {
 		if let Some(status) = child.try_wait()? {
 			return Err(io::Error::other(format!(
-				"Kego service exited during startup ({status}). See data/desktop-server.log."
+				"AllWeave Build service exited during startup ({status}). See data/desktop-server.log."
 			)));
 		}
 		if server_is_ready(port) {
@@ -361,7 +361,7 @@ fn wait_for_server(child: &mut Child, port: u16) -> io::Result<()> {
 	}
 	Err(io::Error::new(
 		io::ErrorKind::TimedOut,
-		"Kego service did not start within 180 seconds. See data/desktop-server.log.",
+		"AllWeave Build service did not start within 180 seconds. See data/desktop-server.log.",
 	))
 }
 
@@ -400,7 +400,7 @@ fn request_shutdown(port: u16, token: &str) -> io::Result<()> {
 
 fn show_error(message: &str) {
 	let body = wide(message);
-	let title = wide("Kego 启动失败");
+	let title = wide("AllWeave Build · 构序启动失败");
 	unsafe {
 		MessageBoxW(
 			std::ptr::null_mut(),

@@ -9,8 +9,8 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
-$staging = Join-Path $output "KegoPortable"
-$archive = Join-Path $output "KegoPortable.zip"
+$staging = Join-Path $output "AllWeaveBuildPortable"
+$archive = Join-Path $output "AllWeaveBuildPortable.zip"
 $runtime = Join-Path $staging "runtime"
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
 $cargoExecutable = if ($cargo) { $cargo.Source } else { Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe" }
@@ -26,6 +26,12 @@ if (-not $NodeExecutable) {
 $NodeExecutable = (Resolve-Path -LiteralPath $NodeExecutable).Path
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip"))) {
 	throw "The Pi release kernel archive pi-windows-x64.zip is missing from the repository root."
+}
+$kernelChecksumPath = Join-Path $repoRoot "pi-windows-x64.zip.sha256"
+$expectedKernelHash = ((Get-Content -LiteralPath $kernelChecksumPath -Raw).Trim() -split '\s+')[0]
+$actualKernelHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip") -Algorithm SHA256).Hash
+if ($expectedKernelHash -notmatch '^[a-fA-F0-9]{64}$' -or $actualKernelHash -ine $expectedKernelHash) {
+	throw "The bundled Pi kernel archive does not match pi-windows-x64.zip.sha256."
 }
 
 if ($BuildWeb) {
@@ -87,12 +93,14 @@ if (Test-Path -LiteralPath $staging) {
 	Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
 }
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
-Copy-Item -LiteralPath $binary -Destination (Join-Path $staging "Kego.exe") -Force
+Copy-Item -LiteralPath $binary -Destination (Join-Path $staging "AllWeaveBuild.exe") -Force
 Copy-Item -LiteralPath $NodeExecutable -Destination (Join-Path $runtime "node.exe") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "package.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.base.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip") -Destination $runtime -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $staging "LICENSE") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip.sha256") -Destination $runtime -Force
 
 foreach ($path in @("apps/server/src", "apps/shared", "apps/web/dist", "packages")) {
 	$source = Join-Path $repoRoot $path
@@ -112,9 +120,9 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 	"workspaces"
 ), $utf8NoBom)
 [System.IO.File]::WriteAllLines((Join-Path $staging "README.txt"), [string[]]@(
-	"Kego Windows desktop"
+	"AllWeave Build - Windows desktop"
 	""
-	"Double-click Kego.exe to open the desktop application. The program stores its sessions, Pi settings, kernel, and WebView data in the data folder next to the executable."
+	"Double-click AllWeaveBuild.exe to open the desktop application. The program stores its sessions, Pi settings, kernel, and WebView data in the data folder next to the executable."
 	""
 	"By default, the workspaces folder is authorized. Add one existing folder path per line to workspace-roots.txt to allow other projects. Relative paths are resolved from this folder. Restart the application after editing the file."
 	""
@@ -171,6 +179,6 @@ if ($WebView2FixedRuntime) {
 }
 
 if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
-& tar.exe -a -c -f $archive -C $output "KegoPortable"
+& tar.exe -a -c -f $archive -C $output "AllWeaveBuildPortable"
 if ($LASTEXITCODE -ne 0) { throw "Creating the portable ZIP failed with exit code $LASTEXITCODE." }
 Write-Output "Portable desktop package created: $archive"

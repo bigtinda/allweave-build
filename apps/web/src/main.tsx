@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
 import "highlight.js/styles/github.css";
 import "./styles.css";
+import "./brand.css";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 const root = document.getElementById("root");

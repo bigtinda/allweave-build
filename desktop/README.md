@@ -1,23 +1,21 @@
-# Kego Windows Desktop
+# AllWeave Build Windows Desktop
 
-This is a Tauri desktop shell for the Kego web console. The Rust process starts the local Node.js service, opens its frontend in a native Windows window, and stops the service tree when the window closes. The service keeps sessions, provider settings, the Pi kernel, and WebView data beside the executable.
+This is a Tauri desktop shell for AllWeave Build (构序). The Rust process starts the bundled Node.js service, opens its frontend in a native Windows window, and stops the service tree when the window closes. The portable package includes the Pi 1.1.0 Windows x64 kernel. Sessions, provider settings, the extracted Pi kernel, and WebView data stay beside the executable.
 
 ## Build a portable package
 
-Use Windows with Rust 1.90 or newer, the Visual Studio C++ Build Tools, Node.js 22.19 or newer, and the repository dependencies installed. From the repository root, run:
+Use Windows with Rust 1.90 or newer, the Visual Studio C++ Build Tools, Node.js 24.3 or newer, and the repository dependencies installed. From the repository root, run:
 
 ```powershell
-.
-desktop\build-portable.ps1
+.\desktop\build-portable.ps1 -BuildWeb
 ```
 
-The script packages the existing frontend build and compiles the Rust desktop executable, then creates `desktop/dist/KegoPortable.zip`. Extract the ZIP and run `Kego.exe`. No installer is generated. Run `npm run build:web` before packaging when the web UI source has changed, or pass `-BuildWeb` to have the packaging script build it.
+The script builds the frontend and Rust desktop executable, then creates `desktop/dist/AllWeaveBuildPortable.zip`. Extract the ZIP and run `AllWeaveBuild.exe`. No installer is generated. Omit `-BuildWeb` to package an existing frontend build.
 
 The app uses the installed WebView2 Runtime by default. To make the package independent of that shared runtime, pass the path to an extracted Microsoft Fixed Version WebView2 runtime:
 
 ```powershell
-.
-desktop\build-portable.ps1 -WebView2FixedRuntime C:\path\to\fixed-webview2
+.\desktop\build-portable.ps1 -WebView2FixedRuntime C:\path\to\fixed-webview2
 ```
 
 The bundled Fixed Version runtime is over 250 MB and must be updated along with the app. Microsoft documents the two WebView2 distribution modes [here](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).

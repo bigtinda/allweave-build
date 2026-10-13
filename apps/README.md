@@ -1,6 +1,6 @@
-# Kego Web Console
+# AllWeave Build · 构序 Web 工作台
 
-本地单用户 Web 工作台。React 页面通过 Fastify 和 WebSocket 操作 Pi Windows release 的 RPC 内核；仓库当前的 `pi-windows-x64.zip` 是默认发行包。浏览器不保存模型密钥，也不直接调用模型 API。
+本地单用户 AI 编程工作台。React 页面通过 Fastify 和 WebSocket 操作内置 Pi Windows release 的 RPC 内核；仓库包含 `pi-windows-x64.zip`，当前版本为 `1.1.0`，SHA-256 见根目录同名 `.sha256` 文件。界面采用 AllWeave Build「构序」的克莱因蓝与中性色主题。浏览器不保存模型密钥，也不直接调用模型 API。
 
 ## 启动
 

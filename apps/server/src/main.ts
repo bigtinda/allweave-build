@@ -13,8 +13,8 @@ const { app } = await createApp({
 await app.listen({ host: "127.0.0.1", port });
 process.stdout.write(
 	process.env.PI_CONSOLE_DESKTOP === "1"
-		? `\nKego Desktop backend ready at http://127.0.0.1:${port}\n\n`
-		: `\nKego Web Console: http://127.0.0.1:5173\nProduction frontend (after build): http://127.0.0.1:${port}\n\n`,
+		? `\nAllWeave Build desktop backend ready at http://127.0.0.1:${port}\n\n`
+		: `\nAllWeave Build: http://127.0.0.1:5173\nProduction frontend (after build): http://127.0.0.1:${port}\n\n`,
 );
 const shutdown = () => {
 	void app.close().then(() => process.exit(0));

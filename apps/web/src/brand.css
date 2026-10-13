@@ -1,0 +1,199 @@
+/* AllWeave Build: neutral surfaces, Klein Blue accents, and interwoven code. */
+:root,
+.app-root {
+	--primary: #002fa7;
+	--surface: #fff;
+	--container: #f3f4f6;
+	--container-low: #f9fafb;
+	--selected: #ebeff8;
+	--on-selected: #111;
+	--text: #111;
+	--muted: #6b7280;
+	--outline: #9ca3af;
+	--line: #e5e7eb;
+	--card-shadow: 0 4px 18px rgb(17 17 17 / 3%);
+}
+:root[data-theme="dark"],
+.app-root[data-theme="dark"] {
+	--primary: #94a8da;
+	--on-primary: #111;
+	--surface: #111318;
+	--container: #1d2028;
+	--container-low: #171a21;
+	--selected: #16294b;
+	--on-selected: #eef2ff;
+	--text: #f3f4f6;
+	--muted: #b1b8c7;
+	--outline: #7b8496;
+	--line: #303644;
+	--card-shadow: 0 4px 18px rgb(0 0 0 / 12%);
+}
+.brand {
+	justify-content: flex-start;
+	gap: 12px;
+	padding: 10px 8px 22px;
+}
+.brand-symbol {
+	width: 52px;
+	height: 30px;
+	flex: 0 0 52px;
+	color: var(--primary);
+}
+.brand-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 5px;
+}
+.brand-copy strong {
+	font-size: 16px;
+	font-weight: 650;
+	letter-spacing: -0.04em;
+}
+.brand-product {
+	color: var(--primary);
+}
+.brand-copy small {
+	color: var(--muted);
+	font-size: 10px;
+	letter-spacing: 0.14em;
+}
+.sidebar {
+	background: var(--container-low);
+}
+.nav-search,
+.nav-footer > a,
+.session-row,
+.workspace-project-heading,
+.app-selection-indicator {
+	border-radius: 10px;
+}
+.nav-search {
+	border: 1px solid var(--line);
+	background: var(--surface);
+}
+.new-session.MuiButton-root {
+	min-height: 44px;
+	border-radius: 10px;
+}
+.welcome-page {
+	position: relative;
+	background: radial-gradient(ellipse at 65% 25%, color-mix(in srgb, var(--primary) 5%, transparent), transparent 60%);
+}
+.welcome-content {
+	position: relative;
+	width: min(100%, 780px);
+	padding: clamp(28px, 5vw, 64px);
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+}
+.welcome-edition {
+	display: block;
+	margin-bottom: 24px;
+	color: var(--muted);
+	font-size: 11px;
+	letter-spacing: 0.28em;
+}
+.welcome-mark {
+	width: 148px;
+	height: 80px;
+	margin: 0 auto 22px;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--primary);
+}
+.welcome-mark svg {
+	width: 100%;
+	height: 100%;
+}
+.welcome-content > .eyebrow {
+	color: var(--primary);
+	font-size: 12px;
+	letter-spacing: 0.16em;
+}
+.welcome-content h1 {
+	margin: 18px 0;
+	font-size: clamp(32px, 4vw, 48px);
+	font-weight: 550;
+	line-height: 1.35;
+	letter-spacing: -0.035em;
+}
+.welcome-content p {
+	color: var(--muted);
+	font-size: 14px;
+	line-height: 1.9;
+}
+.welcome-content > .MuiButton-root {
+	min-width: 156px;
+	margin-top: 14px;
+}
+.welcome-capabilities span {
+	padding: 10px 14px;
+	border-color: var(--line);
+	border-radius: 10px;
+	background: var(--surface);
+	box-shadow: none;
+}
+.welcome-signature {
+	display: block;
+	margin-top: 40px;
+	color: var(--muted);
+	font-size: 11px;
+	letter-spacing: 0.24em;
+}
+.service-brand-icon {
+	width: 100px;
+	height: 50px;
+	color: var(--primary);
+}
+.conversation-build-mark {
+	width: 72px;
+	height: 36px;
+	color: var(--primary);
+}
+.composer {
+	border-radius: 16px;
+	background: var(--surface);
+	box-shadow: 0 6px 24px rgb(0 47 167 / 5%);
+}
+.composer:focus-within {
+	box-shadow: 0 6px 24px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.workspace-panel {
+	border-radius: 16px;
+	box-shadow: 0 8px 30px rgb(17 17 17 / 10%);
+}
+.message,
+.conversation-empty,
+.provider-picker,
+.settings-surface,
+.personalization-card,
+.skill-card,
+.installed-plugin-card {
+	border-radius: 12px;
+}
+body:has(.app-root[data-theme="dark"]) .model-picker-popover-paper,
+body:has(.app-root[data-theme="dark"]) .access-mode-menu .MuiPaper-root {
+	--primary: inherit;
+	--surface: inherit;
+	--container-low: inherit;
+	--selected: inherit;
+	--text: inherit;
+	--muted: inherit;
+	--line: inherit;
+	--card-outline: color-mix(in srgb, var(--line) 58%, transparent);
+}
+@media (max-width: 767px) {
+	.welcome-content {
+		padding: 32px 20px;
+	}
+	.welcome-capabilities {
+		flex-wrap: wrap;
+	}
+	.welcome-signature {
+		margin-top: 28px;
+	}
+}

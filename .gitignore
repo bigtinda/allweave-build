@@ -1,6 +1,5 @@
 node_modules/
 desktop/src-tauri/target/
-/pi-windows-x64.zip
 .pi-console/
 dist/
 .artifacts/

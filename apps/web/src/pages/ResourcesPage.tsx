@@ -25,24 +25,6 @@ import {
 	TextField,
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	ArrowLeft,
-	BookOpen,
-	ChevronDown,
-	ChevronRight,
-	Database,
-	ExternalLink,
-	FolderUp,
-	HardDrive,
-	KeyRound,
-	Menu,
-	PackageOpen,
-	Plus,
-	RefreshCw,
-	Search,
-	Settings2,
-	Trash2,
-} from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import type {
@@ -68,6 +50,24 @@ import { type PluginFeatureId, PluginFeaturePanel } from "../components/PluginFe
 import { ProviderLogo } from "../components/ProviderLogo.tsx";
 import { LoadedExtensionsPanel, SkillLibraryPanel } from "../components/SkillLibraryPanel.tsx";
 import { SpringPages } from "../components/SpringPages.tsx";
+import {
+	ArrowLeft,
+	BookOpen,
+	ChevronDown,
+	ChevronRight,
+	Database,
+	ExternalLink,
+	FolderUp,
+	HardDrive,
+	KeyRound,
+	Menu,
+	PackageOpen,
+	Plus,
+	RefreshCw,
+	Search,
+	Settings2,
+	Trash2,
+} from "../components/WorkbenchIcons.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { ApiError, api } from "../services/api.ts";
 import { encodeResourceImportFiles } from "../services/resource-import.ts";
@@ -151,10 +151,34 @@ function SettingsNavigation({ section }: { section: SettingsSection }) {
 	return (
 		<nav ref={root} className="settings-nav" aria-label="设置分类">
 			<span ref={indicator} className="settings-nav-indicator" aria-hidden="true" />
-			<NavLink to="/settings/providers">模型供应商</NavLink>
-			<NavLink to="/settings/plugins">插件</NavLink>
-			<NavLink to="/settings/storage">存储管理</NavLink>
-			<NavLink to="/settings/system">内核与本地设置</NavLink>
+			<NavLink
+				to="/settings/providers"
+				className={section === "providers" ? "active" : ""}
+				aria-current={section === "providers" ? "page" : undefined}
+			>
+				模型供应商
+			</NavLink>
+			<NavLink
+				to="/settings/plugins"
+				className={section === "plugins" ? "active" : ""}
+				aria-current={section === "plugins" ? "page" : undefined}
+			>
+				插件
+			</NavLink>
+			<NavLink
+				to="/settings/storage"
+				className={section === "storage" ? "active" : ""}
+				aria-current={section === "storage" ? "page" : undefined}
+			>
+				存储管理
+			</NavLink>
+			<NavLink
+				to="/settings/system"
+				className={section === "system" ? "active" : ""}
+				aria-current={section === "system" ? "page" : undefined}
+			>
+				内核与本地设置
+			</NavLink>
 		</nav>
 	);
 }
@@ -719,11 +743,18 @@ function PackageManagerPanel({
 
 function StoragePanel({ onError }: { onError: (message: string) => void }) {
 	const client = useQueryClient();
+	const [sessionPage, setSessionPage] = useState(1);
 	const [selectedSession, setSelectedSession] = useState<StorageSummary["sessions"][number]>();
 	const [pending, setPending] = useState(false);
 	const sessionsList = useRef<HTMLDivElement>(null);
 	const storage = useQuery({ queryKey: ["storage"], queryFn: () => api<StorageSummary>("/storage") });
-	useSpringLayout(sessionsList, storage.data?.sessions.map((session) => session.id).join("\0") ?? "");
+	const pageCount = Math.max(1, Math.ceil((storage.data?.sessions.length ?? 0) / 8));
+	const visiblePage = Math.min(sessionPage, pageCount);
+	const visibleSessions = storage.data?.sessions.slice((visiblePage - 1) * 8, visiblePage * 8) ?? [];
+	useSpringLayout(sessionsList, visibleSessions.map((session) => session.id).join("\0"));
+	useEffect(() => {
+		if (sessionPage > pageCount) setSessionPage(pageCount);
+	}, [sessionPage, pageCount]);
 	const compact = async () => {
 		setPending(true);
 		try {
@@ -793,13 +824,7 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 						{storage.data?.categories.map((category) => (
 							<div className="storage-card" key={category.id}>
 								<div className="storage-card-heading">
-									{category.id === "database" ? (
-										<Database size={18} />
-									) : category.id === "kernel" ? (
-										<HardDrive size={18} />
-									) : (
-										<PackageOpen size={18} />
-									)}
+									{category.id === "database" ? <Database size={18} /> : <PackageOpen size={18} />}
 									<strong>{category.label}</strong>
 								</div>
 								<strong className="storage-bytes">{formatBytes(category.bytes)}</strong>
@@ -826,15 +851,24 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 						</Button>
 					</div>
 					{storage.data?.sessions.length ? (
-						<div ref={sessionsList} className="stored-sessions">
-							{storage.data.sessions.map((session) => (
-								<div className="stored-session-row" key={session.id}>
+						<div ref={sessionsList} className="stored-session-cards">
+							{visibleSessions.map((session) => (
+								<article className="stored-session-card" key={session.id}>
 									<div className="stored-session-name">
-										<strong>{session.title}</strong>
+										<NavLink to={`/sessions/${session.id}`}>
+											<strong>{session.title}</strong>
+										</NavLink>
 										<span className="muted">{new Date(session.updatedAt).toLocaleString()}</span>
 									</div>
 									<span className="muted">{formatBytes(session.bytes)}</span>
-									<Chip size="small" label={session.status} />
+									<Chip
+										size="small"
+										label={
+											{ idle: "就绪", running: "执行中", approval: "等待确认", error: "执行失败" }[
+												session.status
+											]
+										}
+									/>
 									<IconButton
 										aria-label={`删除会话 ${session.title}`}
 										color="error"
@@ -843,11 +877,22 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 									>
 										<Trash2 size={16} />
 									</IconButton>
-								</div>
+								</article>
 							))}
 						</div>
 					) : (
 						<p className="muted">还没有保存的会话。</p>
+					)}
+					{!!storage.data?.sessions.length && (
+						<div className="storage-session-pagination">
+							<span className="muted">共 {storage.data.sessions.length} 个会话 · 每页 8 个</span>
+							<Pagination
+								count={pageCount}
+								page={visiblePage}
+								onChange={(_, page) => setSessionPage(page)}
+								aria-label="会话记录分页"
+							/>
+						</div>
 					)}
 					<div className="storage-maintenance">
 						<div>
@@ -939,6 +984,8 @@ export function ResourcesPage({
 	const [customModels, setCustomModels] = useState("");
 	const [customReasoning, setCustomReasoning] = useState(false);
 	const [savingCustom, setSavingCustom] = useState(false);
+	const [customError, setCustomError] = useState("");
+	const [success, setSuccess] = useState("");
 	const [providerPicker, setProviderPicker] = useState(false);
 	const [providerSearch, setProviderSearch] = useState("");
 	const [providerToAddId, setProviderToAddId] = useState("");
@@ -1032,6 +1079,7 @@ export function ResourcesPage({
 			client.setQueryData(["session", id], updated);
 			void client.invalidateQueries({ queryKey: ["sessions"] });
 			setError("");
+			setSuccess("推理等级已保存。");
 		} catch (error) {
 			setError(error instanceof Error ? error.message : String(error));
 		}
@@ -1080,6 +1128,20 @@ export function ResourcesPage({
 		}
 	};
 	const addCustomProvider = async () => {
+		if (savingCustom) return;
+		setCustomError("");
+		setSuccess("");
+		if (!/^[a-z][a-z0-9-]{1,62}$/u.test(customId.trim().toLowerCase())) {
+			setCustomError("供应商 ID 须为 2–63 个字符，以英文字母开头，仅包含英文、数字和连字符。");
+			return;
+		}
+		try {
+			const url = new URL(customUrl.trim());
+			if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("invalid protocol");
+		} catch {
+			setCustomError("请输入完整的 HTTP 或 HTTPS 接口地址。");
+			return;
+		}
 		const modelList = customModels
 			.split(/\r?\n/u)
 			.map((model) => model.trim())
@@ -1099,13 +1161,15 @@ export function ResourcesPage({
 				client.invalidateQueries({ queryKey: ["models"] }),
 			]);
 			setCustomOpen(false);
+			setProviderPicker(false);
 			setCustomId("");
 			setCustomName("");
 			setCustomUrl("");
 			setCustomModels("");
 			setError("");
+			setSuccess("兼容接口已添加。请在供应商列表中配置凭据。");
 		} catch (error) {
-			setError(error instanceof Error ? error.message : String(error));
+			setCustomError(error instanceof Error ? error.message : String(error));
 		} finally {
 			setSavingCustom(false);
 		}
@@ -1160,6 +1224,11 @@ export function ResourcesPage({
 			{error && (
 				<Alert severity="error" onClose={() => setError("")}>
 					{error}
+				</Alert>
+			)}
+			{success && (
+				<Alert severity="success" aria-live="polite" onClose={() => setSuccess("")}>
+					{success}
 				</Alert>
 			)}
 			{(resources.error ||
@@ -1341,6 +1410,20 @@ export function ResourcesPage({
 											</div>
 										</div>
 									)}
+									{!providers.isPending && !availableProviderGroups.length && (
+										<p className="muted" aria-live="polite">
+											没有匹配的供应商。请修改搜索词，或创建兼容接口。
+										</p>
+									)}
+									<Button
+										startIcon={<Plus size={16} />}
+										onClick={() => {
+											setCustomError("");
+											setCustomOpen(true);
+										}}
+									>
+										添加兼容接口
+									</Button>
 									{providers.isPending ? (
 										<CircularProgress size={22} />
 									) : (
@@ -1366,7 +1449,10 @@ export function ResourcesPage({
 													<button
 														className="provider-picker-card custom-provider-card"
 														type="button"
-														onClick={() => setCustomOpen(true)}
+														onClick={() => {
+															setCustomError("");
+															setCustomOpen(true);
+														}}
 													>
 														<span className="provider-logo-tile">
 															<Plus size={18} />
@@ -1449,21 +1535,23 @@ export function ResourcesPage({
 					{section === "system" && (
 						<>
 							<PersonalizationPanel />
-							<h2>内核与本地设置</h2>
+							<h2>Pi SDK 与本地设置</h2>
 							<div className="settings-surface">
 								<div className="system-setting-row">
-									<span>内核版本</span>
+									<span>Pi SDK 版本</span>
 									<strong>{settings.data?.kernel?.version ?? "不可用"}</strong>
 								</div>
 								<div className="system-setting-row">
-									<span>内核压缩包</span>
-									<code>{settings.data?.kernel?.archive ?? "未配置发行包"}</code>
+									<span>集成方式</span>
+									<strong>
+										{settings.data?.kernel?.integration === "in-process" ? "项目内源码 SDK" : "不可用"}
+									</strong>
 								</div>
 								<div className="system-setting-row">
 									<span>配置目录</span>
 									<code>{settings.data?.agentDirectory}</code>
 								</div>
-								<p>替换内核压缩包并重启服务后，工作台会自动切换到新内核。</p>
+								<p>Pi SDK 与工作台在同一服务进程中运行，升级项目中的 Pi 源码后重新启动即可生效。</p>
 								<p>单用户，本机服务仅监听 127.0.0.1。获准命令和可信扩展使用主机权限，工作台未提供安全沙箱。</p>
 								<div className="system-roots">
 									<span>授权目录</span>
@@ -1479,6 +1567,7 @@ export function ResourcesPage({
 			<Dialog open={!!loginId} onClose={() => void cancelLogin()} maxWidth="sm" fullWidth>
 				<DialogTitle>{loginProvider?.name ?? "供应商认证"}</DialogTitle>
 				<DialogContent className="provider-login-content" sx={{ pt: 1.5 }}>
+					{error && <Alert severity="error">{error}</Alert>}
 					{login.data?.notifications.map(providerLoginNotification)}
 					{login.data?.error && <Alert severity="error">{login.data.error}</Alert>}
 					{login.data?.status === "succeeded" && <Alert severity="success">认证已保存到配置目录。</Alert>}
@@ -1532,10 +1621,11 @@ export function ResourcesPage({
 					</Button>
 				</DialogActions>
 			</Dialog>
-			<Dialog open={customOpen} onClose={() => setCustomOpen(false)} maxWidth="sm" fullWidth>
+			<Dialog open={customOpen} onClose={() => !savingCustom && setCustomOpen(false)} maxWidth="sm" fullWidth>
 				<DialogTitle>添加兼容接口</DialogTitle>
 				<DialogContent className="provider-login-content">
 					<p className="muted">创建一个自定义供应商；保存后可在供应商列表中为它配置 API Key。</p>
+					{customError && <Alert severity="error">{customError}</Alert>}
 					<TextField
 						label="供应商 ID（小写英文）"
 						value={customId}
@@ -1580,9 +1670,14 @@ export function ResourcesPage({
 					/>
 				</DialogContent>
 				<DialogActions>
-					<Button onClick={() => setCustomOpen(false)}>取消</Button>
+					<Button disabled={savingCustom} onClick={() => setCustomOpen(false)}>
+						取消
+					</Button>
 					<Button
-						disabled={savingCustom || !customId || !customName || !customUrl || !customModels.trim()}
+						variant="contained"
+						disabled={
+							savingCustom || !customId.trim() || !customName.trim() || !customUrl.trim() || !customModels.trim()
+						}
 						onClick={() => void addCustomProvider()}
 					>
 						{savingCustom ? <CircularProgress size={18} /> : "保存并添加"}

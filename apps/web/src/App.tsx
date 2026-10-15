@@ -18,6 +18,14 @@ import {
 	useMediaQuery,
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CSSProperties, ReactNode, RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "../../shared/src/protocol.ts";
+import { BuildMark } from "./components/BuildMark.tsx";
+import { SpringCollapse } from "./components/SpringCollapse.tsx";
+import { SpringPages } from "./components/SpringPages.tsx";
+import { SpringSize } from "./components/SpringSize.tsx";
 import {
 	ArrowLeft,
 	BookOpen,
@@ -33,15 +41,7 @@ import {
 	Settings2,
 	Sun,
 	Trash2,
-} from "lucide-react";
-import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "../../shared/src/protocol.ts";
-import { BuildMark } from "./components/BuildMark.tsx";
-import { SpringCollapse } from "./components/SpringCollapse.tsx";
-import { SpringPages } from "./components/SpringPages.tsx";
-import { SpringSize } from "./components/SpringSize.tsx";
+} from "./components/WorkbenchIcons.tsx";
 import { useSpringLayout } from "./hooks/useSpringLayout.ts";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { ResourcesPage } from "./pages/ResourcesPage.tsx";
@@ -179,6 +179,7 @@ function Console() {
 	const sessions = useQuery({ queryKey: ["sessions"], queryFn: () => api<SessionSummary[]>("/sessions") });
 	const [workspaceId, setWorkspaceId] = useState("");
 	const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set());
+	const [expandedSessionWorkspaceIds, setExpandedSessionWorkspaceIds] = useState<Set<string>>(() => new Set());
 	const selectedWorkspace = workspaceId || workspaces.data?.[0]?.id || "";
 	const [search, setSearch] = useState("");
 	const [error, setError] = useState("");
@@ -227,7 +228,9 @@ function Console() {
 			workspaceGroups.some(
 				({ workspace, sessions: groupedSessions }) =>
 					!collapsedWorkspaceIds.has(workspace.id) &&
-					groupedSessions.some((session) => session.id === routeSessionId),
+					(expandedSessionWorkspaceIds.has(workspace.id) ? groupedSessions : groupedSessions.slice(0, 5)).some(
+						(session) => session.id === routeSessionId,
+					),
 			),
 	);
 	const synchronizedSessionId = useRef<string | undefined>(undefined);
@@ -396,11 +399,20 @@ function Console() {
 			>
 				{creating ? "创建中…" : "新建会话"}
 			</Button>
+			<p
+				className="session-target"
+				title={workspaces.data?.find((workspace) => workspace.id === selectedWorkspace)?.path}
+			>
+				新会话将创建在{" "}
+				<strong>
+					{workspaces.data?.find((workspace) => workspace.id === selectedWorkspace)?.name ?? "请选择项目"}
+				</strong>
+			</p>
 			<div className="nav-search">
 				<Search size={17} />
 				<input
 					aria-label="搜索历史会话"
-					placeholder="搜索会话"
+					placeholder="搜索项目或会话"
 					value={search}
 					onChange={(event) => setSearch(event.target.value)}
 				/>
@@ -478,7 +490,10 @@ function Console() {
 								in={!collapsedWorkspaceIds.has(workspace.id)}
 								preset="smooth"
 							>
-								{groupedSessions.map((session) => (
+								{(expandedSessionWorkspaceIds.has(workspace.id)
+									? groupedSessions
+									: groupedSessions.slice(0, 5)
+								).map((session) => (
 									<div className="session-row" key={session.id}>
 										<NavLink
 											to={`/sessions/${session.id}`}
@@ -507,6 +522,26 @@ function Console() {
 										</Tooltip>
 									</div>
 								))}
+								{groupedSessions.length > 5 && (
+									<Button
+										size="small"
+										className="session-show-more"
+										aria-expanded={expandedSessionWorkspaceIds.has(workspace.id)}
+										aria-controls={`workspace-sessions-${workspace.id}`}
+										onClick={() =>
+											setExpandedSessionWorkspaceIds((current) => {
+												const next = new Set(current);
+												if (next.has(workspace.id)) next.delete(workspace.id);
+												else next.add(workspace.id);
+												return next;
+											})
+										}
+									>
+										{expandedSessionWorkspaceIds.has(workspace.id)
+											? "收起更多会话"
+											: `展开其余 ${groupedSessions.length - 5} 个会话`}
+									</Button>
+								)}
 								{groupedSessions.length === 0 && !sessions.isPending && (
 									<span className="workspace-empty-sessions">暂无会话</span>
 								)}
@@ -536,7 +571,7 @@ function Console() {
 				</NavLink>
 				<NavLink to="/settings">
 					<Settings2 size={18} />
-					设置
+					模型与设置
 				</NavLink>
 				<div className="theme-row">
 					<span>构序 · 本地工作台</span>
@@ -551,8 +586,48 @@ function Console() {
 	);
 	return (
 		<div className="console-layout">
+			<a className="skip-link" href="#workbench-content">
+				跳到工作区内容
+			</a>
 			{desktop ? (
-				<SpringSize open={preferences.sidebar} width={276} className="sidebar-slot">
+				<SpringSize
+					open={preferences.sidebar}
+					width={276}
+					collapsedWidth={64}
+					className="sidebar-slot"
+					collapsedContent={
+						<nav className="navigation-rail" aria-label="收起的主导航">
+							<Tooltip title="AllWeave Build 首页">
+								<NavLink
+									to="/"
+									aria-label="AllWeave Build 首页"
+									className={`rail-home${routePage === "session" || routePage === "welcome" ? " active" : ""}`}
+								>
+									<BuildMark className="rail-build-mark" />
+								</NavLink>
+							</Tooltip>
+							<Tooltip title="新建会话">
+								<IconButton
+									aria-label="新建会话"
+									disabled={!selectedWorkspace || creating}
+									onClick={() => void newSession()}
+								>
+									<Plus size={20} />
+								</IconButton>
+							</Tooltip>
+							<Tooltip title="技能与插件">
+								<NavLink to="/skills" aria-label="技能与插件">
+									<BookOpen size={20} />
+								</NavLink>
+							</Tooltip>
+							<Tooltip title="模型与设置">
+								<NavLink to="/settings" aria-label="模型与设置">
+									<Settings2 size={20} />
+								</NavLink>
+							</Tooltip>
+						</nav>
+					}
+				>
 					{sidebar}
 				</SpringSize>
 			) : (
@@ -560,7 +635,13 @@ function Console() {
 					<Box sx={{ height: "100%" }}>{sidebar}</Box>
 				</Drawer>
 			)}
-			<SpringPages className="console-route-switch" pageKey={routePage} pageIndex={routePageIndex} axis="vertical">
+			<SpringPages
+				id="workbench-content"
+				className="console-route-switch"
+				pageKey={routePage}
+				pageIndex={routePageIndex}
+				axis="vertical"
+			>
 				<Routes location={location}>
 					<Route
 						path="/"

@@ -8,6 +8,7 @@ export interface AdaptedEvent {
 	message?: ChatMessage;
 	tool?: ToolCall;
 	error?: string;
+	conversation?: { messages: ChatMessage[]; tools: ToolCall[] };
 }
 
 function chatMessage(message: AgentMessage, complete: boolean): ChatMessage | undefined {

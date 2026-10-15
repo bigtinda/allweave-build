@@ -217,6 +217,11 @@ fn run() -> Result<(), Box<dyn Error>> {
 			let shutdown_token = random_shutdown_token()?;
 			let log = File::create(data_directory.join("desktop-server.log"))?;
 			let job = ProcessJob::new()?;
+			let mut backend_path = vec![runtime.root.clone()];
+			if let Some(path) = std::env::var_os("PATH") {
+				backend_path.extend(std::env::split_paths(&path));
+			}
+			let backend_path = std::env::join_paths(backend_path)?;
 			let mut command = Command::new(runtime.node);
 			command
 				.arg("--import")
@@ -228,8 +233,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 				.env("PI_CONSOLE_SHUTDOWN_TOKEN", &shutdown_token)
 				.env("PI_CONSOLE_DATA_DIR", &data_directory)
 				.env("PI_CODING_AGENT_DIR", data_directory.join("agent"))
-				.env("PI_CONSOLE_KERNEL_ZIP", runtime.root.join("pi-windows-x64.zip"))
 				.env("PI_CONSOLE_ROOTS", roots)
+				.env("PATH", backend_path)
 				.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP)
 				.stdin(Stdio::null())
 				.stdout(Stdio::from(log.try_clone()?))
@@ -288,9 +293,6 @@ fn runtime_paths(executable_directory: &Path) -> io::Result<RuntimePaths> {
 			.and_then(|path| std::env::split_paths(&path).map(|part| part.join("node.exe")).find(|path| path.is_file()))
 			.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Bundled Node.js runtime is missing"))?
 	};
-	if !root.join("pi-windows-x64.zip").is_file() {
-		return Err(io::Error::new(io::ErrorKind::NotFound, "pi-windows-x64.zip is missing from the runtime folder"));
-	}
 	Ok(RuntimePaths { root, node })
 }
 

@@ -91,14 +91,14 @@ export function createThemeColors(dark: boolean, accentColor: string): ThemeColo
 		primary,
 		onPrimary: contrastingText(primary),
 		surface,
-		container: dark ? "#1D2028" : "#F3F4F6",
-		containerLow: dark ? "#171A21" : "#F9FAFB",
+		container: dark ? "#1D2028" : "#F7F6F3",
+		containerLow: dark ? "#171A21" : "#FBFBFA",
 		selected: dark ? mixColors("#202735", accent, 0.3) : mixColors("#FFFFFF", accent, 0.08),
 		onSelected: dark ? "#EEF2FF" : "#111111",
-		text: dark ? "#F3F4F6" : "#111111",
-		muted: dark ? "#B1B8C7" : "#6B7280",
+		text: dark ? "#F3F4F6" : "#2F3437",
+		muted: dark ? "#B1B8C7" : "#71706C",
 		outline: dark ? "#7B8496" : "#9CA3AF",
-		line: dark ? "#303644" : "#E5E7EB",
+		line: dark ? "#303644" : "#EAEAEA",
 	};
 }
 

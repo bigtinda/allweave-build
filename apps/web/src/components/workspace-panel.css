@@ -1,0 +1,445 @@
+/* Docked workbench: the page is primary, execution details stay within reach. */
+.workspace-panel.workspace-panel.workspace-panel {
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: var(--workspace-panel-width);
+	max-width: none;
+	border: 0;
+	border-left: 1px solid var(--line);
+	border-radius: 0;
+	background: var(--surface);
+	box-shadow: none;
+	backdrop-filter: none;
+}
+.workspace-panel-transition.is-overlay .workspace-panel.workspace-panel {
+	left: 0;
+	width: 100%;
+	max-width: none;
+	border-left: 0;
+}
+.workspace-panel .panel-heading {
+	min-height: 52px;
+	gap: 8px;
+	padding: 8px 12px 8px 16px;
+	background: var(--surface);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--muted);
+}
+.panel-project-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text);
+	font-weight: 600;
+}
+.panel-project-label {
+	font-size: 11px;
+	white-space: nowrap;
+}
+.workspace-panel .panel-heading .MuiIconButton-root,
+.workspace-panel .browser-addressbar .MuiIconButton-root {
+	width: 30px;
+	height: 30px;
+	border-radius: 6px;
+}
+.workspace-panel .workspace-primary-tabs {
+	min-height: 42px;
+	flex-shrink: 0;
+	border-bottom: 1px solid var(--line);
+	padding-inline: 8px;
+}
+.workspace-panel .workspace-primary-tabs .MuiTab-root {
+	min-height: 42px;
+	min-width: 0;
+	gap: 7px;
+	padding: 10px 12px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--muted);
+}
+.workspace-panel .workspace-primary-tabs .MuiTab-icon {
+	margin: 0;
+}
+.workspace-panel .workspace-primary-tabs .Mui-selected {
+	color: var(--text);
+}
+.workspace-panel .workspace-primary-tabs .MuiTabs-indicator {
+	height: 2px;
+	background: var(--text);
+	border-radius: 0;
+}
+.workspace-panel.workspace-panel .panel-content {
+	padding: 0;
+	gap: 0;
+	overflow: hidden;
+}
+.workspace-panel .workspace-tab-content {
+	padding: 14px;
+}
+.workspace-panel .file-preview {
+	box-shadow: none;
+}
+.workspace-panel .workspace-resize-handle {
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 5px;
+}
+.workspace-panel .workspace-resize-handle::after {
+	left: 0;
+}
+.browser-panel {
+	display: flex;
+	flex: 1 1 0;
+	min-height: 0;
+	min-width: 0;
+	flex-direction: column;
+	overflow: hidden;
+}
+.browser-addressbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 12px 12px 8px;
+	flex-shrink: 0;
+}
+.browser-address-field {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 1;
+	min-width: 0;
+	height: 34px;
+	padding-left: 10px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--container-low);
+	color: var(--muted);
+}
+.browser-address-field:focus-within,
+.browser-agent-form:focus-within,
+.browser-type-form:focus-within {
+	border-color: var(--primary);
+}
+.browser-panel input {
+	min-width: 0;
+	width: 100%;
+	flex: 1;
+	border: 0;
+	outline: none;
+	color: var(--text);
+	background: transparent;
+	font: inherit;
+	font-size: 12px;
+}
+.browser-panel input::placeholder {
+	color: var(--muted);
+}
+.browser-panel input:disabled {
+	opacity: 0.65;
+}
+.browser-pagebar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 14px 8px;
+	flex-shrink: 0;
+}
+.browser-page-title {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 1;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.browser-page-title svg,
+.browser-address-field > svg {
+	flex-shrink: 0;
+}
+.workspace-panel .browser-pagebar .MuiIconButton-root {
+	width: 26px;
+	height: 26px;
+	border-radius: 5px;
+}
+.browser-session-state,
+.inspector-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+.browser-session-state i,
+.inspector-status i {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--outline);
+}
+.browser-session-state.is-running i,
+.inspector-status.is-running i {
+	background: var(--primary);
+}
+.browser-progress {
+	height: 2px;
+	flex-shrink: 0;
+}
+.browser-progress .MuiLinearProgress-root {
+	height: 2px;
+}
+.browser-viewport {
+	flex: 1 1 0;
+	min-height: 140px;
+	overflow: auto;
+	border-block: 1px solid var(--line);
+	background: var(--container-low);
+}
+.browser-screen {
+	display: block;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: white;
+	cursor: crosshair;
+	line-height: 0;
+}
+.browser-screen img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.browser-screen:disabled {
+	cursor: progress;
+}
+.browser-viewport.is-actual .browser-screen {
+	width: 1280px;
+}
+.browser-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	height: 100%;
+	min-height: 200px;
+	padding: 24px;
+	text-align: center;
+	color: var(--muted);
+}
+.browser-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	margin-bottom: 14px;
+	border: 1px solid var(--line);
+	border-radius: 14px;
+	background: var(--surface);
+}
+.browser-empty h2 {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--text);
+}
+.browser-empty p {
+	margin: 10px 0 20px;
+	font-size: 12px;
+	line-height: 1.85;
+}
+.browser-empty-hint {
+	font-size: 11px;
+	color: var(--muted);
+}
+.browser-error {
+	margin: 4px 12px 8px;
+	flex-shrink: 0;
+	max-height: 140px;
+	overflow: auto;
+}
+.browser-manual {
+	flex-shrink: 0;
+	max-height: 210px;
+	overflow: auto;
+	padding: 0 14px;
+	border-bottom: 1px solid var(--line);
+}
+.browser-manual > summary {
+	padding: 12px 0;
+	cursor: pointer;
+	font-size: 11px;
+	color: var(--text);
+}
+.browser-manual > summary span {
+	margin-left: 12px;
+	color: var(--muted);
+	font-size: 10px;
+}
+.browser-type-form,
+.browser-agent-form {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 5px 4px 12px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--surface);
+}
+.browser-manual-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding-top: 8px;
+}
+.browser-manual-actions .MuiSelect-select {
+	padding: 6px 28px 6px 8px;
+	font-size: 11px;
+}
+.browser-manual-actions .MuiButton-root {
+	min-width: 0;
+	font-size: 11px;
+}
+.browser-page-text {
+	font-size: 11px;
+	line-height: 1.7;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--muted);
+}
+.browser-agent-actions {
+	padding: 14px;
+	flex-shrink: 0;
+}
+.browser-agent-heading {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	font-weight: 500;
+}
+.browser-agent-heading small {
+	margin-left: auto;
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 400;
+}
+.browser-quick-actions {
+	display: flex;
+	gap: 6px;
+	margin: 10px 0;
+}
+.browser-quick-actions .MuiButton-root {
+	min-height: 28px;
+	padding: 3px 10px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	color: var(--text);
+	font-size: 11px;
+	font-weight: 400;
+}
+.workspace-panel .browser-agent-form .MuiIconButton-root {
+	width: 28px;
+	height: 28px;
+	border-radius: 5px;
+	color: var(--text);
+	background: var(--container-low);
+}
+.workspace-inspector {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+	min-height: 40px;
+	border-top: 1px solid var(--line);
+	background: var(--surface);
+}
+.workspace-inspector.is-open {
+	height: min(34vh, 280px);
+}
+.inspector-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-height: 40px;
+	padding: 0 8px;
+	flex-shrink: 0;
+}
+.inspector-toolbar .MuiButton-root {
+	gap: 6px;
+	min-width: 0;
+	padding: 5px 8px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--muted);
+}
+.inspector-toolbar .MuiButton-root[aria-pressed="true"] {
+	background: var(--container-low);
+	color: var(--text);
+}
+.inspector-count {
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+}
+.workspace-panel .inspector-toolbar .MuiIconButton-root {
+	width: 28px;
+	height: 28px;
+}
+.inspector-toolbar .is-collapsed {
+	transform: rotate(180deg);
+}
+.inspector-content {
+	min-height: 0;
+	overflow: auto;
+	padding: 0 12px 12px;
+}
+.inspector-content[hidden] {
+	display: none;
+}
+.inspector-empty {
+	padding: 12px 4px;
+	font-size: 12px;
+	line-height: 1.8;
+	color: var(--muted);
+}
+.inspector-content .tool-card {
+	margin-top: 6px;
+}
+.tool-browser-image {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: 4px;
+}
+.workspace-panel :is(button, summary):focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: -2px;
+}
+@media (max-width: 1199px) {
+	.workspace-panel.workspace-panel.workspace-panel {
+		position: relative;
+		inset: auto;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		height: 100%;
+	}
+	.workspace-panel .workspace-resize-handle {
+		display: none;
+	}
+}
+@media (max-width: 400px) {
+	.panel-project-label,
+	.browser-agent-heading small,
+	.inspector-status {
+		display: none;
+	}
+}

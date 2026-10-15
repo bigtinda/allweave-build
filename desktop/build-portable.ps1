@@ -24,16 +24,12 @@ if (-not $NodeExecutable) {
 	$NodeExecutable = $nodeCommand.Source
 }
 $NodeExecutable = (Resolve-Path -LiteralPath $NodeExecutable).Path
-if (-not (Test-Path -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip"))) {
-	throw "The Pi release kernel archive pi-windows-x64.zip is missing from the repository root."
+$nodeDirectory = Split-Path -Parent $NodeExecutable
+$npmCommand = Join-Path $nodeDirectory "npm.cmd"
+$npmPackage = Join-Path $nodeDirectory "node_modules/npm"
+if (-not (Test-Path -LiteralPath $npmCommand) -or -not (Test-Path -LiteralPath (Join-Path $npmPackage "bin/npm-cli.js"))) {
+	throw "The selected Node.js installation must include npm.cmd and node_modules/npm so bundled Pi package installation remains available."
 }
-$kernelChecksumPath = Join-Path $repoRoot "pi-windows-x64.zip.sha256"
-$expectedKernelHash = ((Get-Content -LiteralPath $kernelChecksumPath -Raw).Trim() -split '\s+')[0]
-$actualKernelHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip") -Algorithm SHA256).Hash
-if ($expectedKernelHash -notmatch '^[a-fA-F0-9]{64}$' -or $actualKernelHash -ine $expectedKernelHash) {
-	throw "The bundled Pi kernel archive does not match pi-windows-x64.zip.sha256."
-}
-
 if ($BuildWeb) {
 	Push-Location $repoRoot
 	try {
@@ -62,6 +58,7 @@ if (-not (Test-Path -LiteralPath $binary)) { throw "Desktop executable was not c
 
 $excludedDirectories = @(
 	".git", ".cache", ".vite", ".turbo", ".pytest_cache", "__pycache__",
+	"node_modules",
 	"coverage", ".nyc_output", "playwright-report", "test-results", "tmp", "temp",
 	"test", "tests", "testing", "__tests__", "__fixtures__", "fixtures", "spec", "specs",
 	"test-*", "tests-*", "testing-*", "*-test-*", "*-tests-*", "*-testing-*",
@@ -98,9 +95,7 @@ Copy-Item -LiteralPath $NodeExecutable -Destination (Join-Path $runtime "node.ex
 Copy-Item -LiteralPath (Join-Path $repoRoot "package.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.base.json") -Destination $runtime -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $staging "LICENSE") -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "pi-windows-x64.zip.sha256") -Destination $runtime -Force
 
 foreach ($path in @("apps/server/src", "apps/shared", "apps/web/dist", "packages")) {
 	$source = Join-Path $repoRoot $path
@@ -111,7 +106,53 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "apps/server/package.json") -Destina
 
 $nodeModules = Join-Path $repoRoot "node_modules"
 if (-not (Test-Path -LiteralPath $nodeModules)) { throw "Repository node_modules is missing. Run npm ci --ignore-scripts first." }
-Copy-RuntimeTree -Source $nodeModules -Destination (Join-Path $runtime "node_modules")
+Push-Location $repoRoot
+try {
+	$npmOutput = @(& $npmCommand ls --parseable --omit=dev --workspace=@pi-console/server 2>&1)
+	$npmExitCode = $LASTEXITCODE
+} finally {
+	Pop-Location
+}
+if ($npmExitCode -ne 0) {
+	$detail = ($npmOutput | Select-Object -Last 8) -join [Environment]::NewLine
+	throw "Could not resolve the server's production dependency tree with npm ls (exit code $npmExitCode). $detail"
+}
+$workspaceDirectories = @{}
+foreach ($manifest in @(
+	(Get-Item -LiteralPath (Join-Path $repoRoot "apps/server/package.json"))
+) + @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "packages") -Directory | ForEach-Object {
+	Get-Item -LiteralPath (Join-Path $_.FullName "package.json") -ErrorAction SilentlyContinue
+} | Where-Object { $_ })) {
+	$package = Get-Content -LiteralPath $manifest.FullName -Raw | ConvertFrom-Json
+	if ($package.name) { $workspaceDirectories[$package.name] = $manifest.DirectoryName }
+}
+
+$runtimeNodeModules = Join-Path $runtime "node_modules"
+New-Item -ItemType Directory -Path $runtimeNodeModules -Force | Out-Null
+$copiedWorkspaces = @{}
+$copiedExternalDependencies = @{}
+foreach ($entry in $npmOutput) {
+	$source = ([string]$entry).Trim()
+	$manifestPath = Join-Path $source "package.json"
+	if (-not (Test-Path -LiteralPath $manifestPath)) { continue }
+	$package = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+	if ($workspaceDirectories.ContainsKey($package.name)) {
+		$copiedWorkspaces[$package.name] = $true
+		continue
+	}
+	if ($source -notmatch '\\node_modules\\' -or $copiedExternalDependencies.ContainsKey($source)) { continue }
+	$relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $source)
+	Copy-RuntimeTree -Source $source -Destination (Join-Path $runtime $relativePath)
+	$copiedExternalDependencies[$source] = $true
+}
+if (-not $copiedWorkspaces.ContainsKey("@earendil-works/pi-coding-agent")) {
+	throw "The production dependency tree did not include @earendil-works/pi-coding-agent."
+}
+
+# Keep npm available for installing Pi extensions without requiring Node.js on the target PC.
+Copy-Item -LiteralPath $npmCommand -Destination (Join-Path $runtime "npm.cmd") -Force
+Copy-Item -LiteralPath $npmPackage -Destination $runtimeNodeModules -Recurse -Force
+Write-Output "Included $($copiedWorkspaces.Count) Pi SDK workspace packages and $($copiedExternalDependencies.Count) production dependency packages."
 
 New-Item -ItemType Directory -Path (Join-Path $staging "workspaces") -Force | Out-Null
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -122,13 +163,13 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines((Join-Path $staging "README.txt"), [string[]]@(
 	"AllWeave Build - Windows desktop"
 	""
-	"Double-click AllWeaveBuild.exe to open the desktop application. The program stores its sessions, Pi settings, kernel, and WebView data in the data folder next to the executable."
+	"Double-click AllWeaveBuild.exe to open the desktop application. The program stores its sessions, Pi settings, and WebView data in the data folder next to the executable."
 	""
 	"By default, the workspaces folder is authorized. Add one existing folder path per line to workspace-roots.txt to allow other projects. Relative paths are resolved from this folder. Restart the application after editing the file."
 	""
 	"The application uses the Windows WebView2 Runtime. If it is not installed on the target PC, rebuild with -WebView2FixedRuntime pointing to an extracted Microsoft Fixed Version WebView2 runtime folder."
 	""
-	"The Pi kernel is stored in runtime/pi-windows-x64.zip. Replace that archive with a new official Windows x64 Pi release to update the kernel; the next launch extracts it into data/pi-kernel."
+	"The Pi coding-agent SDK is bundled from the project source and runs inside the application service."
 ), $utf8NoBom)
 
 $temporaryArtifactPattern = '(^|[._-])(test|tests|testing|spec|specs|fixtures?|tmp|temp)([._-]|$)|^(coverage|\.nyc_output|\.cache|\.vite|\.model-generation-)'

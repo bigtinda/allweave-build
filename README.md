@@ -23,11 +23,11 @@
 
 **AllWeave Build** 是 AllWeave「万象成序」品牌体系中的 **Build · 构序**，面向本地项目的 AI 编程工作台。本仓库基于 Pi，提供浏览器工作台、Windows 桌面封装，以及可扩展的编程代理底层。
 
-你可以选定项目目录、连接模型、提出任务，在同一个界面查看回复与工具执行过程，并在需要时批准操作。会话和配置保存在本机，模型请求由本地服务和 Pi 内核发出。
+你可以选定项目目录、连接模型、提出任务，在同一个界面查看回复与工具执行过程，并在需要时批准操作。会话和配置保存在本机，Pi coding-agent SDK 以内嵌源码方式运行在本地服务进程中。
 
-界面与桌面程序统一使用 **AllWeave Build · 构序** 品牌。底层包名保留 `@earendil-works/pi-*`，项目内置 Pi `1.1.0` Windows x64 内核。
+界面与桌面程序统一使用 **AllWeave Build · 构序** 品牌。底层包名保留 `@earendil-works/pi-*`；工作台直接使用仓库内 `packages/coding-agent` 及相关 Pi 源码，不依赖独立 Pi 可执行文件。
 
-Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-build/releases) 下载便携包，解压后运行 `AllWeaveBuild.exe`。包内包含 Node.js 和 Pi 内核；模型凭据仍需自行配置，系统需具备 WebView2 Runtime。
+Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-build/releases) 下载便携包，解压后运行 `AllWeaveBuild.exe`。包内包含 Node.js 和 Pi SDK 源码；模型凭据仍需自行配置，系统需具备 WebView2 Runtime。
 
 ![AllWeave Build 构序工作台](docs/brand/workbench.png)
 
@@ -42,7 +42,7 @@ Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-buil
 
 ## 快速开始
 
-当前 Web 工作台通过 **Windows x64 Pi 内核**运行编程会话。准备 Windows x64、Git 和 **Node.js 24.3 或更新版本**。Pi 底层 CLI 的最低 Node.js 要求为 22.19；Web 工作台使用更高要求。
+Web 工作台通过仓库中的 Pi coding-agent SDK 运行编程会话。准备 Windows x64、Git 和 **Node.js 24.3 或更新版本**。
 
 ### 1. 获取项目并安装依赖
 
@@ -56,17 +56,9 @@ Copy-Item apps/server/.env.example .env
 
 `hydrate:model-data` 需要网络连接，用于准备底层模型数据。已有 `.env` 时直接编辑现有文件，保留自己的配置。
 
-### 2. 核对内置 Pi 内核
+### 2. 使用内置 Pi SDK
 
-仓库根目录已包含 `pi-windows-x64.zip`，克隆后无需另行下载 Pi。内核版本为 `1.1.0`，校验值记录在 [pi-windows-x64.zip.sha256](pi-windows-x64.zip.sha256)。
-
-保留原始 ZIP，无需手动解压；首次启动会校验并解压到 `.pi-console/pi-kernel/`。更新时可用 [Pi 上游发行页](https://github.com/earendil-works/pi/releases) 的 Windows x64 ZIP 替换，并同步更新 SHA-256 记录。
-
-如需放在其他位置，在根目录 `.env` 中指定路径：
-
-```dotenv
-PI_CONSOLE_KERNEL_ZIP=D:/tools/pi-windows-x64.zip
-```
+Pi coding-agent SDK 和相关运行时代码位于 `packages/`。它与工作台服务在同一 Node.js 进程中运行；升级 Pi 时更新仓库源码并重新启动服务，无需下载或解压独立内核。
 
 ### 3. 启动工作台
 
@@ -92,7 +84,6 @@ npm run dev:web
 | --- | --- |
 | `.env` | 本地服务配置；示例见 [apps/server/.env.example](apps/server/.env.example) |
 | `PI_CONSOLE_ROOTS` | 工作区目录，如 `D:/projects/app;D:/projects/library` |
-| `PI_CONSOLE_KERNEL_ZIP` | Pi Windows x64 内核 ZIP 的位置 |
 | `PI_CONSOLE_DATA_DIR` | 控制台数据目录，默认 `.pi-console/` |
 | `.pi-console/console.sqlite` | 会话界面状态 |
 | `.pi-console/sessions/` | Pi 原生 JSONL 会话记录 |
@@ -104,13 +95,13 @@ API Key 和 OAuth 凭据由本地服务管理，浏览器不直接调用模型 A
 
 工作台面向本机单用户与可信项目，服务默认只监听 `127.0.0.1`，并校验访问令牌、Host 和 Origin。工具访问会检查授权目录与路径。
 
-Pi 内核、可信扩展和获准命令使用当前 Windows 用户权限。界面中的工具确认不提供操作系统级隔离；需要更强隔离时，参阅 [容器与沙箱说明](packages/coding-agent/docs/containerization.md)。
+Pi SDK、可信扩展和获准命令使用当前 Windows 用户权限。界面中的工具确认不提供操作系统级隔离；需要更强隔离时，参阅 [容器与沙箱说明](packages/coding-agent/docs/containerization.md)。
 
 ## Windows 桌面版
 
 桌面版用 Tauri 启动本地 Node.js 服务，并在 Windows 原生窗口中打开工作台。关闭窗口时会停止服务进程树。
 
-自行打包需要 **Rust 1.90 或更新版本**、Visual Studio C++ Build Tools、WebView2 Runtime，以及上述依赖和仓库根目录的 `pi-windows-x64.zip`。
+自行打包需要 **Rust 1.90 或更新版本**、Visual Studio C++ Build Tools、WebView2 Runtime，以及上述依赖。
 
 在 PowerShell 中执行：
 
@@ -118,7 +109,7 @@ Pi 内核、可信扩展和获准命令使用当前 Windows 用户权限。界�
 .\desktop\build-portable.ps1 -BuildWeb
 ```
 
-产物为 `desktop/dist/AllWeaveBuildPortable.zip`。解压后运行 `AllWeaveBuild.exe`，无需安装程序。包内自带 Node.js 和 Pi 内核。目录必须可写，会话、模型配置、内核和 WebView 数据保存在程序旁的 `data/` 目录。
+产物为 `desktop/dist/AllWeaveBuildPortable.zip`。解压后运行 `AllWeaveBuild.exe`，无需安装程序。包内自带 Node.js 和 Pi SDK 源码。目录必须可写，会话、模型配置和 WebView 数据保存在程序旁的 `data/` 目录。
 
 默认授权同目录下的 `workspaces/`。在 `workspace-roots.txt` 中逐行加入其他项目目录后重启程序。固定版本 WebView2 的打包方式见 [桌面版说明](desktop/README.md)。
 

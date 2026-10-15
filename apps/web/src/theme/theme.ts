@@ -22,7 +22,7 @@ export function consoleTheme(
 			divider: colors.line,
 			error: { main: dark ? "#FFB4AB" : "#B3261E" },
 		},
-		shape: { borderRadius: 12 },
+		shape: { borderRadius: 8 },
 		spacing: 8,
 		transitions: {
 			easing: {
@@ -52,7 +52,7 @@ export function consoleTheme(
 		components: {
 			MuiButton: {
 				defaultProps: { disableElevation: true },
-				styleOverrides: { root: { borderRadius: 10, paddingInline: 20 } },
+				styleOverrides: { root: { borderRadius: 6, paddingInline: 16, minHeight: 36 } },
 			},
 			MuiIconButton: { styleOverrides: { root: { padding: 10 } } },
 			MuiTextField: { defaultProps: { size: "small" } },

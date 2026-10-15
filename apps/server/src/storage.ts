@@ -55,7 +55,6 @@ export class StorageManager {
 
 	async summary(): Promise<StorageSummary> {
 		const sessionsDirectory = join(this.dataDirectory, "sessions");
-		const kernelDirectory = join(this.dataDirectory, "pi-kernel");
 		const databaseFiles = [
 			"console.sqlite",
 			"console.sqlite-wal",
@@ -86,7 +85,6 @@ export class StorageManager {
 		const agentRelative = relative(this.dataDirectory, this.agentDirectory);
 		const managedNames = new Set([
 			"sessions",
-			"pi-kernel",
 			...databaseFiles.map((path) => path.slice(this.dataDirectory.length + 1)),
 		]);
 		if (agentRelative && agentRelative !== ".." && !agentRelative.startsWith(`..${sep}`)) {
@@ -98,16 +96,14 @@ export class StorageManager {
 		const measures = await Promise.all([
 			measurePath(sessionsDirectory),
 			measurePath(this.agentDirectory),
-			measurePath(kernelDirectory),
 			measureFiles(databaseFiles),
 			measureFiles(otherPaths),
 		]);
 		const categories: StorageCategory[] = [
 			{ id: "sessions", label: "会话记录", path: sessionsDirectory, ...measures[0] },
 			{ id: "agent", label: "配置与插件", path: this.agentDirectory, ...measures[1] },
-			{ id: "kernel", label: "内核", path: kernelDirectory, ...measures[2] },
-			{ id: "database", label: "工作台数据库", path: databaseFiles[0], ...measures[3] },
-			{ id: "other", label: "其他运行文件", path: this.dataDirectory, ...measures[4] },
+			{ id: "database", label: "工作台数据库", path: databaseFiles[0], ...measures[2] },
+			{ id: "other", label: "其他运行文件", path: this.dataDirectory, ...measures[3] },
 		];
 		const diskStats = await statfs(this.dataDirectory).catch(() => undefined);
 		const totalBytes = categories.reduce((total, category) => total + category.bytes, 0);

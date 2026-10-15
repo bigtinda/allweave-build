@@ -15,8 +15,18 @@ import {
 	useMediaQuery,
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FileCode, Folder, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import {
+	ArrowLeft,
+	FileCode,
+	Folder,
+	GitBranch,
+	Globe,
+	Maximize2,
+	Minimize2,
+	RefreshCw,
+	X,
+} from "./WorkbenchIcons.tsx";
 import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
@@ -33,8 +43,11 @@ import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
 import { usePreferences } from "../stores/preferences.ts";
 import { motionTokens, SpringValue } from "../theme/motion.ts";
+import { BrowserPanel } from "./BrowserPanel.tsx";
+import { GitPanel } from "./GitPanel.tsx";
 import { SpringPages } from "./SpringPages.tsx";
-import { ToolCard } from "./ToolCard.tsx";
+import { WorkspaceInspector } from "./WorkspaceInspector.tsx";
+import "./workspace-panel.css";
 
 // Bundle Monaco locally; loading an editor must not contact a public CDN.
 self.MonacoEnvironment = { getWorker: () => new editorWorker() };
@@ -76,6 +89,7 @@ export function WorkspacePanel({
 	onResizeStateChange,
 	onFileOpen,
 	onReference,
+	onBrowserRequest,
 	close,
 }: {
 	workspace: Workspace;
@@ -85,9 +99,10 @@ export function WorkspacePanel({
 	onResizeStateChange: (resizing: boolean) => void;
 	onFileOpen: () => void;
 	onReference: (path: string) => void;
+	onBrowserRequest: (text: string) => void;
 	close: () => void;
 }) {
-	const [tab, setTab] = useState(0);
+	const [tab, setTab] = useState(4);
 	const [directory, setDirectory] = useState(".");
 	const [search, setSearch] = useState("");
 	const [file, setFile] = useState<FileContent>();
@@ -97,6 +112,7 @@ export function WorkspacePanel({
 	const [confirmSave, setConfirmSave] = useState(false);
 	const [confirmDiscard, setConfirmDiscard] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [savedPath, setSavedPath] = useState("");
 	const [fileMaximized, setFileMaximized] = useState(false);
 	const previewOpenRef = useRef(previewOpen);
 	const previewTransitionId = useRef(0);
@@ -180,6 +196,7 @@ export function WorkspacePanel({
 		return () => widthSpring.current.stop();
 	}, [panelWidth, reducedMotion]);
 	const open = async (path: string) => {
+		setSavedPath("");
 		try {
 			const content = await api<FileContent>(`/workspaces/${workspace.id}/file?path=${encodeURIComponent(path)}`);
 			previewTransitionId.current += 1;
@@ -205,6 +222,7 @@ export function WorkspacePanel({
 			);
 			setFile(updated);
 			setConfirmSave(false);
+			setSavedPath(file.path);
 			setError("");
 			void client.invalidateQueries({ queryKey: ["files", workspace.id] });
 		} catch (error) {
@@ -243,8 +261,13 @@ export function WorkspacePanel({
 		const activePointer = resizePointer.current;
 		if (!activePointer || activePointer.pointerId !== event.pointerId) return;
 		const maximum = maximumPanelWidth();
+		const maximumBeforeOverlay = Math.max(360, maximum - 360);
+		const canExpandToOverlay = activePointer.startWidth >= maximumBeforeOverlay - 1;
 		onPanelWidthChange(
-			Math.min(maximum, Math.max(360, activePointer.startWidth + activePointer.startX - event.clientX)),
+			Math.min(
+				canExpandToOverlay ? maximum : maximumBeforeOverlay,
+				Math.max(360, activePointer.startWidth + activePointer.startX - event.clientX),
+			),
 		);
 	};
 	const stopResize = () => {
@@ -256,7 +279,7 @@ export function WorkspacePanel({
 	const maximumPanelWidth = () => {
 		const layoutWidth = document.querySelector<HTMLElement>(".console-layout")?.clientWidth ?? window.innerWidth;
 		const sidebarWidth = document.querySelector<HTMLElement>(".console-layout > .sidebar-slot")?.offsetWidth ?? 0;
-		return Math.max(360, Math.min(960, layoutWidth - sidebarWidth - 552));
+		return Math.max(360, layoutWidth - sidebarWidth);
 	};
 	const language =
 		(
@@ -274,6 +297,7 @@ export function WorkspacePanel({
 		<aside
 			ref={panelElement}
 			className={`workspace-panel${file ? " is-file-open" : ""}${fileMaximized ? " is-file-maximized" : ""}`}
+			aria-label="项目工具面板"
 			style={{ "--workspace-panel-width": `${visualWidth}px` } as CSSProperties}
 		>
 			<hr
@@ -281,7 +305,7 @@ export function WorkspacePanel({
 				aria-label="调整工作区宽度"
 				aria-orientation="vertical"
 				aria-valuemin={360}
-				aria-valuemax={960}
+				aria-valuemax={maximumPanelWidth()}
 				aria-valuenow={panelWidth}
 				tabIndex={0}
 				onPointerDown={startResize}
@@ -290,7 +314,10 @@ export function WorkspacePanel({
 				onPointerCancel={stopResize}
 				onLostPointerCapture={stopResize}
 				onKeyDown={(event) => {
-					if (event.key === "ArrowLeft") onPanelWidthChange(Math.min(maximumPanelWidth(), panelWidth + 24));
+					const maximum = maximumPanelWidth();
+					const maximumBeforeOverlay = Math.max(360, maximum - 360);
+					const allowedMaximum = panelWidth >= maximumBeforeOverlay - 1 ? maximum : maximumBeforeOverlay;
+					if (event.key === "ArrowLeft") onPanelWidthChange(Math.min(allowedMaximum, panelWidth + 24));
 					if (event.key === "ArrowRight") onPanelWidthChange(Math.max(360, panelWidth - 24));
 				}}
 			/>
@@ -310,10 +337,28 @@ export function WorkspacePanel({
 					</>
 				) : (
 					<>
-						<span>工作区</span>
+						<Folder size={16} />
+						<span className="panel-project-name" title={workspace.path}>
+							{workspace.name}
+						</span>
+						<span className="panel-project-label">工作区</span>
 						<span className="grow" />
 					</>
 				)}
+				<Tooltip title={panelWidth >= maximumPanelWidth() - 8 ? "还原面板宽度" : "展开工具面板"}>
+					<IconButton
+						aria-label="切换工具面板宽度"
+						onClick={() =>
+							onPanelWidthChange(
+								panelWidth >= maximumPanelWidth() - 8
+									? Math.min(480, maximumPanelWidth())
+									: maximumPanelWidth(),
+							)
+						}
+					>
+						{panelWidth >= maximumPanelWidth() - 8 ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+					</IconButton>
+				</Tooltip>
 				<Tooltip title="隐藏面板">
 					<IconButton aria-label="隐藏工作区面板" onClick={close}>
 						<X size={17} />
@@ -321,6 +366,7 @@ export function WorkspacePanel({
 				</Tooltip>
 			</div>
 			<Tabs
+				className="workspace-primary-tabs"
 				value={tab}
 				onChange={(_, value: number) => {
 					setTab(value);
@@ -329,11 +375,16 @@ export function WorkspacePanel({
 				variant="fullWidth"
 				aria-label="工作区面板"
 			>
-				<Tab label="文件" />
-				<Tab label="工具" />
-				<Tab label="活动" />
+				<Tab value={0} label="文件" icon={<FileCode size={16} />} iconPosition="start" />
+				<Tab value={4} label="浏览器" icon={<Globe size={16} />} iconPosition="start" />
+				<Tab value={3} label="Git" icon={<GitBranch size={16} />} iconPosition="start" />
 			</Tabs>
 			<div className="panel-content">
+				{savedPath && (
+					<Alert severity="success" aria-live="polite" onClose={() => setSavedPath("")}>
+						已保存 {savedPath}
+					</Alert>
+				)}
 				{error && (
 					<Alert severity="error" onClose={() => setError("")}>
 						{error}
@@ -382,6 +433,11 @@ export function WorkspacePanel({
 										inputProps={{ "aria-label": "筛选文件" }}
 									/>
 									{files.error && <Alert severity="error">{files.error.message}</Alert>}
+									{!!files.data?.length && !visibleFiles.length && (
+										<p className="muted" aria-live="polite">
+											没有匹配的文件，请修改筛选词。
+										</p>
+									)}
 									<div ref={fileList} className="file-list">
 										{visibleFiles.map((entry) => (
 											<button
@@ -432,7 +488,10 @@ export function WorkspacePanel({
 													language={language}
 													value={draft}
 													theme={dark ? "pi-dark" : "pi-light"}
-													onChange={(value) => setDraft(value ?? "")}
+													onChange={(value) => {
+														setDraft(value ?? "");
+														setSavedPath("");
+													}}
 													options={{
 														minimap: { enabled: false },
 														fontSize: 13,
@@ -467,52 +526,31 @@ export function WorkspacePanel({
 								</div>
 							)}
 						</div>
-					) : tab === 1 ? (
-						<div className="workspace-tab-content">
-							<span className="eyebrow">真实工具执行 · {session.tools.length}</span>
-							{session.tools.length ? (
-								session.tools.map((tool) => <ToolCard key={tool.id} tool={tool} />)
-							) : (
-								<p className="muted">Agent 调用工具后，输入和结果会显示在这里。</p>
+					) : tab === 4 ? (
+						<BrowserPanel
+							key={session.id}
+							sessionId={session.id}
+							onRequest={onBrowserRequest}
+							running={session.tools.some(
+								(tool) => tool.name === "browser" && (tool.status === "running" || tool.status === "approval"),
 							)}
-						</div>
+						/>
 					) : (
-						<div className="workspace-tab-content">
-							<div className="activity-summary">
-								<span className="eyebrow">当前会话</span>
-								<strong>{session.title}</strong>
-								<span>{session.model?.name ?? "尚未配置模型"}</span>
-								<span className="muted">{session.model?.provider ?? ""}</span>
-							</div>
-							{session.tokens && (
-								<div className="token-row">
-									<div>
-										<strong>{session.tokens.input.toLocaleString()}</strong>
-										<small>输入 Token</small>
-									</div>
-									<div>
-										<strong>{session.tokens.output.toLocaleString()}</strong>
-										<small>输出 Token</small>
-									</div>
-								</div>
-							)}
-							<span className="eyebrow">活动时间线</span>
-							<ol className="timeline">
-								{session.activity
-									.filter((item) => item.type !== "message.delta")
-									.slice(-50)
-									.reverse()
-									.map((item) => (
-										<li key={item.id}>
-											<span>{item.description}</span>
-											<small>{new Date(item.timestamp).toLocaleTimeString()}</small>
-										</li>
-									))}
-							</ol>
-						</div>
+						<GitPanel
+							key={workspace.id}
+							workspace={workspace}
+							hasUnsavedFile={!!file && draft !== file.content}
+							onBranchChange={() => {
+								setFile(undefined);
+								setDraft("");
+								setPreviewOpen(false);
+								setFileMaximized(false);
+							}}
+						/>
 					)}
 				</SpringPages>
 			</div>
+			<WorkspaceInspector key={session.id} session={session} />
 			<Dialog open={confirmSave} onClose={() => !saving && setConfirmSave(false)}>
 				<DialogTitle>保存工作区文件？</DialogTitle>
 				<DialogContent>
@@ -524,7 +562,7 @@ export function WorkspacePanel({
 						取消
 					</Button>
 					<Button disabled={saving} onClick={() => void save()}>
-						确认保存
+						{saving ? "保存中…" : "确认保存"}
 					</Button>
 				</DialogActions>
 			</Dialog>

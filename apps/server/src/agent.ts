@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isModelType } from "@earendil-works/pi-ai/utils/model-operations";
-import type { JsonAgentSessionEvent, SessionStats } from "@earendil-works/pi-coding-agent";
 import {
 	type AgentSession,
 	type createAgentSession,
@@ -22,6 +21,7 @@ import {
 	type AccessMode,
 	type Approval,
 	applyEvent,
+	type ChatMessage,
 	type ModelOption,
 	type Resources,
 	type SessionDetail,
@@ -30,9 +30,10 @@ import {
 	type ThinkingLevel,
 	type Workspace,
 } from "../../shared/src/protocol.ts";
-import { type AdaptedEvent, adaptRpcEvent, adaptSdkEvent } from "./adapter.ts";
-import { type PiKernelArchive, PiRpcClient, type RpcRecord, rpcValue } from "./kernel.ts";
-import { APPROVAL_MARKER } from "./kernel-guard.ts";
+import { type AdaptedEvent, adaptSdkEvent } from "./adapter.ts";
+import { BrowserService, createBrowserTool } from "./browser.ts";
+import { captureGitSnapshot, changedGitFiles, type GitSnapshot } from "./git.ts";
+import { prepareDoomCordisHostExtension } from "./kernel.ts";
 import type { ProviderManager } from "./providers.ts";
 import { HttpError, workspacePath } from "./security.ts";
 import type { ConsoleStore, SavedSession } from "./store.ts";
@@ -43,65 +44,40 @@ interface PendingApproval {
 	resolve: (approved: boolean) => void;
 }
 
-interface KernelSession {
-	client: PiRpcClient;
-}
-
-interface KernelState {
-	model?: { id: string; provider: string; name?: string; reasoning?: boolean };
-	thinkingLevel: ThinkingLevel;
-	sessionFile?: string;
-	sessionId: string;
-}
-
-function parseRpcApproval(message: string): { toolCallId: string; name: string; input: unknown } | undefined {
-	if (!message.startsWith(APPROVAL_MARKER)) return undefined;
-	try {
-		const parsed: unknown = JSON.parse(message.slice(APPROVAL_MARKER.length));
-		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
-		const value = parsed as Record<string, unknown>;
-		if (typeof value.toolCallId !== "string" || typeof value.name !== "string") return undefined;
-		return { toolCallId: value.toolCallId, name: value.name, input: value.input };
-	} catch {
-		return undefined;
-	}
-}
-
 export class AgentService {
 	private store: ConsoleStore;
 	private directory: string;
 	private records = new Map<string, SavedSession>();
 	private agents = new Map<string, Promise<AgentSession>>();
-	private kernelAgents = new Map<string, Promise<KernelSession>>();
 	private busy = new Set<string>();
 	private cancelled = new Set<string>();
+	private runs = new Map<string, Promise<void>>();
+	private updating = new Set<string>();
+	private inputs = new Map<string, { prompt: string; text: string; references: string[] }>();
 	private listeners = new Map<string, Set<(event: SessionEvent) => void>>();
 	private approvals = new Map<string, PendingApproval>();
 	private closing = false;
 	private createSession?: typeof createAgentSession;
-	private kernel?: PiKernelArchive;
 	private providers?: ProviderManager;
 	private agentDirectory: string;
-	private guardExtensionPath: string;
+	private browser: BrowserService;
 
 	constructor(
 		store: ConsoleStore,
 		directory: string,
 		options: {
 			createSession?: typeof createAgentSession;
-			kernel?: PiKernelArchive;
 			providers?: ProviderManager;
 			agentDirectory?: string;
-			guardExtensionPath?: string;
+			browser?: BrowserService;
 		} = {},
 	) {
 		this.store = store;
 		this.directory = directory;
 		this.createSession = options.createSession;
-		this.kernel = options.kernel;
 		this.providers = options.providers;
 		this.agentDirectory = options.agentDirectory ?? getAgentDir();
-		this.guardExtensionPath = options.guardExtensionPath ?? "";
+		this.browser = options.browser ?? new BrowserService();
 		for (const record of store.sessions()) {
 			record.detail.accessMode ??= "ask";
 			record.detail.status = "idle";
@@ -194,130 +170,9 @@ export class AgentService {
 		this.agents.set(id, creating);
 		return creating;
 	}
-	private kernelAgent(id: string): Promise<KernelSession> {
-		this.get(id);
-		if (!this.kernel) throw new Error("内核发行包不可用");
-		const existing = this.kernelAgents.get(id);
-		if (existing) return existing;
-		const creating = this.initializeKernel(id).catch((error: unknown) => {
-			this.kernelAgents.delete(id);
-			throw error;
-		});
-		this.kernelAgents.set(id, creating);
-		return creating;
-	}
-	private async initializeKernel(id: string): Promise<KernelSession> {
-		if (!this.kernel) throw new Error("内核发行包不可用");
-		const record = this.records.get(id);
-		if (!record) throw new HttpError(404, "Session not found");
-		const workspace = this.workspace(record.detail.workspaceId);
-		if (!this.guardExtensionPath) throw new Error("工作区保护扩展未配置");
-		let client: PiRpcClient;
-		client = new PiRpcClient((event) => this.handleKernelRecord(id, client, event));
-		const sessionDir = join(this.directory, "sessions", id);
-		try {
-			await this.writeAccessMode(id, record.detail.accessMode);
-			await client.start({
-				executable: this.kernel.getInfo().executable,
-				cwd: workspace.path,
-				sessionDir,
-				existingSessionFile: record.file,
-				agentDir: this.agentDirectory,
-				extensionPath: this.guardExtensionPath,
-				accessModeFile: this.accessModePath(id),
-			});
-			const state = await client.request<KernelState>({ type: "get_state" });
-			record.file = state.sessionFile ?? record.file;
-			record.detail.model = state.model
-				? {
-						id: state.model.id,
-						provider: state.model.provider,
-						name: state.model.name ?? state.model.id,
-						reasoning: state.model.reasoning === true,
-						available: true,
-					}
-				: undefined;
-			record.detail.thinkingLevel = state.thinkingLevel;
-			record.detail.status = "idle";
-			this.store.saveSession(record.detail, record.file);
-			this.emit(id, { type: "session.updated" });
-			return { client };
-		} catch (error) {
-			await client.stop();
-			throw error;
-		}
-	}
-	private handleKernelRecord(id: string, client: PiRpcClient, event: RpcRecord): void {
-		if (!this.records.has(id)) return;
-		if (event.type === "extension_ui_request") {
-			this.handleKernelUiRequest(id, client, event);
-			return;
-		}
-		if (event.type === "kernel_exit") {
-			this.resolveApprovals(id);
-			this.busy.delete(id);
-			this.kernelAgents.delete(id);
-			const detail = this.get(id);
-			if (!this.closing) {
-				detail.status = "error";
-				const message = rpcValue<string>(event, "error");
-				this.emit(id, { type: "agent.error", error: message ?? "内核意外停止" });
-			}
-			return;
-		}
-		if (event.type === "agent_settled") {
-			this.resolveApprovals(id);
-			this.busy.delete(id);
-			const detail = this.get(id);
-			if (detail.status !== "error") detail.status = "idle";
-			void client
-				.request<SessionStats>({ type: "get_session_stats" })
-				.then((stats) => {
-					detail.tokens = stats.tokens;
-					this.emit(id, { type: "agent.status" });
-				})
-				.catch(() => this.emit(id, { type: "agent.status" }));
-		}
-		if (event.type === "agent_start") this.get(id).status = "running";
-		if (event.type === "session_info_changed") {
-			const name = rpcValue<string | undefined>(event, "name");
-			if (name) this.get(id).title = name;
-		}
-		const adapted = adaptRpcEvent(event as unknown as JsonAgentSessionEvent, this.get(id));
-		if (adapted) {
-			if (adapted.error) this.get(id).status = "error";
-			this.emit(id, adapted);
-		}
-	}
-	private handleKernelUiRequest(id: string, client: PiRpcClient, event: RpcRecord): void {
-		const requestId = rpcValue<string>(event, "id");
-		const method = rpcValue<string>(event, "method");
-		if (!requestId || !method) return;
-		if (method === "setTitle") {
-			const title = rpcValue<string>(event, "title");
-			if (title) {
-				this.get(id).title = title;
-				this.emit(id, { type: "session.updated" });
-			}
-			return;
-		}
-		if (method === "notify" || method === "setStatus" || method === "set_editor_text") return;
-		if (method === "confirm") {
-			const title = rpcValue<string>(event, "title") ?? "扩展确认";
-			const message = rpcValue<string>(event, "message") ?? "";
-			const parsed = parseRpcApproval(message);
-			const approval = parsed ?? { toolCallId: requestId, name: title, input: message };
-			void this.requestApproval(id, approval.toolCallId, approval.name, approval.input)
-				.then((approved) => client.sendUiResponse(requestId, approved))
-				.catch(() => client.sendUiResponse(requestId, false));
-			return;
-		}
-		client.sendUiCancelled(requestId);
-	}
 	async prepareForProviderChange(): Promise<void> {
-		if (this.busy.size > 0) throw new HttpError(409, "请先停止运行中的会话，再修改供应商凭据");
-		for (const pending of this.kernelAgents.values()) await (await pending).client.stop();
-		this.kernelAgents.clear();
+		if (this.busy.size > 0 || this.updating.size > 0)
+			throw new HttpError(409, "请先停止运行中的会话，再修改供应商凭据");
 		for (const pending of this.agents.values()) (await pending).dispose();
 		this.agents.clear();
 	}
@@ -327,16 +182,19 @@ export class AgentService {
 		if (!record) throw new HttpError(404, "Session not found");
 		const workspace = this.workspace(record.detail.workspaceId);
 		const cwd = workspace.path;
-		const agentDir = getAgentDir();
+		const agentDir = this.agentDirectory;
 		const settingsManager = SettingsManager.create(cwd, agentDir);
 		// Workspace authorization also trusts its configuration/extensions. They execute native server code.
 		settingsManager.setProjectTrusted(true);
+		const cordisHostPath = await prepareDoomCordisHostExtension(agentDir);
 		const resourceLoader = new DefaultResourceLoader({
 			cwd,
 			agentDir,
 			settingsManager,
+			additionalExtensionPaths: cordisHostPath ? [cordisHostPath] : [],
 			extensionFactories: [
 				(pi) => {
+					pi.registerTool(createBrowserTool(this.browser, id));
 					pi.on("tool_call", async (event) => {
 						const input = event.input as Record<string, unknown>;
 						if (["read", "write", "edit", "ls", "find", "grep"].includes(event.toolName)) {
@@ -376,6 +234,7 @@ export class AgentService {
 			: SessionManager.create(cwd, join(this.directory, "sessions"));
 		const { session, modelFallbackMessage } = await this.createSession({
 			cwd,
+			agentDir,
 			resourceLoader,
 			settingsManager,
 			sessionManager,
@@ -419,9 +278,19 @@ export class AgentService {
 			session.subscribe((event) => {
 				const adapted = adaptSdkEvent(event, this.get(id));
 				if (!adapted) return;
+				if (adapted.message?.role === "user") {
+					const input = this.inputs.get(id);
+					adapted.message.input =
+						input?.prompt === adapted.message.text
+							? { text: input.text, references: input.references }
+							: this.get(id).messages.find((message) => message.id === adapted.message?.id)?.input;
+				}
 				if (event.type === "agent_start") this.get(id).status = "running";
 				// prompt's finally owns idle status: agent_end can precede extension settlement.
-				if (event.type === "agent_end") this.get(id).tokens = session.getSessionStats().tokens;
+				if (event.type === "agent_end") {
+					const stats = session.getSessionStats();
+					this.get(id).tokens = { ...stats.tokens, cost: stats.cost };
+				}
 				if (adapted.error) this.get(id).status = "error";
 				this.emit(id, adapted);
 			});
@@ -433,21 +302,6 @@ export class AgentService {
 		}
 	}
 
-	private accessModePath(id: string): string {
-		return join(this.directory, "policies", `${id}.json`);
-	}
-	private async writeAccessMode(id: string, mode: AccessMode): Promise<void> {
-		const path = this.accessModePath(id);
-		await mkdir(join(this.directory, "policies"), { recursive: true });
-		const temporary = `${path}.${randomUUID()}.tmp`;
-		try {
-			await writeFile(temporary, `${JSON.stringify({ mode })}\n`, { encoding: "utf8", mode: 0o600 });
-			await rename(temporary, path);
-		} catch (error) {
-			await rm(temporary, { force: true });
-			throw error;
-		}
-	}
 	private promptForAccessMode(id: string, text: string): string {
 		if (this.get(id).accessMode !== "plan") return text;
 		return `计划模式已启用。请先分析任务并给出清晰的实施计划；可以使用只读工具检查工作区，但不要修改文件、运行命令或调用会改变外部状态的工具。等用户明确确认计划后，再切换权限模式执行。\n\n${text}`;
@@ -490,11 +344,19 @@ export class AgentService {
 	async prompt(id: string, text: string, references: string[]): Promise<void> {
 		if (this.closing) throw new HttpError(503, "Server is shutting down");
 		this.get(id);
-		if (this.busy.has(id)) throw new HttpError(409, "Agent is already running");
-		if (this.kernel) return this.promptKernel(id, text, references);
+		if (this.busy.has(id) || this.updating.has(id)) throw new HttpError(409, "Agent is already running");
 		this.busy.add(id);
 		this.cancelled.delete(id);
+		let finishRun!: () => void;
+		this.runs.set(
+			id,
+			new Promise<void>((resolve) => {
+				finishRun = resolve;
+			}),
+		);
 		let session: AgentSession;
+		let fileSnapshot: GitSnapshot | undefined;
+		let previousAssistantMessages = new Set<string>();
 		try {
 			session = await this.agent(id);
 			if (!session.model || !this.get(id).model)
@@ -502,6 +364,12 @@ export class AgentService {
 			const workspace = this.workspace(this.get(id).workspaceId);
 			for (const reference of references) await workspacePath(workspace.path, reference);
 			if (this.cancelled.has(id)) throw new HttpError(409, "Task was cancelled before execution");
+			fileSnapshot = await captureGitSnapshot(workspace.path).catch(() => undefined);
+			previousAssistantMessages = new Set(
+				this.get(id)
+					.messages.filter((message) => message.role === "assistant")
+					.map((message) => message.id),
+			);
 			// A reference asks the agent to inspect an authorized file, without uploading host paths.
 			const prompt =
 				this.promptForAccessMode(id, text) +
@@ -510,6 +378,7 @@ export class AgentService {
 					: "");
 			this.get(id).error = undefined;
 			this.get(id).status = "running";
+			this.inputs.set(id, { prompt, text, references: [...references] });
 			this.emit(id, { type: "agent.status" });
 			void session
 				.prompt(prompt)
@@ -517,96 +386,151 @@ export class AgentService {
 					this.get(id).status = "error";
 					this.emit(id, { type: "agent.error", error: error instanceof Error ? error.message : String(error) });
 				})
-				.finally(() => {
-					this.resolveApprovals(id);
-					this.busy.delete(id);
-					this.cancelled.delete(id);
-					const detail = this.get(id);
-					if (detail.status !== "error") detail.status = "idle";
-					detail.tokens = session.getSessionStats().tokens;
-					this.emit(id, { type: "agent.status" });
+				.finally(async () => {
+					try {
+						if (fileSnapshot) {
+							const currentSnapshot = await captureGitSnapshot(workspace.path).catch(() => undefined);
+							if (currentSnapshot) {
+								const changedFiles = await changedGitFiles(fileSnapshot, currentSnapshot).catch(() => []);
+								const message = this.get(id).messages.findLast(
+									(candidate) =>
+										candidate.role === "assistant" && !previousAssistantMessages.has(candidate.id),
+								);
+								if (message && changedFiles.length)
+									this.emit(id, {
+										type: "message.completed",
+										message: { ...message, changedFiles },
+									});
+							}
+						}
+					} finally {
+						this.resolveApprovals(id);
+						this.busy.delete(id);
+						this.cancelled.delete(id);
+						this.inputs.delete(id);
+						this.runs.delete(id);
+						finishRun();
+						const detail = this.get(id);
+						if (detail.status !== "error") detail.status = "idle";
+						const stats = session.getSessionStats();
+						detail.tokens = { ...stats.tokens, cost: stats.cost };
+						this.emit(id, { type: "agent.status" });
+					}
 				});
 		} catch (error) {
 			this.busy.delete(id);
 			this.cancelled.delete(id);
-			throw error;
-		}
-	}
-	private async promptKernel(id: string, text: string, references: string[]): Promise<void> {
-		this.busy.add(id);
-		this.cancelled.delete(id);
-		try {
-			const session = await this.kernelAgent(id);
-			if (!this.get(id).model) {
-				throw new HttpError(400, "No model configured. Add a provider credential and select an available model.");
-			}
-			const workspace = this.workspace(this.get(id).workspaceId);
-			for (const reference of references) await workspacePath(workspace.path, reference);
-			if (this.cancelled.has(id)) throw new HttpError(409, "Task was cancelled before execution");
-			const prompt =
-				this.promptForAccessMode(id, text) +
-				(references.length
-					? `\n\nWorkspace file references:\n${references.map((path) => `- ${JSON.stringify(path)}`).join("\n")}`
-					: "");
-			this.get(id).error = undefined;
-			this.get(id).status = "running";
-			this.emit(id, { type: "agent.status" });
-			const result = await session.client.request<{ disposition: string }>({ type: "prompt", message: prompt });
-			if (result.disposition === "handled") {
-				this.resolveApprovals(id);
-				this.busy.delete(id);
-				this.get(id).status = "idle";
-				this.emit(id, { type: "agent.status" });
-			}
-		} catch (error) {
-			this.resolveApprovals(id);
-			this.busy.delete(id);
-			this.cancelled.delete(id);
-			this.get(id).status = "error";
-			this.emit(id, { type: "agent.error", error: error instanceof Error ? error.message : String(error) });
+			this.runs.delete(id);
+			finishRun();
 			throw error;
 		}
 	}
 	async abort(id: string): Promise<void> {
 		this.get(id);
+		const run = this.runs.get(id);
 		if (this.busy.has(id)) this.cancelled.add(id);
 		this.resolveApprovals(id);
-		if (this.kernel) {
-			const session = await this.kernelAgent(id);
-			await session.client.request({ type: "abort" });
-			return;
+		const pending = this.agents.get(id);
+		if (pending) await (await pending).abort();
+		await run;
+	}
+	async interrupt(id: string, text: string, references: string[]): Promise<void> {
+		this.get(id);
+		if (this.updating.has(id)) throw new HttpError(409, "会话正在更新，请稍后重试");
+		this.updating.add(id);
+		try {
+			const workspace = this.workspace(this.get(id).workspaceId);
+			for (const reference of references) await workspacePath(workspace.path, reference);
+			await this.abort(id);
+		} finally {
+			this.updating.delete(id);
 		}
-		await (await this.agent(id)).abort();
+		await this.prompt(id, text, references);
+	}
+	private findBranchMessageEntry(session: AgentSession, target: ChatMessage) {
+		return session.sessionManager.getBranch().findLast((entry) => {
+			if (entry.type !== "message" || entry.message.role !== target.role) return false;
+			const content = entry.message.content;
+			const text =
+				typeof content === "string"
+					? content
+					: content
+							.filter((block) => block.type === "text")
+							.map((block) => block.text)
+							.join("");
+			return entry.message.timestamp === Date.parse(target.timestamp) && text === target.text;
+		});
+	}
+	private async navigateToMessage(
+		id: string,
+		messageId: string,
+		role: ChatMessage["role"],
+	): Promise<{ target: ChatMessage; session: SessionDetail; editorText: string | undefined }> {
+		const target = this.get(id).messages.find((message) => message.id === messageId && message.role === role);
+		if (!target) throw new HttpError(404, role === "user" ? "用户消息不存在" : "AI 回复不存在");
+		await this.abort(id);
+		const session = await this.agent(id);
+		const entry = this.findBranchMessageEntry(session, target);
+		if (!entry) throw new HttpError(409, "消息不在当前 Pi 会话分支中");
+		const result = await session.navigateTree(entry.id, { summarize: false });
+		if (result.cancelled) throw new HttpError(409, "扩展取消了会话分支操作");
+		// Persist the selected branch point so a restart restores the same active path.
+		session.sessionManager.appendCustomEntry("pi-console.navigation", { messageId, role });
+		const detail = this.get(id);
+		const index = detail.messages.findIndex((message) => message.id === messageId);
+		detail.messages = detail.messages.slice(0, index + (role === "assistant" ? 1 : 0));
+		const toolIds = new Set(
+			session.sessionManager
+				.getBranch()
+				.flatMap((item) =>
+					item.type === "message" && item.message.role === "toolResult" ? [item.message.toolCallId] : [],
+				),
+		);
+		detail.tools = detail.tools.filter((tool) => toolIds.has(tool.id));
+		detail.status = "idle";
+		detail.error = undefined;
+		const stats = session.getSessionStats();
+		detail.tokens = { ...stats.tokens, cost: stats.cost };
+		this.emit(id, {
+			type: role === "user" ? "conversation.rewound" : "conversation.branched",
+			conversation: { messages: detail.messages, tools: detail.tools },
+		});
+		return { target, session: this.get(id), editorText: result.editorText };
+	}
+	async recall(
+		id: string,
+		messageId: string,
+	): Promise<{ session: SessionDetail; text: string; references: string[] }> {
+		if (this.updating.has(id)) throw new HttpError(409, "会话正在更新，请稍后重试");
+		this.updating.add(id);
+		try {
+			const { target, session, editorText } = await this.navigateToMessage(id, messageId, "user");
+			return {
+				session,
+				text: target.input?.text ?? editorText ?? target.text,
+				references: target.input?.references ?? [],
+			};
+		} finally {
+			this.updating.delete(id);
+		}
+	}
+	async branch(id: string, messageId: string): Promise<SessionDetail> {
+		if (this.updating.has(id)) throw new HttpError(409, "会话正在更新，请稍后重试");
+		this.updating.add(id);
+		try {
+			return (await this.navigateToMessage(id, messageId, "assistant")).session;
+		} finally {
+			this.updating.delete(id);
+		}
 	}
 	rename(id: string, title: string): void {
 		this.get(id).title = title;
 		this.emit(id, { type: "session.updated" });
 	}
 	async setModel(id: string, provider: string, modelId: string, thinkingLevel?: ThinkingLevel): Promise<void> {
-		if (this.busy.has(id)) throw new HttpError(409, "Stop the agent before changing models");
+		if (this.busy.has(id) || this.updating.has(id)) throw new HttpError(409, "Stop the agent before changing models");
 		this.busy.add(id);
 		try {
-			if (this.kernel) {
-				const runtime = await this.providers?.runtime();
-				if (!runtime) throw new Error("供应商目录不可用");
-				const model = (await runtime.getAvailable(provider)).find((item) => item.id === modelId);
-				if (!model) throw new HttpError(400, "模型没有可用凭据或当前不可用");
-				const session = await this.kernelAgent(id);
-				await session.client.request({ type: "set_model", provider, modelId });
-				const level = thinkingLevel ?? this.get(id).thinkingLevel;
-				await session.client.request({ type: "set_thinking_level", level });
-				this.get(id).model = {
-					id: model.id,
-					provider: model.provider,
-					name: model.name,
-					reasoning: model.reasoning,
-					available: true,
-				};
-				this.get(id).thinkingLevel = level;
-				this.get(id).error = undefined;
-				this.emit(id, { type: "session.updated" });
-				return;
-			}
 			const session = await this.agent(id);
 			const model = (await session.modelRuntime.getAvailable()).find(
 				(model) => model.provider === provider && model.id === modelId,
@@ -624,18 +548,25 @@ export class AgentService {
 	}
 	async setAccessMode(id: string, accessMode: AccessMode): Promise<SessionDetail> {
 		const detail = this.get(id);
-		if (this.kernel) await this.writeAccessMode(id, accessMode);
 		detail.accessMode = accessMode;
 		this.emit(id, { type: "session.updated" });
 		return detail;
 	}
 	async models(id?: string): Promise<ModelOption[]> {
-		if (this.kernel && this.providers) {
+		if (this.providers) {
 			const models = await this.providers.models();
 			if (id) this.selectInitialModel(id, models);
 			return models;
 		}
-		const runtime = id ? (await this.agent(id)).modelRuntime : await ModelRuntime.create();
+		const runtime = id
+			? (await this.agent(id)).modelRuntime
+			: await ModelRuntime.create({
+					authPath: join(this.agentDirectory, "auth.json"),
+					modelsPath: join(this.agentDirectory, "models.json"),
+					modelsStorePath: join(this.agentDirectory, "models-store.json"),
+					allowModelNetwork: false,
+					refreshOnCreate: false,
+				});
 		const available = await runtime.getAvailable();
 		const keys = new Set(available.map((model) => `${model.provider}/${model.id}`));
 		return runtime
@@ -650,28 +581,6 @@ export class AgentService {
 			}));
 	}
 	async resources(id: string): Promise<Resources> {
-		if (this.kernel) {
-			const client = (await this.kernelAgent(id)).client;
-			const result = await client.request<{
-				commands: Array<{ name: string; source: string; sourceInfo: { path?: string } }>;
-			}>({ type: "get_commands" });
-			const skills = result.commands
-				.filter((command) => command.source === "skill")
-				.map((command) => ({
-					name: command.name,
-					description: "技能",
-					filePath: command.sourceInfo.path ?? command.name,
-					status: "loaded" as const,
-				}));
-			const extensions = [
-				...new Set(
-					result.commands
-						.filter((command) => command.source === "extension")
-						.map((command) => command.sourceInfo.path ?? command.name),
-				),
-			];
-			return { skills, extensions, diagnostics: [] };
-		}
 		const session = await this.agent(id);
 		const skills = session.resourceLoader.getSkills();
 		const extensions = session.resourceLoader.getExtensions();
@@ -731,26 +640,25 @@ export class AgentService {
 	}
 	async delete(id: string): Promise<void> {
 		this.get(id);
-		if (this.busy.has(id)) throw new HttpError(409, "Stop the agent before deleting a session");
+		if (this.busy.has(id) || this.updating.has(id))
+			throw new HttpError(409, "Stop the agent before deleting a session");
 		await this.removeSession(id, true);
 	}
 	async deleteWorkspaceSessions(workspaceId: string): Promise<number> {
 		const ids = [...this.records.values()]
 			.filter((record) => record.detail.workspaceId === workspaceId)
 			.map((record) => record.detail.id);
-		if (ids.some((id) => this.busy.has(id))) {
+		if (ids.some((id) => this.busy.has(id) || this.updating.has(id))) {
 			throw new HttpError(409, "Stop all running workspace sessions before removing this workspace");
 		}
 		for (const id of ids) await this.removeSession(id, false);
 		return ids.length;
 	}
 	private async removeSession(id: string, removeTranscript: boolean): Promise<void> {
-		const kernelPending = this.kernelAgents.get(id);
-		if (kernelPending) await (await kernelPending).client.stop();
-		this.kernelAgents.delete(id);
 		const pending = this.agents.get(id);
 		if (pending) (await pending).dispose();
 		this.agents.delete(id);
+		await this.browser.release(id);
 		const file = this.records.get(id)?.file;
 		if (removeTranscript && file) await rm(file, { force: true });
 		this.records.delete(id);
@@ -759,16 +667,11 @@ export class AgentService {
 	async close(): Promise<void> {
 		this.closing = true;
 		for (const id of this.records.keys()) this.resolveApprovals(id);
-		for (const pending of this.kernelAgents.values()) {
-			const session = await pending;
-			await session.client.request({ type: "abort" }).catch(() => undefined);
-			await session.client.stop();
-		}
-		this.kernelAgents.clear();
 		for (const pending of this.agents.values()) {
 			const agent = await pending;
 			await agent.abort();
 			agent.dispose();
 		}
+		await this.browser.close();
 	}
 }

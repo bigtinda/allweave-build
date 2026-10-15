@@ -1,7 +1,7 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { DefaultPackageManager, type ProgressEvent, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { DefaultPluginStatus, PiConfiguredPackage, PiPackageJob } from "../../shared/src/protocol.ts";
 import { HttpError } from "./security.ts";
 
@@ -109,16 +109,16 @@ function isDisabledDeclaration(declaration: unknown): boolean {
 }
 
 export class PiPackageManager {
-	private executable: string | undefined;
+	private cwd: string;
 	private agentDirectory: string;
 	private beforeInstall: () => Promise<void>;
 	private jobs = new Map<string, PackageJob>();
 	private defaultStatuses = new Map<string, DefaultPluginStatus>();
-	private activeChild: ChildProcess | undefined;
+	private activeOperation: Promise<void> | undefined;
 	private operationStarting = false;
 
-	constructor(executable: string | undefined, agentDirectory: string, beforeInstall: () => Promise<void>) {
-		this.executable = executable;
+	constructor(cwd: string | undefined, agentDirectory: string, beforeInstall: () => Promise<void>) {
+		this.cwd = resolve(cwd ?? agentDirectory);
 		this.agentDirectory = agentDirectory;
 		this.beforeInstall = beforeInstall;
 		for (const source of DEFAULT_PLUGIN_SOURCES) {
@@ -255,12 +255,10 @@ export class PiPackageManager {
 	}
 
 	async close(): Promise<void> {
-		this.activeChild?.kill();
+		await this.activeOperation;
 	}
 
 	private async startCommand(action: "install" | "remove", source: string): Promise<PiPackageJob> {
-		const executable = this.executable;
-		if (!executable) throw new HttpError(503, "内核发行包不可用");
 		this.assertNoRunningOperation();
 		this.operationStarting = true;
 		try {
@@ -271,48 +269,55 @@ export class PiPackageManager {
 			if (action === "install" && this.defaultStatuses.has(source)) {
 				this.defaultStatuses.set(source, { source, status: "running", output: "" });
 			}
-			const child = spawn(executable, [action, source], {
-				cwd: this.agentDirectory,
-				env: { ...process.env, PI_CODING_AGENT_DIR: this.agentDirectory },
-				windowsHide: true,
-				stdio: ["ignore", "pipe", "pipe"],
+			const settingsManager = SettingsManager.create(this.cwd, this.agentDirectory);
+			settingsManager.setProjectTrusted(true);
+			const packageManager = new DefaultPackageManager({
+				cwd: this.cwd,
+				agentDir: this.agentDirectory,
+				settingsManager,
 			});
-			this.activeChild = child;
-			child.stdout?.on("data", (chunk: Buffer | string) => appendOutput(job, chunk));
-			child.stderr?.on("data", (chunk: Buffer | string) => appendOutput(job, chunk));
-			const finish = (status: "succeeded" | "failed", error?: string) => {
-				if (job.status !== "running") return;
-				job.status = status;
-				job.error = error;
-				job.doneAt = Date.now();
-				this.activeChild = undefined;
-				if (action === "install" && this.defaultStatuses.has(source)) {
-					this.defaultStatuses.set(source, {
-						source,
-						status,
-						output: job.output,
-						...(error ? { error } : {}),
-					});
-				}
-				this.pruneJobs();
-			};
-			child.once("error", (error) => finish("failed", error.message));
-			child.once("close", (code) => {
-				if (code === 0) finish("succeeded");
-				else {
-					const detail = job.output.trim().split(/\r?\n/u).slice(-12).join("\n");
-					finish(
-						"failed",
-						[`pi ${action} exited with status ${code ?? "unknown"}`, detail].filter(Boolean).join("\n"),
-					);
-				}
+			packageManager.setProgressCallback((event: ProgressEvent) => {
+				appendOutput(job, `${event.message ?? `${event.action} ${event.source}`}\n`);
 			});
 			this.operationStarting = false;
+			const operation = this.runPackageOperation(packageManager, job);
+			this.activeOperation = operation;
+			void operation.finally(() => {
+				if (this.activeOperation === operation) this.activeOperation = undefined;
+			});
 			return this.view(job);
 		} catch (error) {
 			this.operationStarting = false;
 			throw error;
 		}
+	}
+
+	private async runPackageOperation(packageManager: DefaultPackageManager, job: PackageJob): Promise<void> {
+		try {
+			if (job.action === "install") await packageManager.installAndPersist(job.source);
+			else await packageManager.removeAndPersist(job.source);
+			this.finishJob(job, "succeeded");
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			appendOutput(job, `${message}\n`);
+			this.finishJob(job, "failed", message);
+		}
+	}
+
+	private finishJob(job: PackageJob, status: "succeeded" | "failed", error?: string): void {
+		if (job.status !== "running") return;
+		job.status = status;
+		job.error = error;
+		job.doneAt = Date.now();
+		if (job.action === "install" && this.defaultStatuses.has(job.source)) {
+			this.defaultStatuses.set(job.source, {
+				source: job.source,
+				status,
+				output: job.output,
+				...(error ? { error } : {}),
+			});
+		}
+		this.pruneJobs();
 	}
 
 	private view(job: PackageJob): PiPackageJob {

@@ -1,21 +1,25 @@
 import { useMediaQuery } from "@mui/material";
 import { type ReactNode, useLayoutEffect, useRef } from "react";
-import { motionTokens, SpringValue } from "../theme/motion.ts";
+import { SpringValue } from "../theme/motion.ts";
 
 export function SpringSize({
 	open,
 	children,
 	width,
 	className,
+	collapsedWidth,
+	collapsedContent,
 }: {
 	open: boolean;
 	children: ReactNode;
 	width: number;
 	className: string;
+	collapsedWidth: number;
+	collapsedContent: ReactNode;
 }) {
 	const node = useRef<HTMLDivElement>(null);
 	const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-	const initialTarget = open ? width : 0;
+	const initialTarget = open ? width : collapsedWidth;
 	const spring = useRef<SpringValue>(new SpringValue());
 	const initialized = useRef(false);
 	if (!initialized.current) spring.current.set(initialTarget);
@@ -26,22 +30,27 @@ export function SpringSize({
 			initialized.current = true;
 			element.style.width = `${spring.current.position}px`;
 		}
-		element.setAttribute("aria-hidden", String(!open));
-		element.inert = !open;
 		spring.current.animate(
-			open ? width : 0,
-			motionTokens.transition.pageSlide.preset,
+			open ? width : collapsedWidth,
+			"snappy",
 			(position) => {
 				element.style.width = `${position}px`;
 			},
 			() => {},
 			reducedMotion,
+			0.5,
+			2,
 		);
 		return () => spring.current.stop();
-	}, [open, reducedMotion, width]);
+	}, [collapsedWidth, open, reducedMotion, width]);
 	return (
-		<div ref={node} className={className}>
-			{children}
+		<div ref={node} className={`${className} ${open ? "is-expanded" : "is-compact"}`}>
+			<div className="sidebar-expanded" inert={!open} aria-hidden={!open}>
+				{children}
+			</div>
+			<div className="sidebar-compact" inert={open} aria-hidden={open}>
+				{collapsedContent}
+			</div>
 		</div>
 	);
 }

@@ -27,6 +27,23 @@ export interface GitWorkspaceStatus {
 	worktrees: GitWorktree[];
 	changedFiles: string[];
 }
+export interface GitChange {
+	path: string;
+	index: string;
+	working: string;
+	conflict: boolean;
+}
+export interface GitChanges {
+	branch: string;
+	branches: string[];
+	head: string;
+	indexRevision: string;
+	files: GitChange[];
+}
+export interface GitDiff {
+	text: string;
+	binary: boolean;
+}
 export interface ModelOption {
 	id: string;
 	provider: string;
@@ -75,9 +92,7 @@ export interface ProviderLoginView {
 }
 export interface KernelInfo {
 	version: string;
-	archive: string;
-	executable: string;
-	updatedFromArchive: boolean;
+	integration: "in-process";
 }
 export interface PiPackageJob {
 	id: string;
@@ -126,6 +141,8 @@ export interface ChatMessage {
 	complete: boolean;
 	timestamp: string;
 	error?: string;
+	changedFiles?: string[];
+	input?: { text: string; references: string[] };
 }
 export interface ToolCall {
 	id: string;
@@ -165,7 +182,7 @@ export interface SessionDetail extends SessionSummary {
 	approvals: Approval[];
 	activity: Activity[];
 	sequence: number;
-	tokens?: { input: number; output: number; total: number };
+	tokens?: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number; cost?: number };
 	error?: string;
 }
 export interface FileEntry {
@@ -207,6 +224,8 @@ export type EventType =
 	| "session.updated"
 	| "message.delta"
 	| "message.completed"
+	| "conversation.rewound"
+	| "conversation.branched"
 	| "tool.started"
 	| "tool.updated"
 	| "tool.completed"
@@ -221,6 +240,7 @@ export interface SessionEvent {
 	timestamp: string;
 	message?: ChatMessage;
 	tool?: ToolCall;
+	conversation?: { messages: ChatMessage[]; tools: ToolCall[] };
 	// Summary state accompanies every event so reconnects and model/status changes agree.
 	summary: SessionSummary;
 	approvals: Approval[];
@@ -244,8 +264,8 @@ export function applyEvent(session: SessionDetail, event: SessionEvent): Session
 	return {
 		...session,
 		...event.summary,
-		messages,
-		tools,
+		messages: event.conversation?.messages ?? messages,
+		tools: event.conversation?.tools ?? tools,
 		sequence: event.eventId,
 		approvals: event.approvals,
 		tokens: event.tokens,

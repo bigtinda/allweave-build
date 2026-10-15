@@ -1,4 +1,10 @@
-import { Button, Chip, IconButton, Menu, MenuItem, Popover, Select, Tooltip } from "@mui/material";
+import { Button, Chip, IconButton, Menu, MenuItem, Popover, Select, TextField, Tooltip } from "@mui/material";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import type { AccessMode, ModelOption, SessionDetail, ThinkingLevel } from "../../../shared/src/protocol.ts";
+import { api } from "../services/api.ts";
+import { DEFAULT_COMPOSER_KEYBINDINGS } from "../stores/preferences.ts";
+import { UsageSummary } from "./UsageSummary.tsx";
 import {
 	ArrowUp,
 	Check,
@@ -11,11 +17,7 @@ import {
 	Shield,
 	Square,
 	Zap,
-} from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
-import type { AccessMode, ModelOption, SessionDetail, ThinkingLevel } from "../../../shared/src/protocol.ts";
-import { api } from "../services/api.ts";
-import { DEFAULT_COMPOSER_KEYBINDINGS } from "../stores/preferences.ts";
+} from "./WorkbenchIcons.tsx";
 
 interface Attachment {
 	name: string;
@@ -48,6 +50,9 @@ export function Composer({
 	onError,
 	connected,
 	onSessionChange,
+	text,
+	onTextChange: setText,
+	locked,
 }: {
 	session: SessionDetail;
 	models: ModelOption[];
@@ -56,20 +61,32 @@ export function Composer({
 	onError: (message: string) => void;
 	connected: boolean;
 	onSessionChange: (session: SessionDetail) => void;
+	text: string;
+	onTextChange: (text: string) => void;
+	locked: boolean;
 }) {
-	const [text, setText] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
-	const [pending, setPending] = useState(false);
+	const [working, setPending] = useState(false);
+	const pending = working || locked;
 	const [accessMenu, setAccessMenu] = useState<HTMLElement | null>(null);
 	const [modelAnchor, setModelAnchor] = useState<HTMLElement | null>(null);
 	const [modelPage, setModelPage] = useState(0);
+	const [modelSearch, setModelSearch] = useState("");
+	const [modelProvider, setModelProvider] = useState("");
+	const [feedback, setFeedback] = useState("");
 	const fileInput = useRef<HTMLInputElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const busy = session.status === "running" || session.status === "approval";
 	const available = models.filter((model) => model.available);
-	const modelPageCount = Math.max(1, Math.ceil(available.length / modelsPerPage));
+	const filteredModels = available.filter((model) =>
+		`${model.name} ${model.provider} ${model.id}`.toLowerCase().includes(modelSearch.trim().toLowerCase()),
+	);
+	const providers = [...new Set(filteredModels.map((model) => model.provider))];
+	const activeProvider = providers.includes(modelProvider) ? modelProvider : (providers[0] ?? "");
+	const providerModels = filteredModels.filter((model) => model.provider === activeProvider);
+	const modelPageCount = Math.max(1, Math.ceil(providerModels.length / modelsPerPage));
 	const visibleModelPage = Math.min(modelPage, modelPageCount - 1);
-	const visibleModels = available.slice(visibleModelPage * modelsPerPage, (visibleModelPage + 1) * modelsPerPage);
+	const visibleModels = providerModels.slice(visibleModelPage * modelsPerPage, (visibleModelPage + 1) * modelsPerPage);
 	useLayoutEffect(() => {
 		const textarea = textareaRef.current;
 		if (!textarea) return;
@@ -89,8 +106,10 @@ export function Composer({
 		(model) => model.provider === session.model?.provider && model.id === session.model?.id,
 	);
 	const submit = async () => {
-		if (pending || busy || !text.trim() || !connected) return;
+		if (pending || !text.trim() || !connected || !selectedModel) return;
 		setPending(true);
+		onError("");
+		setFeedback("");
 		try {
 			const prompt =
 				text +
@@ -100,7 +119,7 @@ export function Composer({
 							`\n\nAttached text file ${JSON.stringify(file.name)}:\n<attachment>\n${file.content}\n</attachment>`,
 					)
 					.join("");
-			await api(`/sessions/${session.id}/messages`, { text: prompt, references });
+			await api(`/sessions/${session.id}/messages`, { text: prompt, references, interrupt: busy });
 			setText("");
 			setAttachments([]);
 			references.forEach(removeReference);
@@ -112,31 +131,55 @@ export function Composer({
 	};
 	const selectModel = async (value: string) => {
 		const model = available.find((model) => `${model.provider}/${model.id}` === value);
-		if (!model) return;
+		if (!model || pending || busy) return;
+		setPending(true);
+		onError("");
+		setFeedback("");
 		try {
-			await api(`/sessions/${session.id}/model`, { provider: model.provider, modelId: model.id }, "PUT");
+			const updated = await api<SessionDetail>(
+				`/sessions/${session.id}/model`,
+				{ provider: model.provider, modelId: model.id },
+				"PUT",
+			);
+			onSessionChange(updated);
+			setFeedback(`已切换模型：${model.name}`);
 		} catch (error) {
 			onError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setPending(false);
 		}
 	};
 	const openModelPicker = (anchor: HTMLElement) => {
-		const selectedIndex = available.findIndex(
-			(model) => model.provider === session.model?.provider && model.id === session.model?.id,
-		);
+		setModelSearch("");
+		const provider = session.model?.provider ?? available[0]?.provider ?? "";
+		setModelProvider(provider);
+		const selectedIndex = available
+			.filter((model) => model.provider === provider)
+			.findIndex((model) => model.provider === session.model?.provider && model.id === session.model?.id);
 		setModelPage(Math.floor(Math.max(0, selectedIndex) / modelsPerPage));
 		setModelAnchor(anchor);
 	};
 	const setAccessMode = async (accessMode: AccessMode) => {
+		if (pending || busy) return;
 		setAccessMenu(null);
+		setPending(true);
+		onError("");
+		setFeedback("");
 		try {
 			const updated = await api<SessionDetail>(`/sessions/${session.id}/access-mode`, { accessMode }, "PUT");
 			onSessionChange(updated);
+			setFeedback(`权限已保存：${accessModes.find((mode) => mode.id === accessMode)?.label}`);
 		} catch (error) {
 			onError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setPending(false);
 		}
 	};
 	const setThinkingLevel = async (thinkingLevel: ThinkingLevel) => {
-		if (!selectedModel) return;
+		if (!selectedModel || pending || busy) return;
+		setPending(true);
+		onError("");
+		setFeedback("");
 		try {
 			const updated = await api<SessionDetail>(
 				`/sessions/${session.id}/model`,
@@ -144,8 +187,11 @@ export function Composer({
 				"PUT",
 			);
 			onSessionChange(updated);
+			setFeedback("思考强度已保存。");
 		} catch (error) {
 			onError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setPending(false);
 		}
 	};
 	const activeAccessMode = accessModes.find((mode) => mode.id === session.accessMode) ?? accessModes[1];
@@ -168,6 +214,7 @@ export function Composer({
 					</div>
 				)}
 				<textarea
+					disabled={pending}
 					ref={textareaRef}
 					aria-label="向构序发送任务"
 					placeholder="描述你的任务，或引用工作区文件…"
@@ -233,6 +280,7 @@ export function Composer({
 							aria-label={`当前权限：${activeAccessMode.label}`}
 							aria-haspopup="menu"
 							aria-expanded={!!accessMenu}
+							disabled={busy || pending}
 							onClick={(event) => setAccessMenu(event.currentTarget)}
 						>
 							{activeAccessMode.label}
@@ -287,52 +335,99 @@ export function Composer({
 						transformOrigin={{ vertical: "bottom", horizontal: "left" }}
 						slotProps={{ paper: { className: "model-picker-popover-paper" } }}
 					>
-						<div className="model-picker">
+						<div className="model-picker grouped-model-picker">
 							<div className="model-picker-heading">
 								<strong>选择可用模型</strong>
-								<span>{available.length} 个模型</span>
+								<span>
+									{providers.length} 个供应商 · {filteredModels.length} 个模型
+								</span>
 							</div>
-							<div className="model-picker-options" role="listbox" aria-label="可用模型">
-								{visibleModels.map((model) => {
-									const selected = model.provider === selectedModel?.provider && model.id === selectedModel.id;
-									return (
+							<TextField
+								autoFocus
+								fullWidth
+								placeholder="搜索模型或供应商"
+								value={modelSearch}
+								inputProps={{ "aria-label": "搜索模型或供应商" }}
+								onChange={(event) => {
+									setModelSearch(event.target.value);
+									setModelPage(0);
+								}}
+							/>
+							{!filteredModels.length && (
+								<p className="model-search-empty" aria-live="polite">
+									没有匹配的模型，请尝试其他名称。
+								</p>
+							)}
+							<div className="model-picker-columns">
+								<nav className="model-provider-list" aria-label="模型供应商">
+									<span className="model-level-label">1 · 供应商</span>
+									{providers.map((provider) => (
 										<button
-											key={`${model.provider}/${model.id}`}
+											key={provider}
 											type="button"
-											className="model-picker-option"
-											role="option"
-											aria-selected={selected}
-											title={`${model.name} · ${model.provider}`}
+											aria-pressed={provider === activeProvider}
+											aria-controls={`model-list-${session.id}`}
 											onClick={() => {
-												setModelAnchor(null);
-												void selectModel(`${model.provider}/${model.id}`);
+												setModelProvider(provider);
+												setModelPage(0);
 											}}
 										>
-											<span>{model.name}</span>
-											<small>{model.provider}</small>
-											{selected && <Check size={16} />}
+											<span>{provider}</span>
+											<small>{filteredModels.filter((model) => model.provider === provider).length}</small>
 										</button>
-									);
-								})}
-							</div>
-							<div className="model-picker-pagination">
-								<IconButton
-									aria-label="上一页模型"
-									disabled={visibleModelPage === 0}
-									onClick={() => setModelPage(visibleModelPage - 1)}
-								>
-									<ChevronLeft size={18} />
-								</IconButton>
-								<span>
-									第 {visibleModelPage + 1} / {modelPageCount} 页
-								</span>
-								<IconButton
-									aria-label="下一页模型"
-									disabled={visibleModelPage >= modelPageCount - 1}
-									onClick={() => setModelPage(visibleModelPage + 1)}
-								>
-									<ChevronRight size={18} />
-								</IconButton>
+									))}
+								</nav>
+								<section className="model-provider-models" aria-label="供应商模型">
+									<div className="model-level-label">2 · {activeProvider || "模型"}</div>
+									<div
+										id={`model-list-${session.id}`}
+										className="model-picker-options"
+										role="listbox"
+										aria-label="可用模型"
+									>
+										{visibleModels.map((model) => {
+											const selected =
+												model.provider === selectedModel?.provider && model.id === selectedModel.id;
+											return (
+												<button
+													key={`${model.provider}/${model.id}`}
+													type="button"
+													className="model-picker-option"
+													role="option"
+													aria-selected={selected}
+													title={`${model.name} · ${model.provider}`}
+													onClick={() => {
+														setModelAnchor(null);
+														void selectModel(`${model.provider}/${model.id}`);
+													}}
+												>
+													<span>{model.name}</span>
+													<small>{model.provider}</small>
+													{selected && <Check size={16} />}
+												</button>
+											);
+										})}
+									</div>
+									<div className="model-picker-pagination">
+										<IconButton
+											aria-label="上一页模型"
+											disabled={visibleModelPage === 0}
+											onClick={() => setModelPage(visibleModelPage - 1)}
+										>
+											<ChevronLeft size={18} />
+										</IconButton>
+										<span>
+											第 {visibleModelPage + 1} / {modelPageCount} 页
+										</span>
+										<IconButton
+											aria-label="下一页模型"
+											disabled={visibleModelPage >= modelPageCount - 1}
+											onClick={() => setModelPage(visibleModelPage + 1)}
+										>
+											<ChevronRight size={18} />
+										</IconButton>
+									</div>
+								</section>
 							</div>
 						</div>
 					</Popover>
@@ -366,31 +461,53 @@ export function Composer({
 							</Select>
 						</span>
 					</Tooltip>
-					{busy ? (
+					{busy && (
 						<Button
 							className="send-button"
 							aria-label="停止 Agent"
+							disabled={pending || !connected}
 							variant="contained"
-							startIcon={<Square size={15} />}
 							onClick={() => {
 								void api(`/sessions/${session.id}/abort`, {}).catch((error) => onError(String(error)));
 							}}
 						>
-							停止
+							<Square size={15} />
 						</Button>
-					) : (
-						<IconButton
-							aria-label="发送任务"
-							className="send-button"
+					)}
+					{(!busy || text.trim()) && (
+						<Button
+							aria-label={busy ? "打断并发送" : "发送任务"}
+							className={`send-button${busy ? " interrupt-button" : ""}`}
+							variant="contained"
 							disabled={!text.trim() || pending || !connected || !selectedModel}
 							onClick={() => void submit()}
 						>
-							<ArrowUp size={22} />
-						</IconButton>
+							{pending ? "…" : busy ? "打断并发送" : <ArrowUp size={17} />}
+						</Button>
 					)}
 				</div>
 			</div>
-			<span className="composer-note">Enter 发送 · Shift + Enter 换行 · 命令与文件修改需确认</span>
+			<div className="composer-footer">
+				<div className="composer-note" aria-live="polite">
+					{!connected ? (
+						"连接恢复后可发送，草稿已保留。"
+					) : !selectedModel ? (
+						<Link to="/settings/providers">配置供应商并选择可用模型</Link>
+					) : (
+						feedback ||
+						(session.status === "approval" ? (
+							"等待工具确认，请检查操作后批准或拒绝。"
+						) : pending ? (
+							"正在处理，请稍候…"
+						) : (
+							<>
+								<kbd>Enter</kbd> 发送 · <kbd>Shift + Enter</kbd> 换行
+							</>
+						))
+					)}
+				</div>
+				<UsageSummary tokens={session.tokens} />
+			</div>
 		</div>
 	);
 }

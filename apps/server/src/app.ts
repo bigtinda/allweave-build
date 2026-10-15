@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type createAgentSession, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, VERSION, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
@@ -18,7 +18,8 @@ import type {
 	Workspace,
 } from "../../shared/src/protocol.ts";
 import { AgentService } from "./agent.ts";
-import { PiKernelArchive } from "./kernel.ts";
+import { BrowserService, browserCommand } from "./browser.ts";
+import { changeGitBranch, changeGitIndex, commitGit, gitChanges, gitDiff, gitRoot } from "./git.ts";
 import { PiPackageManager } from "./packages.ts";
 import { ProviderManager } from "./providers.ts";
 import { importSkillPackage, stagePluginPackage } from "./resource-imports.ts";
@@ -133,7 +134,6 @@ export interface AppOptions {
 	port: number;
 	logger?: boolean;
 	createSession?: typeof createAgentSession;
-	kernelZipPath?: string;
 }
 
 export async function createApp(options: AppOptions) {
@@ -173,26 +173,15 @@ export async function createApp(options: AppOptions) {
 	}
 	const agentDirectory = resolve(process.env.PI_CODING_AGENT_DIR ?? join(options.directory, "agent"));
 	const providers = new ProviderManager(agentDirectory);
-	const kernel = options.createSession
-		? undefined
-		: new PiKernelArchive(
-				options.kernelZipPath ??
-					process.env.PI_CONSOLE_KERNEL_ZIP ??
-					fileURLToPath(new URL("../../../pi-windows-x64.zip", import.meta.url)),
-				options.directory,
-			);
-	if (kernel) await kernel.prepare();
+	const browser = new BrowserService([...allowedOrigins]);
 	const agents = new AgentService(store, options.directory, {
-		createSession: options.createSession,
-		kernel,
+		createSession: options.createSession ?? createAgentSession,
 		providers,
 		agentDirectory,
-		guardExtensionPath: fileURLToPath(new URL("./kernel-guard.ts", import.meta.url)),
+		browser,
 	});
 	providers.setBeforeChange(() => agents.prepareForProviderChange());
-	const packages = new PiPackageManager(kernel?.getInfo().executable, agentDirectory, () =>
-		agents.prepareForProviderChange(),
-	);
+	const packages = new PiPackageManager(agentDirectory, agentDirectory, () => agents.prepareForProviderChange());
 	const storage = new StorageManager(options.directory, agentDirectory, store, agents);
 	const app = Fastify({ logger: options.logger ?? true, bodyLimit: 2 * 1024 * 1024 });
 	await app.register(websocket, { options: { maxPayload: 4096 } });
@@ -239,7 +228,7 @@ export async function createApp(options: AppOptions) {
 	});
 	app.get("/api/health", async () => ({
 		status: "ok",
-		kernel: kernel?.getInfo().version ?? "SDK test adapter",
+		kernel: VERSION,
 	}));
 	if (desktop) {
 		app.post("/api/desktop/shutdown", async () => {
@@ -252,7 +241,7 @@ export async function createApp(options: AppOptions) {
 	app.get("/api/settings", async () => ({
 		mode: "local-single-user",
 		roots,
-		kernel: kernel?.getInfo(),
+		kernel: { version: VERSION, integration: "in-process" },
 		agentDirectory,
 		credentialStorage: "auth.json and models.json in the workbench configuration directory",
 		approvals: "Every command, file mutation and custom tool requires confirmation",
@@ -481,6 +470,66 @@ export async function createApp(options: AppOptions) {
 			changedFiles: statusOutput.split(/\r?\n/u).filter(Boolean),
 		};
 	});
+	app.get("/api/workspaces/:id/git", async (request) => {
+		return gitChanges(await gitRoot(workspaceFor(idParams.parse(request.params).id).path));
+	});
+	app.get("/api/workspaces/:id/git/diff", async (request) => {
+		const input = z
+			.object({ path: z.string().min(1).max(4096), staged: z.enum(["true", "false"]).default("false") })
+			.parse(request.query);
+		return gitDiff(
+			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
+			input.path,
+			input.staged === "true",
+		);
+	});
+	app.post("/api/workspaces/:id/git/index", async (request) => {
+		const input = z
+			.object({ path: z.string().min(1).max(4096), staged: z.boolean(), revision: z.string().length(64) })
+			.strict()
+			.parse(request.body);
+		return changeGitIndex(
+			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
+			input.path,
+			input.staged,
+			input.revision,
+		);
+	});
+	app.post("/api/workspaces/:id/git/commit", async (request) => {
+		const input = z
+			.object({ message: z.string().trim().min(1).max(4000), revision: z.string().length(64) })
+			.strict()
+			.parse(request.body);
+		return commitGit(
+			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
+			input.message,
+			input.revision,
+		);
+	});
+	app.post("/api/workspaces/:id/git/branches", async (request) => {
+		const input = z
+			.object({
+				action: z.enum(["create", "switch", "delete"]),
+				name: z.string().min(1).max(200),
+				revision: z.string().length(64),
+				base: z.string().min(1).max(200).optional(),
+			})
+			.strict()
+			.parse(request.body);
+		const workspace = workspaceFor(idParams.parse(request.params).id);
+		if (
+			input.action === "switch" &&
+			agents
+				.list()
+				.some(
+					(session) =>
+						session.workspaceId === workspace.id &&
+						(session.status === "running" || session.status === "approval"),
+				)
+		)
+			throw new HttpError(409, "此项目有任务正在执行，请停止任务后切换分支。");
+		return changeGitBranch(await gitRoot(workspace.path), input.action, input.name, input.revision, input.base);
+	});
 	app.post("/api/plugins/git/worktrees", async (request) => {
 		const input = z
 			.object({
@@ -598,14 +647,36 @@ export async function createApp(options: AppOptions) {
 		return { deleted: true };
 	});
 	app.post("/api/sessions/:id/messages", async (request, reply) => {
-		const { text, references } = z
+		const { text, references, interrupt } = z
 			.object({
 				text: z.string().trim().min(1).max(100_000),
 				references: z.array(z.string().max(4096)).max(20).default([]),
+				interrupt: z.boolean().default(false),
 			})
 			.parse(request.body);
-		await agents.prompt(idParams.parse(request.params).id, text, references);
+		const { id } = idParams.parse(request.params);
+		if (interrupt) await agents.interrupt(id, text, references);
+		else await agents.prompt(id, text, references);
 		return reply.code(202).send({ accepted: true });
+	});
+	app.post("/api/sessions/:id/recall", async (request) => {
+		const { messageId } = z
+			.object({ messageId: z.string().min(1).max(200) })
+			.strict()
+			.parse(request.body);
+		return agents.recall(idParams.parse(request.params).id, messageId);
+	});
+	app.post("/api/sessions/:id/branch", async (request) => {
+		const { messageId } = z
+			.object({ messageId: z.string().min(1).max(200) })
+			.strict()
+			.parse(request.body);
+		return agents.branch(idParams.parse(request.params).id, messageId);
+	});
+	app.get("/api/sessions/:id/browser", async (request) => browser.snapshot(idParams.parse(request.params).id));
+	app.post("/api/sessions/:id/browser", async (request) => {
+		const command = browserCommand.parse(request.body);
+		return browser.run(idParams.parse(request.params).id, command);
 	});
 	app.post("/api/sessions/:id/abort", async (request) => {
 		await agents.abort(idParams.parse(request.params).id);
@@ -691,7 +762,7 @@ export async function createApp(options: AppOptions) {
 		await providers.close();
 		store.close();
 	});
-	void packages.ensureDefaultPackages();
+	if (!options.createSession) void packages.ensureDefaultPackages();
 	return { app };
 }
 

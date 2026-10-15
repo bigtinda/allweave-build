@@ -22,6 +22,7 @@ interface PageState {
 }
 
 interface SpringPagesProps {
+	id?: string;
 	pageKey: string;
 	pageIndex: number;
 	children: ReactNode;
@@ -65,8 +66,9 @@ function SpringPage({
 			if (!element) return;
 			const offset = axis === "vertical" ? `0, ${position}px, 0` : `${position}px, 0, 0`;
 			element.style.transform = `translate3d(${offset})`;
+			element.style.opacity = active ? String(Math.max(0, 1 - Math.abs(position) / travelDistance)) : "0";
 		},
-		[axis],
+		[active, axis, travelDistance],
 	);
 	const measure = useCallback(() => {
 		const element = node.current;
@@ -98,7 +100,7 @@ function SpringPage({
 		const animate = () => {
 			if (active) element.dataset.pageMoving = "true";
 			const preset = motionTokens.transition.pageSlide.preset;
-			positionSpring.current.animate(targetPosition, preset, paintPosition, finish, media.matches);
+			positionSpring.current.animate(targetPosition, preset, paintPosition, finish, media.matches, 0.5, 2);
 		};
 		animate();
 		media.addEventListener("change", animate);
@@ -121,6 +123,7 @@ function SpringPage({
 			aria-hidden={!active}
 			inert={!active}
 			style={{
+				opacity: active ? Math.max(0, 1 - Math.abs(position) / travelDistance) : 0,
 				transform: axis === "vertical" ? `translate3d(0, ${position}px, 0)` : `translate3d(${position}px, 0, 0)`,
 				pointerEvents: active ? undefined : "none",
 			}}
@@ -132,6 +135,7 @@ function SpringPage({
 
 /** Overlaps adjacent pages and retargets their directional springs during quick changes. */
 export function SpringPages({
+	id,
 	pageKey,
 	pageIndex,
 	children,
@@ -157,8 +161,7 @@ export function SpringPages({
 	});
 	if (state.pageKey !== pageKey) {
 		const previous = rendered.current;
-		const distance = axis === "vertical" ? root.current?.clientHeight : root.current?.clientWidth;
-		const travelDistance = Math.max(distance ?? 0, minimumDistance) + interPageGap;
+		const travelDistance = minimumDistance + interPageGap;
 		setState((current) => {
 			if (current.pageKey === pageKey) return current;
 			const direction = pageIndex === current.pageIndex ? current.direction : pageIndex > current.pageIndex ? 1 : -1;
@@ -229,7 +232,7 @@ export function SpringPages({
 		.filter(Boolean)
 		.join(" ");
 	return (
-		<div ref={root} className={rootClassName}>
+		<div ref={root} id={id} tabIndex={id ? -1 : undefined} className={rootClassName}>
 			{[
 				...state.exits,
 				{

@@ -1,6 +1,6 @@
 # AllWeave Build Windows Desktop
 
-This is a Tauri desktop shell for AllWeave Build (构序). The Rust process starts the bundled Node.js service, opens its frontend in a native Windows window, and stops the service tree when the window closes. The portable package includes the Pi 1.1.0 Windows x64 kernel. Sessions, provider settings, the extracted Pi kernel, and WebView data stay beside the executable.
+This is a Tauri desktop shell for AllWeave Build (构序). The Rust process starts the bundled Node.js service, opens its frontend in a native Windows window, and stops the service tree when the window closes. The portable package includes the project’s Pi coding-agent SDK source. Sessions, provider settings, and WebView data stay beside the executable.
 
 ## Build a portable package
 
@@ -24,4 +24,4 @@ The bundled Fixed Version runtime is over 250 MB and must be updated along with 
 
 The `workspaces` folder is authorized by default. Add existing absolute or relative folder paths to `workspace-roots.txt` to authorize other project locations; restart the app after editing it. User data is stored in the adjacent `data` folder, so the extracted directory must be writable.
 
-To update the Pi kernel, replace `runtime/pi-windows-x64.zip` with a newer official Windows x64 Pi release. The next launch verifies the archive and extracts the new kernel into `data/pi-kernel`.
+The Pi SDK runs in-process from the bundled project source. Update the SDK by updating the repository’s `packages/coding-agent` source and rebuilding the portable package.

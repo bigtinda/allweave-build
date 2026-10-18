@@ -21,7 +21,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import type { AppPluginRegistry } from "../../shared/src/plugins.ts";
 import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "../../shared/src/protocol.ts";
+import { BuildBrandFamily } from "./components/BuildBrandFamily.tsx";
 import { BuildMark } from "./components/BuildMark.tsx";
 import { SpringCollapse } from "./components/SpringCollapse.tsx";
 import { SpringPages } from "./components/SpringPages.tsx";
@@ -31,8 +33,10 @@ import {
 	BookOpen,
 	ChevronDown,
 	ChevronRight,
+	FileCode,
 	Folder,
 	FolderOpen,
+	Globe,
 	MessageSquare,
 	Moon,
 	MoreHorizontal,
@@ -43,6 +47,7 @@ import {
 	Trash2,
 } from "./components/WorkbenchIcons.tsx";
 import { useSpringLayout } from "./hooks/useSpringLayout.ts";
+import { AppPluginPage } from "./pages/AppPluginPage.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { ResourcesPage } from "./pages/ResourcesPage.tsx";
 import { api } from "./services/api.ts";
@@ -55,8 +60,8 @@ function ServiceUnavailable({ refresh, message }: { refresh: () => void; message
 	return (
 		<div className="login-page">
 			<div className="login-surface">
-				<BuildMark className="service-brand-icon" />
-				<h1>AllWeave Build · 构序</h1>
+				<BuildBrandFamily className="service-brand-family" />
+				<h1>本地服务未连接</h1>
 				<p>让想法交织，让代码成序。</p>
 				<Alert severity="error">服务端未连接：{message}</Alert>
 				<Button onClick={refresh}>重新连接</Button>
@@ -84,6 +89,44 @@ function SettingsRoute({ sessions, workspaces }: { sessions: SessionSummary[]; w
 			<ResourcesPage kind="settings" section={section} sessions={sessions} workspaces={workspaces} />
 			<Outlet />
 		</RouteSurface>
+	);
+}
+
+function PluginDevelopmentRoute() {
+	const client = useQueryClient();
+	const navigate = useNavigate();
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
+	const openSession = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const detail = await api<SessionDetail>("/app-plugins/development-session", {});
+			client.setQueryData(["session", detail.id], detail);
+			await client.invalidateQueries({ queryKey: ["sessions"] });
+			navigate(`/sessions/${detail.id}`, { replace: true });
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setLoading(false);
+		}
+	}, [client, navigate]);
+	useEffect(() => {
+		void openSession();
+	}, [openSession]);
+	return (
+		<div className="route-surface plugin-development-loading">
+			{loading ? (
+				<>
+					<CircularProgress size={22} />
+					<span>正在打开默认插件开发工作区…</span>
+				</>
+			) : error ? (
+				<Alert severity="error" action={<Button onClick={() => void openSession()}>重试</Button>}>
+					无法打开插件开发会话：{error}
+				</Alert>
+			) : null}
+		</div>
 	);
 }
 
@@ -177,10 +220,21 @@ function Console() {
 	}, [desktop]);
 	const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/workspaces") });
 	const sessions = useQuery({ queryKey: ["sessions"], queryFn: () => api<SessionSummary[]>("/sessions") });
+	const appPlugins = useQuery({ queryKey: ["app-plugins"], queryFn: () => api<AppPluginRegistry>("/app-plugins") });
 	const [workspaceId, setWorkspaceId] = useState("");
 	const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set());
 	const [expandedSessionWorkspaceIds, setExpandedSessionWorkspaceIds] = useState<Set<string>>(() => new Set());
-	const selectedWorkspace = workspaceId || workspaces.data?.[0]?.id || "";
+	const userWorkspaces = useMemo(
+		() => (workspaces.data ?? []).filter((workspace) => workspace.kind !== "plugin-development"),
+		[workspaces.data],
+	);
+	const userSessions = useMemo(
+		() => (sessions.data ?? []).filter((session) => session.purpose !== "plugin-development"),
+		[sessions.data],
+	);
+	const selectedWorkspace = userWorkspaces.some((workspace) => workspace.id === workspaceId)
+		? workspaceId
+		: (userWorkspaces[0]?.id ?? "");
 	const [search, setSearch] = useState("");
 	const [error, setError] = useState("");
 	const [creating, setCreating] = useState(false);
@@ -190,25 +244,32 @@ function Console() {
 	const [workspaceSaving, setWorkspaceSaving] = useState(false);
 	const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<Workspace>();
 	const [workspaceDeleting, setWorkspaceDeleting] = useState(false);
+	const [workspaceSource, setWorkspaceSource] = useState<"local" | "remote">("local");
 	const [path, setPath] = useState("");
 	const [browsePath, setBrowsePath] = useState("");
 	const [pickingFolder, setPickingFolder] = useState(false);
+	const [remoteHost, setRemoteHost] = useState("");
+	const [remoteBrowsePath, setRemoteBrowsePath] = useState("");
+	const [remoteFingerprints, setRemoteFingerprints] = useState<string[]>([]);
+	const [remoteScanning, setRemoteScanning] = useState(false);
+	const [remoteTrusting, setRemoteTrusting] = useState(false);
 	const [manage, setManage] = useState<SessionSummary>();
 	const [title, setTitle] = useState("");
 	const [deleting, setDeleting] = useState(false);
 	const workspaceGroups = useMemo(() => {
 		const query = search.trim().toLowerCase();
-		return (workspaces.data ?? []).flatMap((workspace) => {
+		return userWorkspaces.flatMap((workspace) => {
 			const workspaceMatches = workspace.name.toLowerCase().includes(query);
 			const groupedSessions = (sessions.data ?? []).filter(
 				(session) =>
 					session.workspaceId === workspace.id &&
+					session.purpose !== "plugin-development" &&
 					(!query || workspaceMatches || session.title.toLowerCase().includes(query)),
 			);
 			if (query && !workspaceMatches && groupedSessions.length === 0) return [];
 			return [{ workspace, sessions: groupedSessions }];
 		});
-	}, [search, sessions.data, workspaces.data]);
+	}, [search, sessions.data, userWorkspaces]);
 	const sessionList = useRef<HTMLDivElement>(null);
 	const sessionGroups = useRef<HTMLDivElement>(null);
 	const navFooter = useRef<HTMLDivElement>(null);
@@ -243,27 +304,56 @@ function Console() {
 		const routeSession = sessions.data?.find((session) => session.id === routeSessionId);
 		if (!routeSession) return;
 		synchronizedSessionId.current = routeSessionId;
-		setWorkspaceId(routeSession.workspaceId);
+		if (routeSession.purpose !== "plugin-development") setWorkspaceId(routeSession.workspaceId);
 	}, [routeSessionId, sessions.data]);
+	const routeSessionPurpose =
+		sessions.data?.find((session) => session.id === routeSessionId)?.purpose ??
+		(routeSessionId ? client.getQueryData<SessionDetail>(["session", routeSessionId])?.purpose : undefined);
 	const routePage = location.pathname.startsWith("/settings")
 		? "settings"
-		: location.pathname === "/skills"
-			? "skills"
-			: sessionMatch
-				? "session"
-				: "welcome";
-	const routePageIndex = { welcome: 0, session: 1, skills: 2, settings: 3 }[routePage];
+		: location.pathname === "/plugin-development" || routeSessionPurpose === "plugin-development"
+			? "plugin-development"
+			: location.pathname === "/skills"
+				? "skills"
+				: location.pathname.startsWith("/plugins/")
+					? "plugin"
+					: sessionMatch
+						? "session"
+						: "welcome";
+	const routePageIndex = { welcome: 0, session: 1, "plugin-development": 2, skills: 3, settings: 4, plugin: 5 }[
+		routePage
+	];
 	const workspaceDeleteSessions = workspaceDeleteTarget
-		? (sessions.data ?? []).filter((session) => session.workspaceId === workspaceDeleteTarget.id)
+		? (sessions.data ?? []).filter(
+				(session) => session.workspaceId === workspaceDeleteTarget.id && session.purpose !== "plugin-development",
+			)
 		: [];
 	const workspaceDeleteRunningSessions = workspaceDeleteSessions.filter(
 		(session) => session.status === "running" || session.status === "approval",
 	);
 	const localFolders = useQuery({
 		queryKey: ["local-folders", browsePath],
-		enabled: workspaceDialog,
+		enabled: workspaceDialog && workspaceSource === "local",
 		queryFn: () =>
 			api<LocalFolderListing>(`/local-folders${browsePath ? `?path=${encodeURIComponent(browsePath)}` : ""}`),
+	});
+	const remoteHostStatus = useQuery({
+		queryKey: ["remote-host-trusted", remoteHost],
+		enabled: workspaceDialog && workspaceSource === "remote" && !!remoteHost.trim(),
+		queryFn: () => api<{ trusted: boolean }>(`/remote-hosts/trusted?host=${encodeURIComponent(remoteHost.trim())}`),
+	});
+	const remoteFolders = useQuery({
+		queryKey: ["remote-folders", remoteHost, remoteBrowsePath],
+		enabled:
+			workspaceDialog &&
+			workspaceSource === "remote" &&
+			!!remoteHost.trim() &&
+			remoteHostStatus.data?.trusted === true,
+		queryFn: () => {
+			const query = new URLSearchParams({ host: remoteHost.trim() });
+			if (remoteBrowsePath) query.set("path", remoteBrowsePath);
+			return api<LocalFolderListing>(`/remote-hosts/folders?${query}`);
+		},
 	});
 	const newSession = async () => {
 		if (!selectedWorkspace || creating) return;
@@ -282,13 +372,50 @@ function Console() {
 	};
 	const addWorkspace = async () => {
 		try {
-			const workspace = await api<Workspace>("/workspaces", { path, authorize: true });
+			const workspace = await api<Workspace>(
+				"/workspaces",
+				workspaceSource === "remote"
+					? { path: path.trim(), remoteHost: remoteHost.trim() }
+					: { path, authorize: true },
+			);
 			await client.invalidateQueries({ queryKey: ["workspaces"] });
 			setWorkspaceId(workspace.id);
 			setWorkspaceDialog(false);
 			setPath("");
+			setRemoteHost("");
+			setRemoteFingerprints([]);
 		} catch (error) {
 			setError(error instanceof Error ? error.message : String(error));
+		}
+	};
+	const scanRemoteHost = async () => {
+		if (!remoteHost.trim() || remoteScanning) return;
+		setRemoteScanning(true);
+		setRemoteFingerprints([]);
+		try {
+			const result = await api<{ fingerprints: string[] }>("/remote-hosts/scan", { host: remoteHost.trim() });
+			setRemoteFingerprints(result.fingerprints);
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setRemoteScanning(false);
+		}
+	};
+	const trustRemoteHost = async () => {
+		const fingerprint = remoteFingerprints[0];
+		if (!fingerprint || remoteTrusting) return;
+		setRemoteTrusting(true);
+		try {
+			await api("/remote-hosts/trust", {
+				host: remoteHost.trim(),
+				fingerprint,
+				replace: remoteHostStatus.data?.trusted === true,
+			});
+			await client.invalidateQueries({ queryKey: ["remote-host-trusted", remoteHost] });
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setRemoteTrusting(false);
 		}
 	};
 	const saveWorkspaceName = async () => {
@@ -318,9 +445,7 @@ function Console() {
 			const removedSessions = (sessions.data ?? []).filter(
 				(session) => session.workspaceId === workspaceDeleteTarget.id,
 			);
-			const remainingWorkspaces = (workspaces.data ?? []).filter(
-				(workspace) => workspace.id !== workspaceDeleteTarget.id,
-			);
+			const remainingWorkspaces = userWorkspaces.filter((workspace) => workspace.id !== workspaceDeleteTarget.id);
 			const remainingSessions = (sessions.data ?? []).filter(
 				(session) => session.workspaceId !== workspaceDeleteTarget.id,
 			);
@@ -381,33 +506,25 @@ function Console() {
 	};
 	const sidebar = (
 		<nav className="sidebar" aria-label="主导航">
-			<NavLink to="/" className="brand">
-				<BuildMark className="brand-symbol" />
-				<span className="brand-copy">
-					<strong>
-						AllWeave <span className="brand-product">Build</span>
-					</strong>
-					<small>构序 / 万象成序</small>
-				</span>
+			<NavLink to="/" className="brand" aria-label="万象成序 AllWeave · 构序 Build 工作台">
+				<BuildBrandFamily />
 			</NavLink>
 			<Button
 				className="new-session"
 				variant="contained"
 				startIcon={<Plus size={20} />}
-				disabled={!selectedWorkspace || creating}
-				onClick={() => void newSession()}
+				onClick={() => {
+					setWorkspaceSource("local");
+					setPath("");
+					setBrowsePath("");
+					setRemoteHost("");
+					setRemoteBrowsePath("");
+					setRemoteFingerprints([]);
+					setWorkspaceDialog(true);
+				}}
 			>
-				{creating ? "创建中…" : "新建会话"}
+				新建工作区
 			</Button>
-			<p
-				className="session-target"
-				title={workspaces.data?.find((workspace) => workspace.id === selectedWorkspace)?.path}
-			>
-				新会话将创建在{" "}
-				<strong>
-					{workspaces.data?.find((workspace) => workspace.id === selectedWorkspace)?.name ?? "请选择项目"}
-				</strong>
-			</p>
 			<div className="nav-search">
 				<Search size={17} />
 				<input
@@ -423,13 +540,11 @@ function Console() {
 					className="workspace-add-button"
 					size="small"
 					startIcon={<Plus size={14} />}
-					onClick={() => {
-						setPath("");
-						setBrowsePath("");
-						setWorkspaceDialog(true);
-					}}
+					disabled={!selectedWorkspace || creating}
+					title={workspaces.data?.find((workspace) => workspace.id === selectedWorkspace)?.path}
+					onClick={() => void newSession()}
 				>
-					添加工作区
+					{creating ? "创建中…" : "新建会话"}
 				</Button>
 			</div>
 			<div ref={sessionList} className="workspace-project-list">
@@ -464,10 +579,16 @@ function Console() {
 									className="workspace-project-button"
 									type="button"
 									aria-pressed={workspace.id === selectedWorkspace}
-									title={workspace.path}
+									title={workspace.remote ? `${workspace.remote.host}: ${workspace.path}` : workspace.path}
 									onClick={() => setWorkspaceId(workspace.id)}
 								>
-									{workspace.id === selectedWorkspace ? <FolderOpen size={16} /> : <Folder size={16} />}
+									{workspace.remote ? (
+										<Globe size={16} />
+									) : workspace.id === selectedWorkspace ? (
+										<FolderOpen size={16} />
+									) : (
+										<Folder size={16} />
+									)}
 									<span>{workspace.name}</span>
 								</button>
 								<Tooltip title="工作区设置">
@@ -545,6 +666,31 @@ function Console() {
 								{groupedSessions.length === 0 && !sessions.isPending && (
 									<span className="workspace-empty-sessions">暂无会话</span>
 								)}
+								{(appPlugins.data?.plugins ?? [])
+									.filter((plugin) => plugin.enabled)
+									.flatMap((plugin) => plugin.manifest.navigation.map((entry) => ({ plugin, entry })))
+									.filter(({ plugin, entry }) => {
+										const query = search.trim().toLowerCase();
+										return (
+											!query ||
+											plugin.manifest.name.toLowerCase().includes(query) ||
+											entry.title.toLowerCase().includes(query)
+										);
+									})
+									.map(({ plugin, entry }) => (
+										<div className="session-row app-plugin-nav-row" key={`${plugin.manifest.id}:${entry.id}`}>
+											<NavLink
+												to={`/plugins/${plugin.manifest.id}/${entry.viewId}?workspace=${workspace.id}`}
+												onClick={() => {
+													setWorkspaceId(workspace.id);
+													if (!desktop && preferences.sidebar) preferences.toggleSidebar();
+												}}
+											>
+												<BookOpen size={15} />
+												<span>{entry.title}</span>
+											</NavLink>
+										</div>
+									))}
 							</SpringCollapse>
 						</section>
 					))}
@@ -561,13 +707,19 @@ function Console() {
 							? 'a[href="/skills"].active'
 							: routePage === "settings"
 								? 'a[href="/settings"].active'
-								: ".no-footer-link"
+								: routePage === "plugin-development"
+									? 'a[href="/plugin-development"].active'
+									: ".no-footer-link"
 					}
 					className="app-selection-indicator footer-selection-indicator"
 				/>
 				<NavLink to="/skills">
 					<BookOpen size={18} />
 					技能与插件
+				</NavLink>
+				<NavLink to="/plugin-development">
+					<FileCode size={18} />
+					插件开发
 				</NavLink>
 				<NavLink to="/settings">
 					<Settings2 size={18} />
@@ -597,10 +749,10 @@ function Console() {
 					className="sidebar-slot"
 					collapsedContent={
 						<nav className="navigation-rail" aria-label="收起的主导航">
-							<Tooltip title="AllWeave Build 首页">
+							<Tooltip title="万象成序 · 构序 Build 工作台">
 								<NavLink
 									to="/"
-									aria-label="AllWeave Build 首页"
+									aria-label="万象成序 · 构序 Build 工作台"
 									className={`rail-home${routePage === "session" || routePage === "welcome" ? " active" : ""}`}
 								>
 									<BuildMark className="rail-build-mark" />
@@ -618,6 +770,11 @@ function Console() {
 							<Tooltip title="技能与插件">
 								<NavLink to="/skills" aria-label="技能与插件">
 									<BookOpen size={20} />
+								</NavLink>
+							</Tooltip>
+							<Tooltip title="插件开发">
+								<NavLink to="/plugin-development" aria-label="插件开发">
+									<FileCode size={20} />
 								</NavLink>
 							</Tooltip>
 							<Tooltip title="模型与设置">
@@ -649,7 +806,7 @@ function Console() {
 							<RouteSurface>
 								<ChatPage
 									workspaces={workspaces.data ?? []}
-									sessions={sessions.data ?? []}
+									sessions={userSessions}
 									onNew={() => void newSession()}
 								/>
 							</RouteSurface>
@@ -661,7 +818,7 @@ function Console() {
 							<RouteSurface>
 								<ChatPage
 									workspaces={workspaces.data ?? []}
-									sessions={sessions.data ?? []}
+									sessions={userSessions}
 									onNew={() => void newSession()}
 								/>
 							</RouteSurface>
@@ -671,18 +828,20 @@ function Console() {
 						path="/skills"
 						element={
 							<RouteSurface>
-								<ResourcesPage
-									kind="skills"
-									sessions={sessions.data ?? []}
-									workspaces={workspaces.data ?? []}
-								/>
+								<ResourcesPage kind="skills" sessions={userSessions} workspaces={userWorkspaces} />
 							</RouteSurface>
 						}
 					/>
+					<Route path="/plugin-development" element={<PluginDevelopmentRoute />} />
 					<Route
-						path="/settings"
-						element={<SettingsRoute sessions={sessions.data ?? []} workspaces={workspaces.data ?? []} />}
-					>
+						path="/plugins/:pluginId/:viewId"
+						element={
+							<RouteSurface>
+								<AppPluginPage />
+							</RouteSurface>
+						}
+					/>
+					<Route path="/settings" element={<SettingsRoute sessions={userSessions} workspaces={userWorkspaces} />}>
 						<Route index element={null} />
 						<Route path="providers" element={null} />
 						<Route path="plugins" element={null} />
@@ -696,7 +855,7 @@ function Console() {
 							<RouteSurface>
 								<ChatPage
 									workspaces={workspaces.data ?? []}
-									sessions={sessions.data ?? []}
+									sessions={userSessions}
 									onNew={() => void newSession()}
 								/>
 							</RouteSurface>
@@ -713,104 +872,256 @@ function Console() {
 			>
 				<DialogTitle>添加工作区</DialogTitle>
 				<DialogContent className="workspace-picker-content">
+					<fieldset className="workspace-source-switch">
+						<legend className="visually-hidden">工作区位置</legend>
+						<Button
+							size="small"
+							variant={workspaceSource === "local" ? "contained" : "outlined"}
+							onClick={() => {
+								setWorkspaceSource("local");
+								setPath("");
+							}}
+						>
+							本机项目
+						</Button>
+						<Button
+							size="small"
+							variant={workspaceSource === "remote" ? "contained" : "outlined"}
+							onClick={() => {
+								setWorkspaceSource("remote");
+								setPath("");
+							}}
+						>
+							远程主机
+						</Button>
+					</fieldset>
 					<div className="workspace-picker">
-						<div className="workspace-picker-browser">
-							<div className="workspace-browser-toolbar">
-								<IconButton
-									aria-label="上级目录"
-									disabled={!localFolders.data?.parentPath}
-									onClick={() => setBrowsePath(localFolders.data?.parentPath ?? "")}
-								>
-									<ArrowLeft size={17} />
-								</IconButton>
-								<span className="path-label" title={localFolders.data?.currentPath ?? "此电脑"}>
-									{localFolders.data?.currentPath ?? "此电脑"}
-								</span>
-								<Button
-									size="small"
-									variant="contained"
-									className="workspace-select-folder-button"
-									startIcon={<FolderOpen size={15} />}
-									disabled={!localFolders.data?.currentPath}
-									onClick={() => setPath(localFolders.data?.currentPath ?? "")}
-								>
-									选择此文件夹
-								</Button>
-							</div>
-							{localFolders.error && (
-								<Alert severity="error">
-									{localFolders.error instanceof Error
-										? `无法读取目录列表：${localFolders.error.message}`
-										: "无法读取目录列表。可以使用 Windows 文件夹选择器，或输入完整路径。"}
-								</Alert>
-							)}
-							{localFolders.isPending ? (
-								<div className="workspace-folder-state">
-									<CircularProgress size={22} />
-									<span>正在读取本机目录…</span>
-								</div>
-							) : (
-								<div className="workspace-folder-list">
-									{localFolders.data?.roots.map((folder) => (
-										<button
-											className="workspace-folder-row"
-											key={folder.path}
-											type="button"
-											onClick={() => setBrowsePath(folder.path)}
+						{workspaceSource === "local" ? (
+							<>
+								<div className="workspace-picker-browser">
+									<div className="workspace-browser-toolbar">
+										<IconButton
+											aria-label="上级目录"
+											disabled={!localFolders.data?.parentPath}
+											onClick={() => setBrowsePath(localFolders.data?.parentPath ?? "")}
 										>
-											<Folder size={17} />
-											<span>{folder.name}</span>
-											<code>{folder.path}</code>
-											<ChevronRight size={16} />
-										</button>
-									))}
-									{localFolders.data?.directories.map((folder) => (
-										<button
-											className="workspace-folder-row"
-											key={folder.path}
-											type="button"
-											onClick={() => setBrowsePath(folder.path)}
+											<ArrowLeft size={17} />
+										</IconButton>
+										<span className="path-label" title={localFolders.data?.currentPath ?? "此电脑"}>
+											{localFolders.data?.currentPath ?? "此电脑"}
+										</span>
+										<Button
+											size="small"
+											variant="contained"
+											className="workspace-select-folder-button"
+											startIcon={<FolderOpen size={15} />}
+											disabled={!localFolders.data?.currentPath}
+											onClick={() => setPath(localFolders.data?.currentPath ?? "")}
 										>
-											<Folder size={17} />
-											<span>{folder.name}</span>
-											<ChevronRight size={16} />
-										</button>
-									))}
-									{!localFolders.error &&
-										(localFolders.data?.roots.length ?? 0) + (localFolders.data?.directories.length ?? 0) ===
-											0 && <div className="workspace-folder-state">此位置没有可浏览的文件夹</div>}
+											选择此文件夹
+										</Button>
+									</div>
+									{localFolders.error && (
+										<Alert severity="error">
+											{localFolders.error instanceof Error
+												? `无法读取目录列表：${localFolders.error.message}`
+												: "无法读取目录列表。可以使用 Windows 文件夹选择器，或输入完整路径。"}
+										</Alert>
+									)}
+									{localFolders.isPending ? (
+										<div className="workspace-folder-state">
+											<CircularProgress size={22} />
+											<span>正在读取本机目录…</span>
+										</div>
+									) : (
+										<div className="workspace-folder-list">
+											{localFolders.data?.roots.map((folder) => (
+												<button
+													className="workspace-folder-row"
+													key={folder.path}
+													type="button"
+													onClick={() => setBrowsePath(folder.path)}
+												>
+													<Folder size={17} />
+													<span>{folder.name}</span>
+													<code>{folder.path}</code>
+													<ChevronRight size={16} />
+												</button>
+											))}
+											{localFolders.data?.directories.map((folder) => (
+												<button
+													className="workspace-folder-row"
+													key={folder.path}
+													type="button"
+													onClick={() => setBrowsePath(folder.path)}
+												>
+													<Folder size={17} />
+													<span>{folder.name}</span>
+													<ChevronRight size={16} />
+												</button>
+											))}
+											{!localFolders.error &&
+												(localFolders.data?.roots.length ?? 0) +
+													(localFolders.data?.directories.length ?? 0) ===
+													0 && <div className="workspace-folder-state">此位置没有可浏览的文件夹</div>}
+										</div>
+									)}
 								</div>
-							)}
-						</div>
-						<div className="workspace-picker-form">
-							<div className="workspace-picker-intro">
-								<strong>选择项目目录</strong>
-								<p className="muted">使用 Windows 文件夹窗口选择，或输入文件夹绝对路径。</p>
-							</div>
-							<Button
-								variant="outlined"
-								startIcon={pickingFolder ? <CircularProgress size={16} /> : <FolderOpen size={17} />}
-								disabled={pickingFolder}
-								onClick={() => void pickWorkspaceFolder()}
-							>
-								{pickingFolder ? "等待 Windows 文件夹窗口…" : "从 Windows 选择文件夹"}
-							</Button>
-							<TextField
-								fullWidth
-								label="项目目录绝对路径"
-								value={path}
-								onChange={(event) => setPath(event.target.value)}
-							/>
-							<Alert severity="warning" className="workspace-picker-warning">
-								授权后，构序可读写所选目录及其子目录。可信扩展和获准命令也会以当前 Windows 用户权限运行。
-							</Alert>
-						</div>
+								<div className="workspace-picker-form">
+									<div className="workspace-picker-intro">
+										<strong>选择本机项目目录</strong>
+										<p className="muted">使用 Windows 文件夹窗口选择，或输入文件夹绝对路径。</p>
+									</div>
+									<Button
+										variant="outlined"
+										startIcon={pickingFolder ? <CircularProgress size={16} /> : <FolderOpen size={17} />}
+										disabled={pickingFolder}
+										onClick={() => void pickWorkspaceFolder()}
+									>
+										{pickingFolder ? "等待 Windows 文件夹窗口…" : "从 Windows 选择文件夹"}
+									</Button>
+									<TextField
+										fullWidth
+										label="项目目录绝对路径"
+										value={path}
+										onChange={(event) => setPath(event.target.value)}
+									/>
+									<Alert severity="warning" className="workspace-picker-warning">
+										授权后，构序可读写所选目录及其子目录。可信扩展和获准命令也会以当前 Windows 用户权限运行。
+									</Alert>
+								</div>
+							</>
+						) : (
+							<>
+								<div className="workspace-picker-browser">
+									<div className="workspace-browser-toolbar">
+										<IconButton
+											aria-label="远程上级目录"
+											disabled={!remoteFolders.data?.parentPath}
+											onClick={() => setRemoteBrowsePath(remoteFolders.data?.parentPath ?? "")}
+										>
+											<ArrowLeft size={17} />
+										</IconButton>
+										<span className="path-label" title={remoteFolders.data?.currentPath ?? "远程主机"}>
+											{remoteFolders.data?.currentPath ?? "远程主机目录"}
+										</span>
+										<Button
+											size="small"
+											variant="contained"
+											className="workspace-select-folder-button"
+											startIcon={<FolderOpen size={15} />}
+											disabled={!remoteFolders.data?.currentPath}
+											onClick={() => setPath(remoteFolders.data?.currentPath ?? "")}
+										>
+											选择此文件夹
+										</Button>
+									</div>
+									{remoteHostStatus.error && (
+										<Alert severity="error">无法检查 SSH 信任状态：{String(remoteHostStatus.error)}</Alert>
+									)}
+									{remoteFolders.error && (
+										<Alert severity="error">无法读取远程目录：{String(remoteFolders.error)}</Alert>
+									)}
+									{!remoteHostStatus.data?.trusted ? (
+										<div className="workspace-folder-state">
+											{remoteHost.trim() ? "请先扫描并信任此 SSH 主机" : "输入 SSH 主机别名后浏览目录"}
+										</div>
+									) : remoteFolders.isPending ? (
+										<div className="workspace-folder-state">
+											<CircularProgress size={22} />
+											<span>正在读取远程目录…</span>
+										</div>
+									) : (
+										<div className="workspace-folder-list">
+											{remoteFolders.data?.directories.map((folder) => (
+												<button
+													className="workspace-folder-row"
+													key={folder.path}
+													type="button"
+													onClick={() => setRemoteBrowsePath(folder.path)}
+												>
+													<Folder size={17} />
+													<span>{folder.name}</span>
+													<ChevronRight size={16} />
+												</button>
+											))}
+											{!remoteFolders.error && !remoteFolders.data?.directories.length && (
+												<div className="workspace-folder-state">此位置没有可浏览的文件夹</div>
+											)}
+										</div>
+									)}
+								</div>
+								<div className="workspace-picker-form">
+									<div className="workspace-picker-intro">
+										<strong>连接 SSH 远程项目</strong>
+										<p className="muted">主机名可使用本机 SSH 配置中的别名。</p>
+									</div>
+									<TextField
+										fullWidth
+										label="SSH 主机或配置别名"
+										value={remoteHost}
+										onChange={(event) => {
+											setRemoteHost(event.target.value);
+											setRemoteBrowsePath("");
+											setPath("");
+											setRemoteFingerprints([]);
+										}}
+									/>
+									{remoteHostStatus.data?.trusted && (
+										<Alert severity="success">此主机的 SSH 密钥已在本机信任。</Alert>
+									)}
+									<Button
+										variant="outlined"
+										startIcon={remoteScanning ? <CircularProgress size={16} /> : undefined}
+										disabled={!remoteHost.trim() || remoteScanning || remoteTrusting}
+										onClick={() => void scanRemoteHost()}
+									>
+										{remoteScanning ? "正在扫描…" : "扫描 SSH 主机密钥"}
+									</Button>
+									{remoteFingerprints.length > 0 && (
+										<div className="workspace-remote-fingerprints">
+											<strong>请与主机管理员提供的指纹核对</strong>
+											{remoteFingerprints.map((fingerprint) => (
+												<code key={fingerprint}>{fingerprint}</code>
+											))}
+											<Button disabled={remoteTrusting} onClick={() => void trustRemoteHost()}>
+												{remoteTrusting
+													? "正在保存信任…"
+													: remoteHostStatus.data?.trusted
+														? "我已核对并替换已信任的密钥"
+														: "我已核对并信任这些密钥"}
+											</Button>
+											{remoteHostStatus.data?.trusted && (
+												<Alert severity="warning">仅在管理员确认主机密钥已轮换后替换信任。</Alert>
+											)}
+										</div>
+									)}
+									<TextField
+										fullWidth
+										label="远程项目绝对路径"
+										value={path}
+										disabled={!remoteHostStatus.data?.trusted}
+										onChange={(event) => setPath(event.target.value)}
+									/>
+									<Alert severity="warning" className="workspace-picker-warning">
+										SSH 连接使用本机 SSH 配置和密钥。获准的命令会以远程账号权限在此主机上运行。
+									</Alert>
+								</div>
+							</>
+						)}
 					</div>
 				</DialogContent>
 				<DialogActions>
 					<Button onClick={() => setWorkspaceDialog(false)}>取消</Button>
-					<Button variant="contained" disabled={!path.trim()} onClick={() => void addWorkspace()}>
-						授权并添加
+					<Button
+						variant="contained"
+						disabled={
+							!path.trim() ||
+							(workspaceSource === "remote" && (!remoteHost.trim() || remoteHostStatus.data?.trusted !== true))
+						}
+						onClick={() => void addWorkspace()}
+					>
+						{workspaceSource === "remote" ? "添加远程项目" : "授权并添加"}
 					</Button>
 				</DialogActions>
 			</Dialog>
@@ -834,8 +1145,11 @@ function Console() {
 						onChange={(event) => setWorkspaceName(event.target.value)}
 					/>
 					<div className="workspace-manage-path">
-						<span className="muted">本机文件夹</span>
-						<code>{workspaceManage?.path}</code>
+						<span className="muted">{workspaceManage?.remote ? "SSH 远程项目" : "本机文件夹"}</span>
+						<code>
+							{workspaceManage?.remote ? `${workspaceManage.remote.host}: ` : ""}
+							{workspaceManage?.path}
+						</code>
 					</div>
 				</DialogContent>
 				<DialogActions>
@@ -879,7 +1193,10 @@ function Console() {
 							<p>有 {workspaceDeleteRunningSessions.length} 个会话仍在运行或等待确认，请先停止它们。</p>
 						)}
 					</Alert>
-					<code className="workspace-delete-path">{workspaceDeleteTarget?.path}</code>
+					<code className="workspace-delete-path">
+						{workspaceDeleteTarget?.remote ? `${workspaceDeleteTarget.remote.host}: ` : ""}
+						{workspaceDeleteTarget?.path}
+					</code>
 				</DialogContent>
 				<DialogActions>
 					<Button disabled={workspaceDeleting} onClick={() => setWorkspaceDeleteTarget(undefined)}>

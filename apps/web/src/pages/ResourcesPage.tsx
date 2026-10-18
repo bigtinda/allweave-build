@@ -45,6 +45,7 @@ import type {
 	ThinkingLevel,
 	Workspace,
 } from "../../../shared/src/protocol.ts";
+import { AppPluginManagerPanel } from "../components/AppPluginManagerPanel.tsx";
 import { PersonalizationPanel } from "../components/PersonalizationPanel.tsx";
 import { type PluginFeatureId, PluginFeaturePanel } from "../components/PluginFeaturePanel.tsx";
 import { ProviderLogo } from "../components/ProviderLogo.tsx";
@@ -1529,7 +1530,10 @@ export function ResourcesPage({
 						</>
 					)}
 					{section === "plugins" && (
-						<PackageManagerPanel onError={setError} sessions={sessions} workspaces={workspaces} />
+						<>
+							<AppPluginManagerPanel onError={setError} workspaces={workspaces} />
+							<PackageManagerPanel onError={setError} sessions={sessions} workspaces={workspaces} />
+						</>
 					)}
 					{section === "storage" && <StoragePanel onError={setError} />}
 					{section === "system" && (

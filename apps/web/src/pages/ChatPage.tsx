@@ -18,7 +18,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch as BranchIcon, Check, Copy, Undo2 } from "lucide-react";
 import type { CSSProperties, MutableRefObject } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type {
 	ChatMessage,
@@ -27,6 +27,7 @@ import type {
 	SessionSummary,
 	Workspace,
 } from "../../../shared/src/protocol.ts";
+import { BuildBrandFamily } from "../components/BuildBrandFamily.tsx";
 import { BuildMark } from "../components/BuildMark.tsx";
 import { Composer } from "../components/Composer.tsx";
 import { Markdown } from "../components/Markdown.tsx";
@@ -43,7 +44,148 @@ import { SpringValue } from "../theme/motion.ts";
 
 const statusLabel = { idle: "就绪", running: "执行中", approval: "等待确认", error: "执行失败" };
 const abortedMessage = "This operation was aborted";
-function MessageChanges({ files }: { files: string[] }) {
+const collapsedUserMessageThreshold = 1_200;
+interface ConversationMarker {
+	id: string;
+	contentTop: number;
+	position: number;
+}
+
+function ConversationTimeline({
+	groups,
+	scrollRef,
+	transcriptRef,
+	reducedMotion,
+	onNavigate,
+}: {
+	groups: ChatMessage[][];
+	scrollRef: MutableRefObject<HTMLDivElement | null>;
+	transcriptRef: MutableRefObject<HTMLDivElement | null>;
+	reducedMotion: boolean;
+	onNavigate: () => void;
+}) {
+	const [markers, setMarkers] = useState<ConversationMarker[]>([]);
+	const [activeId, setActiveId] = useState("");
+	const [left, setLeft] = useState(0);
+	const markerPositions = useRef<ConversationMarker[]>([]);
+
+	useLayoutEffect(() => {
+		const scrollElement = scrollRef.current;
+		const transcriptElement = transcriptRef.current;
+		if (!scrollElement || !transcriptElement) return;
+		const updateActive = (items: ConversationMarker[] = markerPositions.current) => {
+			const activeTop = scrollElement.scrollTop + scrollElement.clientHeight * 0.22;
+			let current = items[0];
+			for (const marker of items) {
+				if (marker.contentTop <= activeTop) current = marker;
+				else break;
+			}
+			setActiveId(current?.id ?? "");
+		};
+		const onScroll = () => updateActive();
+		const measure = () => {
+			const scrollHeight = scrollElement.scrollHeight;
+			const scrollRect = scrollElement.getBoundingClientRect();
+			const transcriptRect = transcriptElement.getBoundingClientRect();
+			const nextLeft = Math.max(0, transcriptRect.left - scrollRect.left);
+			setLeft((current) => (Math.abs(current - nextLeft) < 1 ? current : nextLeft));
+			const articles = Array.from(transcriptElement.querySelectorAll<HTMLElement>("[data-conversation-id]"));
+			const nextMarkers =
+				groups.length > 1 && scrollHeight > scrollElement.clientHeight
+					? articles.flatMap((article) => {
+							const id = article.dataset.conversationId;
+							if (!id) return [];
+							const contentTop = article.getBoundingClientRect().top - scrollRect.top + scrollElement.scrollTop;
+							return [
+								{
+									id,
+									contentTop,
+									position: Math.min(98.5, Math.max(1.5, (contentTop / scrollHeight) * 100)),
+								},
+							];
+						})
+					: [];
+			markerPositions.current = nextMarkers;
+			setMarkers((current) => {
+				const unchanged =
+					current.length === nextMarkers.length &&
+					current.every(
+						(marker, index) =>
+							marker.id === nextMarkers[index].id &&
+							Math.abs(marker.position - nextMarkers[index].position) < 0.1,
+					);
+				return unchanged ? current : nextMarkers;
+			});
+			updateActive(nextMarkers);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(scrollElement);
+		observer.observe(transcriptElement);
+		scrollElement.addEventListener("scroll", onScroll, { passive: true });
+		window.addEventListener("resize", measure, { passive: true });
+		return () => {
+			observer.disconnect();
+			scrollElement.removeEventListener("scroll", onScroll);
+			window.removeEventListener("resize", measure);
+		};
+	}, [groups.length, scrollRef, transcriptRef]);
+
+	const groupsById = new Map(groups.map((messages) => [messages[0].id, messages]));
+	if (markers.length < 2) return null;
+
+	return (
+		<nav className="message-timeline" aria-label="会话消息导航" style={{ left }}>
+			<div className="message-timeline-track" aria-hidden="true" />
+			{markers.map((marker, index) => {
+				const messages = groupsById.get(marker.id);
+				if (!messages) return null;
+				const firstMessage = messages[0];
+				const finalMessage = messages[messages.length - 1];
+				const speaker = firstMessage.role === "user" ? "你" : "构序";
+				const time = new Date(firstMessage.timestamp).toLocaleTimeString([], {
+					hour: "2-digit",
+					minute: "2-digit",
+				});
+				const text = (finalMessage.text || finalMessage.error || finalMessage.thinking || "正在生成…")
+					.replace(/\s+/g, " ")
+					.trim();
+				const excerpt = text.length > 120 ? `${text.slice(0, 120)}…` : text;
+				const previewId = `message-timeline-preview-${index}`;
+				return (
+					<button
+						key={marker.id}
+						type="button"
+						className={`message-timeline-marker${marker.id === activeId ? " is-active" : ""}`}
+						style={{ top: `${marker.position}%` }}
+						aria-label={`跳转到${speaker} · ${time}`}
+						aria-current={marker.id === activeId ? "location" : undefined}
+						aria-describedby={previewId}
+						onClick={() => {
+							const scrollElement = scrollRef.current;
+							if (!scrollElement) return;
+							onNavigate();
+							scrollElement.scrollTo({
+								top: Math.max(0, marker.contentTop - 12),
+								behavior: reducedMotion ? "auto" : "smooth",
+							});
+						}}
+					>
+						<span className="message-timeline-tick" aria-hidden="true" />
+						<span id={previewId} className="message-timeline-preview" role="tooltip">
+							<strong>
+								{speaker} · {time}
+							</strong>
+							<span>{excerpt}</span>
+						</span>
+					</button>
+				);
+			})}
+		</nav>
+	);
+}
+
+function MessageChanges({ files, onOpenFile }: { files: string[]; onOpenFile: (path: string) => void }) {
 	const [showAll, setShowAll] = useState(false);
 	const visibleFiles = showAll ? files : files.slice(0, 3);
 	return (
@@ -56,10 +198,18 @@ function MessageChanges({ files }: { files: string[] }) {
 			</div>
 			<ul className="message-changes-list">
 				{visibleFiles.map((path) => (
-					<li key={path} title={path}>
-						<FileCode size={14} />
-						<span>{path}</span>
-						<small>已修改</small>
+					<li key={path}>
+						<button
+							type="button"
+							className="message-changes-file"
+							aria-label={`查看文件 ${path}`}
+							title={path}
+							onClick={() => onOpenFile(path)}
+						>
+							<FileCode size={14} aria-hidden="true" />
+							<span>{path}</span>
+							<small>已修改</small>
+						</button>
 					</li>
 				))}
 			</ul>
@@ -211,6 +361,13 @@ export function ChatPage({
 	const [drawerPanel, setDrawerPanel] = useState(false);
 	const [panelWidth, setPanelWidth] = useState(480);
 	const [resizingPanel, setResizingPanel] = useState(false);
+	const [fileRequest, setFileRequest] = useState<{
+		requestId: number;
+		sessionId: string;
+		workspaceId: string;
+		path: string;
+	}>();
+	const fileRequestSequence = useRef(0);
 	const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
 	const togglePanel = desktop ? preferences.togglePanel : () => setDrawerPanel((previous) => !previous);
 	const [error, setError] = useState("");
@@ -219,6 +376,7 @@ export function ChatPage({
 	const [approving, setApproving] = useState(false);
 	const [navigatingConversation, setNavigatingConversation] = useState(false);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
+	const [historyPage, setHistoryPage] = useState<{ sessionId: string; endId: string }>();
 	const draft = session ? (drafts[session.id] ?? "") : "";
 	const scroll = useRef<HTMLDivElement>(null);
 	const transcript = useRef<HTMLDivElement>(null);
@@ -240,8 +398,9 @@ export function ChatPage({
 	}, [id]);
 	useEffect(() => {
 		if (session?.sequence === undefined) return;
-		if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
-	}, [session?.sequence]);
+		if (follow.current && scroll.current && historyPage?.sessionId !== session.id)
+			scroll.current.scrollTop = scroll.current.scrollHeight;
+	}, [session?.sequence, session?.id, historyPage]);
 	const workspace = workspaces.find((workspace) => workspace.id === session?.workspaceId);
 	const workspaceIndex = workspace
 		? Math.max(
@@ -257,8 +416,15 @@ export function ChatPage({
 		if (message.role === "assistant" && previous?.[0].role === "assistant") previous.push(message);
 		else conversation.push([message]);
 	}
+	const historyEnd =
+		historyPage?.sessionId === session?.id
+			? conversation.findIndex((messages) => messages[0].id === historyPage?.endId) + 1
+			: 0;
+	const pageEnd = historyEnd || conversation.length;
+	const pageStart = Math.max(0, pageEnd - 40);
+	const visibleConversation = conversation.slice(pageStart, pageEnd);
 	const workspaceOpen = Boolean(session && workspace && (desktop ? preferences.panel : drawerPanel));
-	useSpringLayout(transcript, conversation.map((messages) => messages[0].id).join("\0"));
+	useSpringLayout(transcript, visibleConversation.map((messages) => messages[0].id).join("\0"));
 	const mainWidth = Math.max(0, viewportWidth - sidebarWidth);
 	const panelOverlay = desktop && workspaceOpen && panelWidth > mainWidth - 360;
 	const targetReservation = desktop && workspaceOpen && !panelOverlay ? panelWidth : 0;
@@ -286,11 +452,22 @@ export function ChatPage({
 		);
 		return () => layoutReservation.current.stop();
 	}, [desktop, reducedMotion, resizingPanel, targetReservation]);
-	const expandPanelForFile = () => {
+	const expandPanelForFile = useCallback(() => {
 		const availablePanelWidth = window.innerWidth - sidebarWidth - 552;
 		const preferredWidth = Math.max(360, Math.min(840, window.innerWidth * 0.42, availablePanelWidth));
 		setPanelWidth((current) => Math.max(current, preferredWidth));
+	}, [sidebarWidth]);
+	const openChangedFile = (path: string) => {
+		if (!session || !workspace) return;
+		const requestId = ++fileRequestSequence.current;
+		setFileRequest({ requestId, sessionId: session.id, workspaceId: workspace.id, path });
+		if (desktop) {
+			if (!preferences.panel) preferences.togglePanel();
+		} else setDrawerPanel(true);
 	};
+	const handleFileRequestHandled = useCallback((requestId: number) => {
+		setFileRequest((current) => (current?.requestId === requestId ? undefined : current));
+	}, []);
 	const decide = async (approved: boolean) => {
 		if (!session || !approval) return;
 		setApproving(true);
@@ -347,6 +524,8 @@ export function ChatPage({
 				key={workspace.id}
 				workspace={workspace}
 				session={session}
+				fileRequest={fileRequest}
+				onFileRequestHandled={handleFileRequestHandled}
 				panelWidth={panelWidth}
 				onPanelWidthChange={setPanelWidth}
 				onResizeStateChange={setResizingPanel}
@@ -371,11 +550,9 @@ export function ChatPage({
 					<Menu />
 				</IconButton>
 				<div className="welcome-content">
-					<span className="welcome-edition">ALLWEAVE / BUILD</span>
-					<div className="welcome-mark">
-						<BuildMark />
-					</div>
-					<span className="eyebrow">构序 · AI 编程工作台</span>
+					<BuildBrandFamily className="welcome-family" />
+					<span className="welcome-edition">LOCAL PROJECT WORKBENCH</span>
+					<span className="eyebrow">构序 · 本地 AI 编程工作台</span>
 					<h1>
 						让想法交织。
 						<br />
@@ -504,129 +681,205 @@ export function ChatPage({
 							{connection}。恢复连接后自动同步服务端状态。
 						</Alert>
 					)}
-					<div
-						ref={(node) => setSessionNode(scroll, node, session.id)}
-						data-session-motion-id={session.id}
-						className="chat-scroll"
-						onScroll={(event) => {
-							const element = event.currentTarget;
-							follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-						}}
-					>
+					<div className="chat-conversation">
 						<div
-							ref={(node) => setSessionNode(transcript, node, session.id)}
+							ref={(node) => setSessionNode(scroll, node, session.id)}
 							data-session-motion-id={session.id}
-							className="transcript"
+							className="chat-scroll"
+							onScroll={(event) => {
+								const element = event.currentTarget;
+								follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+							}}
 						>
-							{!session.messages.length && (
-								<div className="conversation-empty">
-									<BuildMark className="conversation-build-mark" />
-									<h2>今天要完成什么？</h2>
-									<p>
-										工作区已连接到 <strong>{workspace?.name}</strong>。<br />
-										从解释代码、修复问题或实现功能开始。
-									</p>
-								</div>
-							)}
-							{conversation.map((messages) => {
-								const role = messages[0].role;
-								const finalMessage = messages[messages.length - 1];
-								const actionMessage = role === "user" ? messages[0] : finalMessage;
-								return (
-									<article key={messages[0].id} className={`message message-${role}`}>
-										<div className={`message-body message-body-${role}`}>
-											<div className="message-label">
-												{role === "user" ? (
-													"你"
-												) : (
-													<>
-														<Sparkles size={16} />
-														构序
-													</>
+							<div
+								ref={(node) => setSessionNode(transcript, node, session.id)}
+								data-session-motion-id={session.id}
+								className="transcript"
+							>
+								{!session.messages.length && (
+									<div className="conversation-empty">
+										<BuildMark className="conversation-build-mark" />
+										<h2>今天要完成什么？</h2>
+										<p>
+											工作区已连接到 <strong>{workspace?.name}</strong>。<br />
+											从解释代码、修复问题或实现功能开始。
+										</p>
+									</div>
+								)}
+								{pageStart > 0 && (
+									<Button
+										onClick={() => {
+											follow.current = false;
+											setHistoryPage({ sessionId: session.id, endId: conversation[pageStart - 1][0].id });
+											scroll.current?.scrollTo(0, 0);
+										}}
+									>
+										查看更早消息
+									</Button>
+								)}
+								{visibleConversation.map((messages) => {
+									const role = messages[0].role;
+									const finalMessage = messages[messages.length - 1];
+									const actionMessage = role === "user" ? messages[0] : finalMessage;
+									return (
+										<article
+											key={messages[0].id}
+											data-conversation-id={messages[0].id}
+											className={`message message-${role}`}
+										>
+											<div className={`message-body message-body-${role}`}>
+												<div className="message-label">
+													{role === "user" ? (
+														"你"
+													) : (
+														<>
+															<Sparkles size={16} />
+															构序
+														</>
+													)}
+													<time>
+														{new Date(messages[0].timestamp).toLocaleTimeString([], {
+															hour: "2-digit",
+															minute: "2-digit",
+														})}
+													</time>
+												</div>
+												{role === "assistant" &&
+													messages.some(
+														(message, index) =>
+															message.thinking || (index < messages.length - 1 && message.text),
+													) && (
+														<SpringDisclosure className="thinking" label="本轮推理与过程 · 展开查看">
+															{messages.map((message, index) => (
+																<div key={message.id} className="thinking-segment">
+																	{message.thinking && <Markdown text={message.thinking} />}
+																	{index < messages.length - 1 && message.text && (
+																		<div className="process-note">
+																			<span className="muted">过程说明</span>
+																			<Markdown text={message.text} />
+																		</div>
+																	)}
+																</div>
+															))}
+														</SpringDisclosure>
+													)}
+												<div className="message-answer">
+													{role === "user" && finalMessage.text.length > collapsedUserMessageThreshold ? (
+														<details className="long-user-message">
+															<summary>
+																<span className="long-user-message-preview">
+																	{finalMessage.text.slice(0, 120).replace(/\s+/gu, " ").trim()}
+																</span>
+																<span className="long-user-message-meta">
+																	{finalMessage.text.length.toLocaleString()} 字符 ·{" "}
+																	<span className="long-user-message-open-label">展开查看</span>
+																	<span className="long-user-message-close-label">收起内容</span>
+																</span>
+																<ChevronDown className="long-user-message-chevron" size={15} />
+															</summary>
+															<div className="long-user-message-content">
+																<Markdown text={finalMessage.text} />
+															</div>
+														</details>
+													) : (
+														<Markdown text={finalMessage.text} />
+													)}
+												</div>
+												{messages.some((message) => !message.complete) && (
+													<span className="stream-label">正在生成…</span>
 												)}
-												<time>
-													{new Date(messages[0].timestamp).toLocaleTimeString([], {
-														hour: "2-digit",
-														minute: "2-digit",
-													})}
-												</time>
+												{messages
+													.filter((message) => message.error)
+													.slice(-1)
+													.map((message) => (
+														<ModelRequestError key={message.id} message={message.error!} />
+													))}
 											</div>
 											{role === "assistant" &&
-												messages.some(
-													(message, index) =>
-														message.thinking || (index < messages.length - 1 && message.text),
-												) && (
-													<SpringDisclosure className="thinking" label="本轮推理与过程 · 展开查看">
-														{messages.map((message, index) => (
-															<div key={message.id} className="thinking-segment">
-																{message.thinking && <Markdown text={message.thinking} />}
-																{index < messages.length - 1 && message.text && (
-																	<div className="process-note">
-																		<span className="muted">过程说明</span>
-																		<Markdown text={message.text} />
-																	</div>
-																)}
-															</div>
-														))}
-													</SpringDisclosure>
+												finalMessage.changedFiles &&
+												finalMessage.changedFiles.length > 0 && (
+													<MessageChanges files={finalMessage.changedFiles} onOpenFile={openChangedFile} />
 												)}
-											<div className="message-answer">
-												<Markdown text={finalMessage.text} />
-											</div>
-											{messages.some((message) => !message.complete) && (
-												<span className="stream-label">正在生成…</span>
-											)}
-											{messages
-												.filter((message) => message.error)
-												.slice(-1)
-												.map((message) => (
-													<ModelRequestError key={message.id} message={message.error!} />
-												))}
-										</div>
-										{role === "assistant" &&
-											finalMessage.changedFiles &&
-											finalMessage.changedFiles.length > 0 && (
-												<MessageChanges files={finalMessage.changedFiles} />
-											)}
-										<MessageActions
-											message={actionMessage}
-											busy={navigatingConversation}
-											canNavigate={
-												connection === "已连接" && (role === "user" ? !draft : finalMessage.complete)
-											}
-											onRecall={() => void recall(messages[0].id)}
-											onBranch={() => void branch(finalMessage.id)}
-										/>
-									</article>
-								);
-							})}
-							{session.error && session.messages.at(-1)?.error !== session.error && (
-								<Alert
-									severity={
-										session.error === abortedMessage || session.error.startsWith("No models available")
-											? "info"
-											: "error"
-									}
-								>
-									{session.error === abortedMessage ? (
-										"已停止生成，已生成的内容已保留。可以继续发送任务。"
-									) : session.error.startsWith("No models available") ? (
-										<>
-											服务端尚未配置模型认证。请配置供应商凭据或环境变量并重启服务，再到{" "}
-											<Link to="/settings">模型与设置</Link> 选择可用模型。
-										</>
-									) : (
-										session.error
-									)}
-								</Alert>
-							)}
-							{models.error && <Alert severity="error">模型列表加载失败：{models.error.message}</Alert>}
-							{error && (
-								<Alert severity="error" onClose={() => setError("")}>
-									{error}
-								</Alert>
-							)}
+											<MessageActions
+												message={actionMessage}
+												busy={navigatingConversation}
+												canNavigate={
+													connection === "已连接" && (role === "user" ? !draft : finalMessage.complete)
+												}
+												onRecall={() => void recall(messages[0].id)}
+												onBranch={() => void branch(finalMessage.id)}
+											/>
+										</article>
+									);
+								})}
+								{historyEnd > 0 && (
+									<>
+										<Button
+											onClick={() => {
+												const nextEnd = Math.min(conversation.length, pageEnd + 40);
+												setHistoryPage(
+													nextEnd === conversation.length
+														? undefined
+														: {
+																sessionId: session.id,
+																endId: conversation[nextEnd - 1][0].id,
+															},
+												);
+												scroll.current?.scrollTo(0, 0);
+											}}
+										>
+											查看较新消息
+										</Button>
+										<Button
+											onClick={() => {
+												setHistoryPage(undefined);
+												follow.current = true;
+											}}
+										>
+											回到最新消息
+										</Button>
+									</>
+								)}
+								{session.error && session.messages.at(-1)?.error !== session.error && (
+									<Alert
+										severity={
+											session.error === abortedMessage || session.error.startsWith("No models available")
+												? "info"
+												: "error"
+										}
+									>
+										{session.error === abortedMessage ? (
+											"已停止生成，已生成的内容已保留。可以继续发送任务。"
+										) : session.error.startsWith("No models available") ? (
+											<>
+												服务端尚未配置模型认证。请配置供应商凭据或环境变量并重启服务，再到{" "}
+												<Link to="/settings">模型与设置</Link> 选择可用模型。
+											</>
+										) : (
+											session.error
+										)}
+									</Alert>
+								)}
+								{models.error && <Alert severity="error">模型列表加载失败：{models.error.message}</Alert>}
+								{error && (
+									<Alert severity="error" onClose={() => setError("")}>
+										{error}
+									</Alert>
+								)}
+							</div>
 						</div>
+						{visibleConversation.length > 1 && (
+							<ConversationTimeline
+								key={`${session.id}:${visibleConversation.map((messages) => messages[0].id).join("\0")}`}
+								groups={visibleConversation}
+								scrollRef={scroll}
+								transcriptRef={transcript}
+								reducedMotion={reducedMotion}
+								onNavigate={() => {
+									follow.current = false;
+								}}
+							/>
+						)}
 					</div>
 					<Composer
 						key={session.id}

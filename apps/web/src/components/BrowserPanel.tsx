@@ -1,8 +1,9 @@
 import { Alert, Button, IconButton, LinearProgress, MenuItem, Select, Tooltip } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import type { BrowserCommand, BrowserSnapshot } from "../../../shared/src/browser.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { BrowserCommand, BrowserSnapshot, BrowserStreamEvent } from "../../../shared/src/browser.ts";
 import { ApiError, api } from "../services/api.ts";
+import { BrowserSurface } from "./BrowserSurface.tsx";
 import {
 	ArrowUp,
 	ChevronLeft,
@@ -37,21 +38,94 @@ export function BrowserPanel({
 	const [fit, setFit] = useState(true);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState("");
+	const [live, setLive] = useState(false);
+	const [frame, setFrame] = useState<{ image: string; tabId: string } | null>(null);
+	const [dialogText, setDialogText] = useState("");
+	const inputQueue = useRef<Promise<void>>(Promise.resolve());
+	const viewport = useRef<HTMLDivElement>(null);
 	const queryKey = ["browser", sessionId];
 	const browser = useQuery({
 		queryKey,
 		queryFn: () => api<BrowserSnapshot | null>(`/sessions/${sessionId}/browser`),
-		refetchInterval: pending ? false : 2000,
+		refetchInterval: pending || live ? false : 2000,
 		retry: false,
 	});
 	const snapshot = browser.data;
 	const url = addressDraft ?? (snapshot?.url === "about:blank" ? "" : snapshot?.url) ?? "";
 	const disabled = pending || running;
+	useEffect(() => {
+		let disposed = false;
+		let socket: WebSocket;
+		let reconnect: ReturnType<typeof setTimeout>;
+		const connect = () => {
+			socket = new WebSocket(
+				`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws/browser/${sessionId}`,
+			);
+			socket.onopen = () => {
+				if (!disposed) setLive(true);
+			};
+			socket.onmessage = (message) => {
+				if (disposed) return;
+				const event = JSON.parse(message.data as string) as BrowserStreamEvent;
+				if (event.type === "frame") setFrame({ image: event.image, tabId: event.tabId });
+				else if (event.type === "state") client.setQueryData(["browser", sessionId], event.snapshot);
+				else setError(event.error);
+			};
+			socket.onclose = () => {
+				if (!disposed) {
+					setLive(false);
+					reconnect = setTimeout(connect, 1500);
+				}
+			};
+			socket.onerror = () => socket.close();
+		};
+		connect();
+		return () => {
+			disposed = true;
+			clearTimeout(reconnect);
+			socket.close();
+		};
+	}, [client, sessionId]);
+	useEffect(() => {
+		setDialogText(snapshot?.dialog?.defaultValue ?? "");
+	}, [snapshot?.dialog?.defaultValue]);
+	const input = useCallback(
+		(command: BrowserCommand) => {
+			inputQueue.current = inputQueue.current.then(async () => {
+				try {
+					await api(`/sessions/${sessionId}/browser/input`, command);
+				} catch (error) {
+					setError(browserErrorMessage(error));
+				}
+			});
+		},
+		[sessionId],
+	);
+	const hasPage = !!snapshot;
+	useEffect(() => {
+		const element = viewport.current;
+		if (!element || !hasPage || disabled || snapshot?.dialog) return;
+		let timer: ReturnType<typeof setTimeout>;
+		const observer = new ResizeObserver(() => {
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				const width = fit ? Math.max(320, Math.min(1280, Math.floor(element.clientWidth))) : 1280;
+				const height = fit ? Math.max(200, Math.min(800, Math.floor(element.clientHeight))) : 800;
+				if (snapshot?.width !== width || snapshot?.height !== height) input({ action: "resize", width, height });
+			}, 150);
+		});
+		observer.observe(element);
+		return () => {
+			clearTimeout(timer);
+			observer.disconnect();
+		};
+	}, [hasPage, disabled, fit, input, snapshot?.width, snapshot?.height, snapshot?.dialog]);
 	const run = async (command: BrowserCommand) => {
 		if (disabled) return false;
 		setPending(true);
 		setError("");
 		try {
+			await inputQueue.current;
 			await client.cancelQueries({ queryKey });
 			const result = await api<BrowserSnapshot | null>(`/sessions/${sessionId}/browser`, command);
 			client.setQueryData(queryKey, result);
@@ -64,6 +138,16 @@ export function BrowserPanel({
 			setPending(false);
 		}
 	};
+	const copy = async (cut: boolean) => {
+		if (disabled) return;
+		try {
+			await inputQueue.current;
+			const result = await api<BrowserSnapshot>(`/sessions/${sessionId}/browser`, { action: "copy", cut });
+			if (result.clipboard) await navigator.clipboard.writeText(result.clipboard);
+		} catch (error) {
+			setError(browserErrorMessage(error));
+		}
+	};
 	const request = (instruction: string) => {
 		onRequest(
 			`请使用内置 browser 工具${snapshot ? `操作当前页面 ${snapshot.url}` : "打开并操作网页"}：${instruction}`,
@@ -72,6 +156,41 @@ export function BrowserPanel({
 	};
 	return (
 		<section className="browser-panel" aria-label="内置浏览器">
+			{snapshot && (
+				<div className="browser-tabs" role="tablist" aria-label="网页标签页">
+					{snapshot.tabs.map((tab) => (
+						<div className={`browser-tab${tab.id === snapshot.tabId ? " is-active" : ""}`} key={tab.id}>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={tab.id === snapshot.tabId}
+								disabled={disabled}
+								title={tab.url}
+								onClick={() => void run({ action: "switchTab", tabId: tab.id })}
+							>
+								{tab.title || "新标签页"}
+							</button>
+							<button
+								type="button"
+								aria-label={`关闭标签页 ${tab.title || "新标签页"}`}
+								disabled={disabled}
+								onClick={() => void run({ action: "closeTab", tabId: tab.id })}
+							>
+								<X size={12} />
+							</button>
+						</div>
+					))}
+					<button
+						type="button"
+						className="browser-add-tab"
+						disabled={disabled}
+						aria-label="新建浏览器标签页"
+						onClick={() => void run({ action: "newTab" })}
+					>
+						+
+					</button>
+				</div>
+			)}
 			<form
 				className="browser-addressbar"
 				onSubmit={(event) => {
@@ -146,7 +265,7 @@ export function BrowserPanel({
 				</span>
 				<span className={`browser-session-state${running || pending ? " is-running" : ""}`}>
 					<i />
-					{running ? "Agent 正在操作" : pending ? "操作中" : "与 Agent 共享"}
+					{running ? "Agent 正在操作" : pending ? "操作中" : live ? "实时共享" : "正在连接"}
 				</span>
 				<Tooltip title={fit ? "按实际尺寸查看" : "适应面板宽度"}>
 					<IconButton aria-label={fit ? "按实际尺寸查看" : "适应面板宽度"} onClick={() => setFit(!fit)}>
@@ -173,30 +292,38 @@ export function BrowserPanel({
 					{error || browserErrorMessage(browser.error)}
 				</Alert>
 			)}
-			<div className={`browser-viewport${fit ? " is-fit" : " is-actual"}`}>
-				{snapshot ? (
-					<button
-						type="button"
-						className="browser-screen"
-						disabled={disabled}
-						aria-label="点击浏览器页面"
-						onClick={(event) => {
-							const rect = event.currentTarget.getBoundingClientRect();
-							const x = event.detail ? (event.clientX - rect.left) / rect.width : 0.5;
-							const y = event.detail ? (event.clientY - rect.top) / rect.height : 0.5;
-							void run({
-								action: "click",
-								x: Math.min(1279, Math.max(0, x * snapshot.width)),
-								y: Math.min(799, Math.max(0, y * snapshot.height)),
-							});
-						}}
-					>
-						<img
-							src={`data:image/jpeg;base64,${snapshot.image}`}
-							alt={snapshot.title || "浏览器页面"}
-							draggable={false}
+			{snapshot?.dialog && (
+				<div className="browser-dialog" role="alertdialog" aria-label="网页弹窗">
+					<p>{snapshot.dialog.message}</p>
+					{snapshot.dialog.type === "prompt" && (
+						<input
+							aria-label="网页弹窗输入"
+							value={dialogText}
+							onChange={(event) => setDialogText(event.target.value)}
 						/>
-					</button>
+					)}
+					<div>
+						<Button disabled={disabled} onClick={() => void run({ action: "dialog", accept: false })}>
+							取消
+						</Button>
+						<Button
+							disabled={disabled}
+							onClick={() => void run({ action: "dialog", accept: true, text: dialogText })}
+						>
+							确定
+						</Button>
+					</div>
+				</div>
+			)}
+			<div ref={viewport} className={`browser-viewport${fit ? " is-fit" : " is-actual"}`}>
+				{snapshot ? (
+					<BrowserSurface
+						snapshot={snapshot}
+						image={frame?.tabId === snapshot.tabId ? frame.image : snapshot.image}
+						disabled={disabled || !!snapshot.dialog}
+						input={input}
+						copy={(cut) => void copy(cut)}
+					/>
 				) : (
 					<div className="browser-empty">
 						<span className="browser-empty-icon">

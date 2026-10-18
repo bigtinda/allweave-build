@@ -30,7 +30,14 @@ export function SpringDisclosure({
 				{label}
 				<ChevronDown className="spring-disclosure-chevron" size={16} aria-hidden="true" />
 			</button>
-			<SpringCollapse id={panelId} className="spring-disclosure-panel" in={open} preset="smooth">
+			<SpringCollapse
+				id={panelId}
+				className="spring-disclosure-panel"
+				in={open}
+				preset="smooth"
+				mountOnEnter
+				unmountOnExit
+			>
 				<section aria-labelledby={triggerId}>{children}</section>
 			</SpringCollapse>
 		</section>

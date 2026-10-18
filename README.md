@@ -27,7 +27,7 @@
 
 界面与桌面程序统一使用 **AllWeave Build · 构序** 品牌。底层包名保留 `@earendil-works/pi-*`；工作台直接使用仓库内 `packages/coding-agent` 及相关 Pi 源码，不依赖独立 Pi 可执行文件。
 
-Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-build/releases) 下载便携包，解压后运行 `AllWeaveBuild.exe`。包内包含 Node.js 和 Pi SDK 源码；模型凭据仍需自行配置，系统需具备 WebView2 Runtime。
+Windows 用户可从 [GitHub Releases](https://github.com/bigtinda/allweave-build/releases) 下载 EXE 安装包，安装后从桌面或开始菜单启动。包内包含 Node.js 和 Pi SDK 源码；模型凭据仍需自行配置，系统需具备 WebView2 Runtime。
 
 ![AllWeave Build 构序工作台](docs/brand/workbench.png)
 
@@ -50,11 +50,11 @@ Web 工作台通过仓库中的 Pi coding-agent SDK 运行编程会话。准备 
 git clone https://github.com/bigtinda/allweave-build.git
 cd allweave-build
 npm ci --ignore-scripts
-npm run hydrate:model-data
+node scripts/hydrate-desktop-models.mjs
 Copy-Item apps/server/.env.example .env
 ```
 
-`hydrate:model-data` 需要网络连接，用于准备底层模型数据。已有 `.env` 时直接编辑现有文件，保留自己的配置。
+模型准备脚本需要网络连接，下载并校验与当前源码匹配的固定快照。已有 `.env` 时直接编辑现有文件，保留自己的配置。
 
 ### 2. 使用内置 Pi SDK
 
@@ -99,17 +99,19 @@ Pi SDK、可信扩展和获准命令使用当前 Windows 用户权限。界面�
 
 ## Windows 桌面版
 
+[Build Windows Desktop](https://github.com/bigtinda/allweave-build/actions/workflows/windows-desktop.yml) 自动构建并验证安装包。打开成功的运行，在 Artifacts 下载包含安装 EXE 与 SHA-256 文件的压缩包。`Publish Model Catalog` 是底层模型目录任务，不生成桌面程序。
+
 桌面版用 Tauri 启动本地 Node.js 服务，并在 Windows 原生窗口中打开工作台。关闭窗口时会停止服务进程树。
 
-自行打包需要 **Rust 1.90 或更新版本**、Visual Studio C++ Build Tools、WebView2 Runtime，以及上述依赖。
+自行打包需要 **Rust 1.90 或更新版本**、Visual Studio C++ Build Tools、NSIS 3、WebView2 Runtime，以及上述依赖。
 
 在 PowerShell 中执行：
 
 ```powershell
-.\desktop\build-portable.ps1 -BuildWeb
+.\desktop\build-installer.ps1
 ```
 
-产物为 `desktop/dist/AllWeaveBuildPortable.zip`。解压后运行 `AllWeaveBuild.exe`，无需安装程序。包内自带 Node.js 和 Pi SDK 源码。目录必须可写，会话、模型配置和 WebView 数据保存在程序旁的 `data/` 目录。
+产物为 `desktop/dist/AllWeaveBuild-<版本>-windows-x64-setup.exe`。默认安装到当前用户目录，并创建快捷方式。每次打包自动递增桌面版本号，升级安装保留会话、模型配置、插件与工作区；安装程序会阻止降级。
 
 默认授权同目录下的 `workspaces/`。在 `workspace-roots.txt` 中逐行加入其他项目目录后重启程序。固定版本 WebView2 的打包方式见 [桌面版说明](desktop/README.md)。
 
@@ -122,13 +124,13 @@ apps/
   web/          React、Vite、MUI、Monaco 前端
   server/       Fastify、WebSocket、SQLite 本地服务
   shared/       前后端共享协议
-desktop/        Tauri Windows 桌面封装与便携包脚本
+desktop/        Tauri Windows 桌面封装与 EXE 安装包脚本
 packages/       Pi 编程代理与底层库
 scripts/        开发、校验与打包工具
 docs/brand/     AllWeave Build README 品牌资源
 ```
 
-浏览器通过 HTTP / WebSocket 连接本地服务，本地服务通过 Pi 的 RPC（进程间请求与事件协议）控制编程内核。模型调用与工具执行在服务端和内核中完成。
+浏览器通过 HTTP / WebSocket 连接本地服务，本地服务直接调用进程内的 Pi coding-agent SDK。模型调用与工具执行由服务端运行。
 
 ### 常用命令
 

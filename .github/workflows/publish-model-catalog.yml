@@ -37,8 +37,8 @@ permissions:
 
 jobs:
   generate:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
-    runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'earendil-works/pi' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) }}
+    runs-on: ubuntu-24.04
     env:
       SOURCE_REF: ${{ github.event.workflow_run.head_sha || inputs.source_ref || github.sha }}
     steps:
@@ -64,7 +64,7 @@ jobs:
         run: npm run check:model-catalog
 
       - name: Upload model catalog JSON
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: model-catalog-json
           path: .artifacts/model-catalog
@@ -72,9 +72,9 @@ jobs:
           retention-days: 14
 
   publish:
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    if: ${{ github.repository == 'earendil-works/pi' && (github.event_name == 'schedule' || github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && inputs.publish)) }}
     needs: generate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: pi-model-upload
     concurrency:
       group: publish-model-catalog-r2
@@ -99,7 +99,7 @@ jobs:
           node-version: '22'
 
       - name: Download model catalog JSON
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: model-catalog-json
           path: .artifacts/model-catalog

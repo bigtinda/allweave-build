@@ -1,10 +1,13 @@
 export type AgentStatus = "idle" | "running" | "approval" | "error";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AccessMode = "plan" | "ask" | "auto" | "full";
+export type SessionPurpose = "plugin-development";
 export interface Workspace {
 	id: string;
 	name: string;
 	path: string;
+	remote?: { host: string };
+	kind?: "plugin-development";
 }
 export interface LocalFolder {
 	name: string;
@@ -170,6 +173,7 @@ export interface SessionSummary {
 	id: string;
 	workspaceId: string;
 	title: string;
+	purpose?: SessionPurpose;
 	status: AgentStatus;
 	updatedAt: string;
 	model?: ModelOption;
@@ -196,6 +200,7 @@ export interface FileContent {
 	path: string;
 	content: string;
 	revision: string;
+	truncated?: boolean;
 }
 export interface SkillInfo {
 	name: string;

@@ -1,7 +1,7 @@
 import { Button } from "@mui/material";
 import { Check, Copy } from "lucide-react";
 import type { ReactNode } from "react";
-import { Children, isValidElement, useState } from "react";
+import { Children, isValidElement, memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
@@ -52,7 +52,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 		</details>
 	);
 }
-export function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({ text }: { text: string }) {
 	return (
 		<div className="markdown">
 			<ReactMarkdown
@@ -71,4 +71,4 @@ export function Markdown({ text }: { text: string }) {
 			</ReactMarkdown>
 		</div>
 	);
-}
+});

@@ -8,6 +8,8 @@ export function useSession(id: string | undefined) {
 	const [connection, setConnection] = useState("连接中");
 	const query = useQuery({
 		queryKey: ["session", id],
+		gcTime: 0,
+		structuralSharing: false,
 		enabled: !!id,
 		queryFn: async () => {
 			const fetched = await api<SessionDetail>(`/sessions/${id}`);
@@ -42,7 +44,12 @@ export function useSession(id: string | undefined) {
 				if (message.type !== "message.delta" && message.type !== "tool.updated") {
 					void client.invalidateQueries({ queryKey: ["sessions"] });
 				}
-				if (message.type === "tool.completed") void client.invalidateQueries({ queryKey: ["files"] });
+				if (message.type === "tool.completed") {
+					void client.invalidateQueries({ queryKey: ["files"] });
+					if (message.tool?.name === "plugin_install") {
+						void client.invalidateQueries({ queryKey: ["app-plugins"] });
+					}
+				}
 			};
 			socket.onclose = () => {
 				if (!active) return;

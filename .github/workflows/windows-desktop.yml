@@ -1,0 +1,109 @@
+name: Build Windows Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-desktop.yml'
+      - 'apps/**'
+      - 'desktop/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - 'nix/model-catalog.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-desktop.yml'
+      - 'apps/**'
+      - 'desktop/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - 'nix/model-catalog.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+          rustup default 1.99.0
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed.' }
+
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+
+      - name: Prepare model data
+        run: |
+          node scripts/hydrate-desktop-models.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Model data hydration failed.' }
+
+      - name: Check source
+        run: |
+          npm run check
+          if ($LASTEXITCODE -ne 0) { throw 'Source checks failed.' }
+
+      - name: Test desktop versioning
+        run: ./desktop/test-version.ps1
+
+      - name: Install Windows packaging tools
+        run: |
+          choco install nsis --version=3.12 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed.' }
+          choco install webview2-runtime --yes --no-progress
+          if ($LASTEXITCODE -notin @(0, 3010)) { throw 'WebView2 Runtime installation failed.' }
+
+      - name: Build desktop application
+        run: |
+          $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS/makensis.exe'
+          & ./desktop/build-installer.ps1 -Rebuild -NsisCompiler $nsis
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging failed.' }
+
+      - name: Verify packaged application
+        run: |
+          $installer = @(Get-ChildItem desktop/dist/*-windows-x64-setup.exe)
+          if ($installer.Count -ne 1) { throw 'Expected exactly one Windows installer.' }
+          & ./desktop/test-installer.ps1 -Installer $installer[0].FullName
+
+      - name: Upload Windows desktop
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allweave-build-windows-x64-${{ github.run_number }}
+          path: |
+            desktop/dist/*-windows-x64-setup.exe
+            desktop/dist/*-windows-x64-setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

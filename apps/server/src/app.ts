@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open as openFile, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAgentSession, VERSION, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
@@ -15,20 +15,23 @@ import type {
 	FileEntry,
 	LocalFolder,
 	LocalFolderListing,
+	SessionDetail,
 	Workspace,
 } from "../../shared/src/protocol.ts";
 import { AgentService } from "./agent.ts";
+import { AppPluginManager, parseAppPluginManifest } from "./app-plugins.ts";
 import { BrowserService, browserCommand } from "./browser.ts";
-import { changeGitBranch, changeGitIndex, commitGit, gitChanges, gitDiff, gitRoot } from "./git.ts";
+import { changeGitBranch, changeGitIndex, commitGit, gitChanges, gitDiff, gitRoot, localGitOperations } from "./git.ts";
 import { PiPackageManager } from "./packages.ts";
 import { ProviderManager } from "./providers.ts";
+import { RemoteWorkspaceService } from "./remote-workspaces.ts";
 import { importSkillPackage, stagePluginPackage } from "./resource-imports.ts";
 import { contained, HttpError, tokenMatches, workspacePath } from "./security.ts";
 import { StorageManager } from "./storage.ts";
 import { ConsoleStore } from "./store.ts";
 
 const idParams = z.object({ id: z.string().uuid() });
-const fileQuery = z.object({ path: z.string().max(4096).default(".") });
+const fileQuery = z.object({ path: z.string().max(4096).default("."), preview: z.enum(["true", "false"]).optional() });
 const thinkingLevel = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const accessMode = z.enum(["plan", "ask", "auto", "full"]);
 const resourceImportFiles = z
@@ -43,6 +46,8 @@ const hiddenDirectoryNames = new Set([
 	"system volume information",
 	"$recycle.bin",
 ]);
+const maxEditableFileBytes = 1024 * 1024;
+const maxLargeFilePreviewBytes = 256 * 1024;
 
 function runGit(cwd: string, args: string[]): Promise<string> {
 	return new Promise((resolvePromise, rejectPromise) => {
@@ -134,6 +139,7 @@ export interface AppOptions {
 	port: number;
 	logger?: boolean;
 	createSession?: typeof createAgentSession;
+	remoteWorkspaces?: RemoteWorkspaceService;
 }
 
 export async function createApp(options: AppOptions) {
@@ -166,24 +172,56 @@ export async function createApp(options: AppOptions) {
 	const allowedOrigins = new Set([`http://127.0.0.1:${options.port}`, "http://127.0.0.1:5173"]);
 	const allowedHosts = new Set([`127.0.0.1:${options.port}`, "127.0.0.1:5173"]);
 	const store = new ConsoleStore(options.directory);
+	const remoteWorkspaces = options.remoteWorkspaces ?? new RemoteWorkspaceService(options.directory);
+	const pluginWorkspacePath = resolve(options.directory, "plugin-workspace");
+	await mkdir(pluginWorkspacePath, { recursive: true });
+	const canonicalPluginWorkspacePath = await realpath(pluginWorkspacePath);
+	await mkdir(join(canonicalPluginWorkspacePath, "plugins"), { recursive: true });
+	const existingPluginWorkspace = store
+		.workspaces()
+		.find(
+			(workspace) =>
+				workspace.kind === "plugin-development" ||
+				(!workspace.remote && workspace.path === canonicalPluginWorkspacePath),
+		);
+	const pluginWorkspace: Workspace = {
+		id: existingPluginWorkspace?.id ?? randomUUID(),
+		name: "插件开发",
+		path: canonicalPluginWorkspacePath,
+		kind: "plugin-development",
+	};
+	store.saveWorkspace(pluginWorkspace);
 	for (const root of roots) {
-		if (!store.workspaceWasRemoved(root) && !store.workspaces().some((workspace) => workspace.path === root)) {
+		if (root === canonicalPluginWorkspacePath) continue;
+		if (
+			!store.workspaceWasRemoved(root) &&
+			!store.workspaces().some((workspace) => !workspace.remote && workspace.path === root)
+		) {
 			store.saveWorkspace({ id: randomUUID(), name: basename(root) || root, path: root });
 		}
+	}
+	for (const saved of store.sessions()) {
+		if (saved.detail.purpose !== "plugin-development" || saved.detail.workspaceId === pluginWorkspace.id) continue;
+		saved.detail.workspaceId = pluginWorkspace.id;
+		store.saveSession(saved.detail, saved.file);
 	}
 	const agentDirectory = resolve(process.env.PI_CODING_AGENT_DIR ?? join(options.directory, "agent"));
 	const providers = new ProviderManager(agentDirectory);
 	const browser = new BrowserService([...allowedOrigins]);
+	const appPlugins = new AppPluginManager(options.directory);
 	const agents = new AgentService(store, options.directory, {
 		createSession: options.createSession ?? createAgentSession,
 		providers,
 		agentDirectory,
 		browser,
+		appPlugins,
+		remoteWorkspaces,
 	});
 	providers.setBeforeChange(() => agents.prepareForProviderChange());
 	const packages = new PiPackageManager(agentDirectory, agentDirectory, () => agents.prepareForProviderChange());
 	const storage = new StorageManager(options.directory, agentDirectory, store, agents);
 	const app = Fastify({ logger: options.logger ?? true, bodyLimit: 2 * 1024 * 1024 });
+	app.addHook("onClose", async () => remoteWorkspaces.close());
 	await app.register(websocket, { options: { maxPayload: 4096 } });
 	app.addHook("onRequest", async (request, reply) => {
 		reply.header("X-Content-Type-Options", "nosniff");
@@ -250,6 +288,34 @@ export async function createApp(options: AppOptions) {
 		authentication: "Server credentials and environment variables; never sent to the browser",
 	}));
 	app.get("/api/providers", async () => providers.list());
+	app.get("/api/app-plugins", async () => appPlugins.list());
+	let pluginDevelopmentSession: Promise<SessionDetail> | undefined;
+	app.post("/api/app-plugins/development-session", async () => {
+		if (!pluginDevelopmentSession) {
+			pluginDevelopmentSession = (async () => {
+				const existing = agents
+					.list()
+					.find(
+						(session) => session.purpose === "plugin-development" && session.workspaceId === pluginWorkspace.id,
+					);
+				return existing
+					? agents.get(existing.id)
+					: agents.createPluginDevelopmentSession(pluginWorkspace.id, "插件开发");
+			})().finally(() => {
+				pluginDevelopmentSession = undefined;
+			});
+		}
+		return pluginDevelopmentSession;
+	});
+	app.post("/api/app-plugins/install", async (request) => {
+		const { manifestJson } = z
+			.object({ manifestJson: z.string().min(1).max(96_000) })
+			.strict()
+			.parse(request.body);
+		const plugin = await appPlugins.install(parseAppPluginManifest(manifestJson));
+		await agents.refreshIdleAgentsForPluginChange();
+		return plugin;
+	});
 	app.get("/api/packages", async () => packages.list());
 	app.get("/api/packages/defaults", async () => packages.defaultPlugins());
 	app.post("/api/packages/install", async (request) => {
@@ -346,22 +412,72 @@ export async function createApp(options: AppOptions) {
 			throw new HttpError(501, "The native folder picker is available on Windows only");
 		return { path: (await pickWindowsFolder()) ?? null };
 	});
+	app.get("/api/remote-hosts/trusted", async (request) => {
+		const { host } = z.object({ host: z.string().min(1).max(255) }).parse(request.query);
+		return { trusted: await remoteWorkspaces.isTrusted(host) };
+	});
+	app.post("/api/remote-hosts/scan", async (request) => {
+		const { host } = z
+			.object({ host: z.string().trim().min(1).max(255) })
+			.strict()
+			.parse(request.body);
+		return remoteWorkspaces.scan(host);
+	});
+	app.post("/api/remote-hosts/trust", async (request) => {
+		const { host, fingerprint, replace } = z
+			.object({
+				host: z.string().trim().min(1).max(255),
+				fingerprint: z.string().trim().min(1).max(512),
+				replace: z.boolean().optional(),
+			})
+			.strict()
+			.parse(request.body);
+		return remoteWorkspaces.trust(host, fingerprint, replace);
+	});
+	app.get("/api/remote-hosts/folders", async (request) => {
+		const input = z
+			.object({ host: z.string().min(1).max(255), path: z.string().max(4096).optional() })
+			.parse(request.query);
+		return remoteWorkspaces.browse(input.host, input.path);
+	});
 	app.get("/api/workspaces", async () => store.workspaces());
 	app.post("/api/workspaces", async (request) => {
 		const input = z
 			.object({
 				path: z.string().min(1).max(4096),
 				name: z.string().min(1).max(100).optional(),
+				remoteHost: z.string().trim().min(1).max(255).optional(),
 				authorize: z.boolean().default(false),
 			})
 			.parse(request.body);
+		if (input.remoteHost) {
+			const path = await remoteWorkspaces.addWorkspace(input.remoteHost, input.path);
+			const existing = store
+				.workspaces()
+				.find(
+					(workspace) =>
+						workspace.remote?.host.toLowerCase() === input.remoteHost!.toLowerCase() && workspace.path === path,
+				);
+			if (existing) return existing;
+			const name =
+				input.name ??
+				path
+					.split(/[\\/]+/u)
+					.filter(Boolean)
+					.at(-1) ??
+				input.remoteHost;
+			const workspace: Workspace = { id: randomUUID(), path, name, remote: { host: input.remoteHost } };
+			store.saveWorkspace(workspace);
+			return workspace;
+		}
 		const path = await realpath(resolve(input.path));
 		if (!(await stat(path)).isDirectory()) throw new HttpError(400, "Workspace must be a directory");
 		if (!roots.some((root) => contained(root, path))) {
 			if (!input.authorize) throw new HttpError(403, "Authorize this folder before adding it as a workspace");
 			await authorizeRoot(path);
 		}
-		const existing = store.workspaces().find((workspace) => workspace.path === path);
+		if (path === pluginWorkspace.path) throw new HttpError(409, "插件开发工作区由系统管理");
+		const existing = store.workspaces().find((workspace) => !workspace.remote && workspace.path === path);
 		if (existing) return existing;
 		const workspace: Workspace = { id: randomUUID(), path, name: input.name ?? basename(path) };
 		store.saveWorkspace(workspace);
@@ -370,6 +486,7 @@ export async function createApp(options: AppOptions) {
 	app.patch("/api/workspaces/:id", async (request) => {
 		const { id } = idParams.parse(request.params);
 		const workspace = workspaceFor(id);
+		if (workspace.kind === "plugin-development") throw new HttpError(409, "插件开发工作区名称固定");
 		const { name } = z
 			.object({ name: z.string().trim().min(1).max(100) })
 			.strict()
@@ -381,16 +498,108 @@ export async function createApp(options: AppOptions) {
 	app.delete("/api/workspaces/:id", async (request) => {
 		const { id } = idParams.parse(request.params);
 		const workspace = workspaceFor(id);
+		if (workspace.kind === "plugin-development") throw new HttpError(409, "插件开发工作区不能删除");
 		const sessionsDeleted = await agents.deleteWorkspaceSessions(id);
-		store.deleteWorkspace(id, workspace.path);
+		store.deleteWorkspace(id, workspace.path, !workspace.remote);
 		return { deleted: true, sessionsDeleted };
 	});
 	const workspaceFor = (id: string): Workspace => {
 		const workspace = store.workspaces().find((item) => item.id === id);
-		if (!workspace || !roots.some((root) => contained(root, workspace.path)))
+		if (
+			!workspace ||
+			(!workspace.remote &&
+				!roots.some((root) => contained(root, workspace.path)) &&
+				!(
+					workspace.kind === "plugin-development" &&
+					workspace.id === pluginWorkspace.id &&
+					workspace.path === pluginWorkspace.path
+				))
+		)
 			throw new HttpError(404, "Authorized workspace not found");
 		return workspace;
 	};
+	const gitFor = async (workspace: Workspace) => {
+		const operations = workspace.remote ? await remoteWorkspaces.gitOperations(workspace) : localGitOperations;
+		return { root: await gitRoot(workspace.path, operations), operations };
+	};
+	app.post("/api/app-plugins/import", async (request) => {
+		const { workspaceId, manifestPath } = z
+			.object({
+				workspaceId: z.string().uuid(),
+				manifestPath: z.string().trim().min(1).max(512).default(".allweave/plugins/plugin.json"),
+			})
+			.strict()
+			.parse(request.body);
+		if (/^(?:[\\/]|[A-Za-z]:)/u.test(manifestPath)) throw new HttpError(400, "插件清单路径必须是工作区相对路径");
+		const workspace = workspaceFor(workspaceId);
+		const content = workspace.remote
+			? (await remoteWorkspaces.readFile(workspace, manifestPath)).content
+			: await readFile(await workspacePath(workspace.path, manifestPath), "utf8");
+		const plugin = await appPlugins.install(parseAppPluginManifest(content));
+		await agents.refreshIdleAgentsForPluginChange();
+		return plugin;
+	});
+	app.post("/api/app-plugins/:id/enable", async (request) => {
+		const { id } = z.object({ id: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u) }).parse(request.params);
+		const plugin = await appPlugins.setEnabled(id, true);
+		await agents.refreshIdleAgentsForPluginChange();
+		return plugin;
+	});
+	app.post("/api/app-plugins/:id/disable", async (request) => {
+		const { id } = z.object({ id: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u) }).parse(request.params);
+		const plugin = await appPlugins.setEnabled(id, false);
+		await agents.refreshIdleAgentsForPluginChange();
+		return plugin;
+	});
+	app.delete("/api/app-plugins/:id", async (request) => {
+		const { id } = z.object({ id: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u) }).parse(request.params);
+		await appPlugins.remove(id);
+		await agents.refreshIdleAgentsForPluginChange();
+		return { removed: true };
+	});
+	app.get("/api/workspaces/:workspaceId/app-plugins/:pluginId/records", async (request) => {
+		const { workspaceId, pluginId } = z
+			.object({
+				workspaceId: z.string().uuid(),
+				pluginId: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u),
+			})
+			.parse(request.params);
+		workspaceFor(workspaceId);
+		return appPlugins.listRecords(pluginId, workspaceId);
+	});
+	app.post("/api/workspaces/:workspaceId/app-plugins/:pluginId/records", async (request) => {
+		const { workspaceId, pluginId } = z
+			.object({
+				workspaceId: z.string().uuid(),
+				pluginId: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u),
+			})
+			.parse(request.params);
+		workspaceFor(workspaceId);
+		return appPlugins.createRecord(pluginId, workspaceId, request.body);
+	});
+	app.patch("/api/workspaces/:workspaceId/app-plugins/:pluginId/records/:recordId", async (request) => {
+		const { workspaceId, pluginId, recordId } = z
+			.object({
+				workspaceId: z.string().uuid(),
+				pluginId: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u),
+				recordId: z.string().uuid(),
+			})
+			.parse(request.params);
+		workspaceFor(workspaceId);
+		return appPlugins.updateRecord(pluginId, workspaceId, recordId, request.body);
+	});
+	app.delete("/api/workspaces/:workspaceId/app-plugins/:pluginId/records/:recordId", async (request) => {
+		const { workspaceId, pluginId, recordId } = z
+			.object({
+				workspaceId: z.string().uuid(),
+				pluginId: z.string().regex(/^[a-z][a-z0-9-]{2,48}$/u),
+				recordId: z.string().uuid(),
+			})
+			.parse(request.params);
+		workspaceFor(workspaceId);
+		await appPlugins.deleteRecord(pluginId, workspaceId, recordId);
+		return { deleted: true };
+	});
 	const mcpConfigFile = async (root: string, kind: "adapter" | "extension", createParent = false) => {
 		const canonicalRoot = await realpath(root);
 		const target = resolve(canonicalRoot, kind === "adapter" ? ".mcp.json" : join(".pi", "mcp.json"));
@@ -413,6 +622,7 @@ export async function createApp(options: AppOptions) {
 			.object({ workspaceId: z.string().uuid(), kind: z.enum(["adapter", "extension"]) })
 			.parse(request.query);
 		const workspace = workspaceFor(workspaceId);
+		if (workspace.remote) return remoteWorkspaces.readMcpConfig(workspace, kind);
 		const path = await mcpConfigFile(workspace.path, kind);
 		const content = await readFile(path, "utf8").catch((error: unknown) => {
 			if (error instanceof Error && "code" in error && error.code === "ENOENT") return '{\n  "mcpServers": {}\n}\n';
@@ -446,65 +656,65 @@ export async function createApp(options: AppOptions) {
 		) {
 			throw new HttpError(400, "MCP config must contain an mcpServers object");
 		}
-		const path = await mcpConfigFile(workspace.path, input.kind, true);
-		const temporary = `${path}.${randomUUID()}.tmp`;
-		await writeFile(temporary, `${JSON.stringify(parsed, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-		await rename(temporary, path);
+		const content = `${JSON.stringify(parsed, null, 2)}\n`;
+		if (workspace.remote) await remoteWorkspaces.writeMcpConfig(workspace, input.kind, content);
+		else {
+			const path = await mcpConfigFile(workspace.path, input.kind, true);
+			const temporary = `${path}.${randomUUID()}.tmp`;
+			await writeFile(temporary, content, { encoding: "utf8", mode: 0o600 });
+			await rename(temporary, path);
+		}
+		await agents.refreshIdleAgentsForPluginChange();
 		return { saved: true, path: input.kind === "adapter" ? ".mcp.json" : ".pi/mcp.json" };
 	});
 	app.get("/api/plugins/git", async (request) => {
 		const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(request.query);
 		const workspace = workspaceFor(workspaceId);
-		const repositoryPath = await runGit(workspace.path, ["rev-parse", "--show-toplevel"]);
+		const run = workspace.remote
+			? (root: string, args: string[]) =>
+					remoteWorkspaces.execute(workspace, ["git", "--literal-pathspecs", ...args], root)
+			: runGit;
+		const repositoryPath = (await run(workspace.path, ["rev-parse", "--show-toplevel"])).trim();
 		const [branch, branchOutput, worktreeOutput, statusOutput] = await Promise.all([
-			runGit(repositoryPath, ["branch", "--show-current"]),
-			runGit(repositoryPath, ["branch", "--format=%(refname:short)"]),
-			runGit(repositoryPath, ["worktree", "list", "--porcelain"]),
-			runGit(repositoryPath, ["status", "--short"]),
+			run(repositoryPath, ["branch", "--show-current"]),
+			run(repositoryPath, ["branch", "--format=%(refname:short)"]),
+			run(repositoryPath, ["worktree", "list", "--porcelain"]),
+			run(repositoryPath, ["status", "--short"]),
 		]);
 		return {
 			repositoryPath,
-			branch,
+			branch: branch.trim(),
 			branches: branchOutput.split(/\r?\n/u).filter(Boolean),
 			worktrees: parseGitWorktrees(worktreeOutput),
 			changedFiles: statusOutput.split(/\r?\n/u).filter(Boolean),
 		};
 	});
 	app.get("/api/workspaces/:id/git", async (request) => {
-		return gitChanges(await gitRoot(workspaceFor(idParams.parse(request.params).id).path));
+		const { root, operations } = await gitFor(workspaceFor(idParams.parse(request.params).id));
+		return gitChanges(root, operations);
 	});
 	app.get("/api/workspaces/:id/git/diff", async (request) => {
 		const input = z
 			.object({ path: z.string().min(1).max(4096), staged: z.enum(["true", "false"]).default("false") })
 			.parse(request.query);
-		return gitDiff(
-			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
-			input.path,
-			input.staged === "true",
-		);
+		const { root, operations } = await gitFor(workspaceFor(idParams.parse(request.params).id));
+		return gitDiff(root, input.path, input.staged === "true", operations);
 	});
 	app.post("/api/workspaces/:id/git/index", async (request) => {
 		const input = z
 			.object({ path: z.string().min(1).max(4096), staged: z.boolean(), revision: z.string().length(64) })
 			.strict()
 			.parse(request.body);
-		return changeGitIndex(
-			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
-			input.path,
-			input.staged,
-			input.revision,
-		);
+		const { root, operations } = await gitFor(workspaceFor(idParams.parse(request.params).id));
+		return changeGitIndex(root, input.path, input.staged, input.revision, operations);
 	});
 	app.post("/api/workspaces/:id/git/commit", async (request) => {
 		const input = z
 			.object({ message: z.string().trim().min(1).max(4000), revision: z.string().length(64) })
 			.strict()
 			.parse(request.body);
-		return commitGit(
-			await gitRoot(workspaceFor(idParams.parse(request.params).id).path),
-			input.message,
-			input.revision,
-		);
+		const { root, operations } = await gitFor(workspaceFor(idParams.parse(request.params).id));
+		return commitGit(root, input.message, input.revision, operations);
 	});
 	app.post("/api/workspaces/:id/git/branches", async (request) => {
 		const input = z
@@ -528,7 +738,8 @@ export async function createApp(options: AppOptions) {
 				)
 		)
 			throw new HttpError(409, "此项目有任务正在执行，请停止任务后切换分支。");
-		return changeGitBranch(await gitRoot(workspace.path), input.action, input.name, input.revision, input.base);
+		const { root, operations } = await gitFor(workspace);
+		return changeGitBranch(root, input.action, input.name, input.revision, input.base, operations);
 	});
 	app.post("/api/plugins/git/worktrees", async (request) => {
 		const input = z
@@ -540,26 +751,42 @@ export async function createApp(options: AppOptions) {
 			})
 			.parse(request.body);
 		const workspace = workspaceFor(input.workspaceId);
-		const repositoryPath = await runGit(workspace.path, ["rev-parse", "--show-toplevel"]);
-		await runGit(repositoryPath, ["check-ref-format", "--branch", input.branch]);
-		const statusOutput = await runGit(repositoryPath, ["worktree", "list", "--porcelain"]);
+		const run = workspace.remote
+			? (root: string, args: string[]) =>
+					remoteWorkspaces.execute(workspace, ["git", "--literal-pathspecs", ...args], root)
+			: runGit;
+		const repositoryPath = (await run(workspace.path, ["rev-parse", "--show-toplevel"])).trim();
+		await run(repositoryPath, ["check-ref-format", "--branch", input.branch]);
+		const statusOutput = await run(repositoryPath, ["worktree", "list", "--porcelain"]);
 		if (parseGitWorktrees(statusOutput).some((worktree) => worktree.branch === input.branch)) {
 			throw new HttpError(409, "This branch is already checked out in a worktree");
 		}
 		const targetName = input.branch.replace(/[\\/]+/gu, "-");
-		const target = join(options.directory, "worktrees", input.workspaceId, targetName);
-		await mkdir(dirname(target), { recursive: true });
-		if (await lstat(target).catch(() => undefined)) throw new HttpError(409, "Worktree destination already exists");
+		const target = workspace.remote
+			? await remoteWorkspaces.worktreeTarget(workspace, targetName)
+			: join(options.directory, "worktrees", input.workspaceId, targetName);
+		if (!workspace.remote) {
+			await mkdir(dirname(target), { recursive: true });
+			if (await lstat(target).catch(() => undefined))
+				throw new HttpError(409, "Worktree destination already exists");
+		}
 		if (input.mode === "existing") {
-			await runGit(repositoryPath, ["worktree", "add", target, input.branch]);
+			await run(repositoryPath, ["worktree", "add", target, input.branch]);
 		} else {
 			if (!input.baseBranch) throw new HttpError(400, "Choose a base branch for the new worktree");
-			await runGit(repositoryPath, ["check-ref-format", "--branch", input.baseBranch]);
-			await runGit(repositoryPath, ["worktree", "add", "-b", input.branch, target, input.baseBranch]);
+			await run(repositoryPath, ["check-ref-format", "--branch", input.baseBranch]);
+			await run(repositoryPath, ["worktree", "add", "-b", input.branch, target, input.baseBranch]);
 		}
-		const path = await realpath(target);
-		await authorizeRoot(path);
-		const nextWorkspace: Workspace = { id: randomUUID(), name: input.branch, path };
+		const path = workspace.remote
+			? await remoteWorkspaces.addWorkspace(workspace.remote.host, target)
+			: await realpath(target);
+		if (!workspace.remote) await authorizeRoot(path);
+		const nextWorkspace: Workspace = {
+			id: randomUUID(),
+			name: input.branch,
+			path,
+			...(workspace.remote ? { remote: workspace.remote } : {}),
+		};
 		store.saveWorkspace(nextWorkspace);
 		const session = await agents.create(nextWorkspace.id, `工作树 · ${input.branch}`);
 		return { workspace: nextWorkspace, session };
@@ -568,6 +795,7 @@ export async function createApp(options: AppOptions) {
 		const { id } = idParams.parse(request.params);
 		const { path } = fileQuery.parse(request.query);
 		const workspace = workspaceFor(id);
+		if (workspace.remote) return remoteWorkspaces.listFiles(workspace, path);
 		const target = await workspacePath(workspace.path, path);
 		const entries = await readdir(target, { withFileTypes: true });
 		const files: FileEntry[] = [];
@@ -591,19 +819,39 @@ export async function createApp(options: AppOptions) {
 		}
 		return files.sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
 	});
-	const readContent = async (root: string, path: string): Promise<FileContent> => {
+	const readContent = async (root: string, path: string, allowLargePreview = false): Promise<FileContent> => {
 		const target = await workspacePath(root, path);
 		const stats = await stat(target);
-		if (!stats.isFile() || stats.size > 1024 * 1024)
+		if (!stats.isFile() || (stats.size > maxEditableFileBytes && !allowLargePreview))
 			throw new HttpError(413, "Only text files up to 1 MB can be edited");
-		const buffer = await readFile(target);
+		const truncated = stats.size > maxEditableFileBytes;
+		let buffer: Buffer;
+		if (truncated) {
+			const handle = await openFile(target, "r");
+			try {
+				const preview = Buffer.alloc(maxLargeFilePreviewBytes);
+				const { bytesRead } = await handle.read(preview, 0, preview.length, 0);
+				buffer = preview.subarray(0, bytesRead);
+			} finally {
+				await handle.close();
+			}
+		} else buffer = await readFile(target);
 		if (buffer.includes(0)) throw new HttpError(415, "Binary file preview is not supported");
-		return { path, content: buffer.toString("utf8"), revision: createHash("sha256").update(buffer).digest("hex") };
+		const content = new TextDecoder("utf-8").decode(buffer, { stream: truncated });
+		return {
+			path,
+			content,
+			revision: createHash("sha256").update(buffer).digest("hex"),
+			...(truncated ? { truncated: true } : {}),
+		};
 	};
 	app.get("/api/workspaces/:id/file", async (request) => {
 		const { id } = idParams.parse(request.params);
-		const { path } = fileQuery.parse(request.query);
-		return readContent(workspaceFor(id).path, path);
+		const { path, preview } = fileQuery.parse(request.query);
+		const workspace = workspaceFor(id);
+		return workspace.remote
+			? remoteWorkspaces.readFile(workspace, path, preview === "true")
+			: readContent(workspace.path, path, preview === "true");
 	});
 	app.put("/api/workspaces/:id/file", async (request) => {
 		const { id } = idParams.parse(request.params);
@@ -614,7 +862,20 @@ export async function createApp(options: AppOptions) {
 				revision: z.string().length(64),
 			})
 			.parse(request.body);
-		const root = workspaceFor(id).path;
+		const workspace = workspaceFor(id);
+		if (workspace.remote) {
+			const checked = await remoteWorkspaces.checkedPath(workspace, path);
+			const queueKey = remoteWorkspaces.mutationKey(workspace, checked.path, checked.paths);
+			return withFileMutationQueue(queueKey, async () => {
+				const current = await remoteWorkspaces.readFile(workspace, path);
+				if (current.revision !== revision) {
+					throw new HttpError(409, "文件已在远程主机上发生变化，请重新加载后保存。");
+				}
+				await remoteWorkspaces.writeFile(workspace, path, content);
+				return remoteWorkspaces.readFile(workspace, path);
+			});
+		}
+		const root = workspace.path;
 		const target = await workspacePath(root, path);
 		return withFileMutationQueue(target, async () => {
 			const current = await readContent(root, path);
@@ -628,7 +889,8 @@ export async function createApp(options: AppOptions) {
 		const input = z
 			.object({ workspaceId: z.string().uuid(), title: z.string().min(1).max(120).default("新会话") })
 			.parse(request.body);
-		workspaceFor(input.workspaceId);
+		const workspace = workspaceFor(input.workspaceId);
+		if (workspace.kind === "plugin-development") throw new HttpError(409, "请从插件开发入口创建开发会话");
 		return agents.create(input.workspaceId, input.title);
 	});
 	// Re-authorize persisted workspaces on every session route, including WebSocket.
@@ -647,16 +909,28 @@ export async function createApp(options: AppOptions) {
 		return { deleted: true };
 	});
 	app.post("/api/sessions/:id/messages", async (request, reply) => {
-		const { text, references, interrupt } = z
+		const { text, attachments, references, interrupt } = z
 			.object({
 				text: z.string().trim().min(1).max(100_000),
+				attachments: z
+					.array(z.object({ name: z.string().trim().min(1).max(200), content: z.string().max(100_000) }))
+					.max(6)
+					.default([]),
 				references: z.array(z.string().max(4096)).max(20).default([]),
 				interrupt: z.boolean().default(false),
 			})
 			.parse(request.body);
 		const { id } = idParams.parse(request.params);
-		if (interrupt) await agents.interrupt(id, text, references);
-		else await agents.prompt(id, text, references);
+		const prompt =
+			text +
+			attachments
+				.map(
+					(file) =>
+						`\n\nAttached text file ${JSON.stringify(file.name)}:\n<attachment>\n${file.content}\n</attachment>`,
+				)
+				.join("");
+		if (interrupt) await agents.interrupt(id, prompt, references);
+		else await agents.prompt(id, prompt, references);
 		return reply.code(202).send({ accepted: true });
 	});
 	app.post("/api/sessions/:id/recall", async (request) => {
@@ -673,10 +947,46 @@ export async function createApp(options: AppOptions) {
 			.parse(request.body);
 		return agents.branch(idParams.parse(request.params).id, messageId);
 	});
-	app.get("/api/sessions/:id/browser", async (request) => browser.snapshot(idParams.parse(request.params).id));
+	app.get("/api/sessions/:id/browser", async (request) => {
+		const { id } = idParams.parse(request.params);
+		agents.get(id);
+		return browser.snapshot(id);
+	});
 	app.post("/api/sessions/:id/browser", async (request) => {
+		const { id } = idParams.parse(request.params);
+		agents.get(id);
 		const command = browserCommand.parse(request.body);
-		return browser.run(idParams.parse(request.params).id, command);
+		return browser.run(id, command);
+	});
+	app.post("/api/sessions/:id/browser/input", async (request) => {
+		const { id } = idParams.parse(request.params);
+		agents.get(id);
+		const command = browserCommand.parse(request.body);
+		if (!["pointer", "type", "press", "scroll", "resize"].includes(command.action))
+			throw new HttpError(400, "不支持的浏览器输入");
+		await browser.run(id, command, undefined, false);
+		return { accepted: true };
+	});
+	app.get("/ws/browser/:id", { websocket: true }, (socket, request) => {
+		const { id } = idParams.parse(request.params);
+		agents.get(id);
+		const unsubscribe = browser.subscribe(id, (event) => {
+			if (socket.readyState !== 1) return;
+			if (socket.bufferedAmount > 2 * 1024 * 1024) {
+				if (event.type === "state") socket.close(1013, "Reconnect for current browser state");
+				return;
+			}
+			socket.send(JSON.stringify(event));
+		});
+		const heartbeat = setInterval(() => {
+			if (socket.readyState === 1) socket.ping();
+		}, 30_000);
+		const cleanup = () => {
+			unsubscribe();
+			clearInterval(heartbeat);
+		};
+		socket.on("close", cleanup);
+		socket.on("error", cleanup);
 	});
 	app.post("/api/sessions/:id/abort", async (request) => {
 		await agents.abort(idParams.parse(request.params).id);

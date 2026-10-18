@@ -1,22 +1,30 @@
 import { randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, join } from "node:path";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import { isModelType } from "@earendil-works/pi-ai/utils/model-operations";
 import {
 	type AgentSession,
 	type createAgentSession,
+	createBashToolDefinition,
+	createCodemodeExtension,
 	createEditToolDefinition,
+	createMcpExtension,
 	createReadToolDefinition,
+	createToolSearchExtension,
 	createWriteToolDefinition,
 	DefaultResourceLoader,
 	defaultModelPerProvider,
 	detectSupportedImageMimeTypeFromFile,
 	getAgentDir,
+	type InlineExtension,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 	type ToolDefinition,
+	withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	type AccessMode,
 	type Approval,
@@ -26,18 +34,39 @@ import {
 	type Resources,
 	type SessionDetail,
 	type SessionEvent,
+	type SessionPurpose,
 	type SessionSummary,
 	type ThinkingLevel,
 	type Workspace,
 } from "../../shared/src/protocol.ts";
 import { type AdaptedEvent, adaptSdkEvent } from "./adapter.ts";
+import { type AppPluginManager, parseAppPluginManifest } from "./app-plugins.ts";
 import { BrowserService, createBrowserTool } from "./browser.ts";
 import { captureGitSnapshot, changedGitFiles, type GitSnapshot } from "./git.ts";
 import { prepareDoomCordisHostExtension } from "./kernel.ts";
 import type { ProviderManager } from "./providers.ts";
+import type { RemoteWorkspaceService } from "./remote-workspaces.ts";
 import { HttpError, workspacePath } from "./security.ts";
 import type { ConsoleStore, SavedSession } from "./store.ts";
 import { toolPermission } from "./tool-policy.ts";
+
+function remoteImageMimeType(path: string): string | undefined {
+	switch (extname(path).toLowerCase()) {
+		case ".jpg":
+		case ".jpeg":
+			return "image/jpeg";
+		case ".png":
+			return "image/png";
+		case ".gif":
+			return "image/gif";
+		case ".webp":
+			return "image/webp";
+		case ".bmp":
+			return "image/bmp";
+		default:
+			return undefined;
+	}
+}
 
 interface PendingApproval {
 	sessionId: string;
@@ -53,6 +82,8 @@ export class AgentService {
 	private cancelled = new Set<string>();
 	private runs = new Map<string, Promise<void>>();
 	private updating = new Set<string>();
+	private refreshing = new Set<string>();
+	private pendingPluginRefresh = new Set<string>();
 	private inputs = new Map<string, { prompt: string; text: string; references: string[] }>();
 	private listeners = new Map<string, Set<(event: SessionEvent) => void>>();
 	private approvals = new Map<string, PendingApproval>();
@@ -61,6 +92,8 @@ export class AgentService {
 	private providers?: ProviderManager;
 	private agentDirectory: string;
 	private browser: BrowserService;
+	private appPlugins?: AppPluginManager;
+	private remoteWorkspaces?: RemoteWorkspaceService;
 
 	constructor(
 		store: ConsoleStore,
@@ -70,6 +103,8 @@ export class AgentService {
 			providers?: ProviderManager;
 			agentDirectory?: string;
 			browser?: BrowserService;
+			appPlugins?: AppPluginManager;
+			remoteWorkspaces?: RemoteWorkspaceService;
 		} = {},
 	) {
 		this.store = store;
@@ -78,6 +113,8 @@ export class AgentService {
 		this.providers = options.providers;
 		this.agentDirectory = options.agentDirectory ?? getAgentDir();
 		this.browser = options.browser ?? new BrowserService();
+		this.appPlugins = options.appPlugins;
+		this.remoteWorkspaces = options.remoteWorkspaces;
 		for (const record of store.sessions()) {
 			record.detail.accessMode ??= "ask";
 			record.detail.status = "idle";
@@ -100,8 +137,18 @@ export class AgentService {
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	}
 	private summary(detail: SessionDetail): SessionSummary {
-		const { id, workspaceId, title, status, updatedAt, model, thinkingLevel } = detail;
-		return { id, workspaceId, title, status, updatedAt, model, thinkingLevel, accessMode: detail.accessMode };
+		const { id, workspaceId, title, purpose, status, updatedAt, model, thinkingLevel } = detail;
+		return {
+			id,
+			workspaceId,
+			title,
+			purpose,
+			status,
+			updatedAt,
+			model,
+			thinkingLevel,
+			accessMode: detail.accessMode,
+		};
 	}
 	get(id: string): SessionDetail {
 		const record = this.records.get(id);
@@ -113,12 +160,13 @@ export class AgentService {
 		if (!workspace) throw new HttpError(404, "Workspace not found");
 		return workspace;
 	}
-	async create(workspaceId: string, title: string): Promise<SessionDetail> {
+	async create(workspaceId: string, title: string, purpose?: SessionPurpose): Promise<SessionDetail> {
 		this.workspace(workspaceId);
 		const detail: SessionDetail = {
 			id: randomUUID(),
 			workspaceId,
 			title,
+			...(purpose ? { purpose } : {}),
 			status: "idle",
 			updatedAt: new Date().toISOString(),
 			thinkingLevel: "medium",
@@ -133,13 +181,22 @@ export class AgentService {
 		this.store.saveSession(detail);
 		return this.get(detail.id);
 	}
+	async createPluginDevelopmentSession(workspaceId: string, title: string): Promise<SessionDetail> {
+		return this.create(workspaceId, title, "plugin-development");
+	}
 	private selectInitialModel(id: string, models: ModelOption[]): void {
 		const detail = this.get(id);
 		if (detail.model) return;
 		const available = models.filter((model) => model.available);
 		if (!available.length) return;
 		const workspace = this.workspace(detail.workspaceId);
-		const settings = SettingsManager.create(workspace.path, this.agentDirectory);
+		const settingsCwd =
+			detail.purpose === "plugin-development"
+				? this.directory
+				: workspace.remote
+					? join(this.directory, "remote-projects", workspace.id)
+					: workspace.path;
+		const settings = SettingsManager.create(settingsCwd, this.agentDirectory);
 		const defaultProvider = settings.getDefaultProvider();
 		const defaultModelId = settings.getDefaultModel();
 		const preferred =
@@ -173,94 +230,396 @@ export class AgentService {
 	async prepareForProviderChange(): Promise<void> {
 		if (this.busy.size > 0 || this.updating.size > 0)
 			throw new HttpError(409, "请先停止运行中的会话，再修改供应商凭据");
-		for (const pending of this.agents.values()) (await pending).dispose();
+		for (const pending of this.agents.values()) await this.disposeAgent(await pending, "reload");
 		this.agents.clear();
+	}
+	private async disposeAgent(session: AgentSession, reason: "quit" | "reload"): Promise<void> {
+		try {
+			await session.extensionRunner.emit({ type: "session_shutdown", reason });
+		} finally {
+			session.dispose();
+		}
+	}
+	async refreshIdleAgentsForPluginChange(): Promise<void> {
+		for (const id of this.agents.keys()) {
+			this.pendingPluginRefresh.add(id);
+			await this.refreshAgentAfterPluginChange(id);
+		}
+	}
+	private async refreshAgentAfterPluginChange(id: string): Promise<void> {
+		if (!this.pendingPluginRefresh.has(id)) return;
+		if (this.busy.has(id) || this.updating.has(id)) {
+			this.pendingPluginRefresh.add(id);
+			return;
+		}
+		const pending = this.agents.get(id);
+		if (!pending) {
+			this.pendingPluginRefresh.delete(id);
+			return;
+		}
+		this.refreshing.add(id);
+		try {
+			let session: AgentSession;
+			try {
+				session = await pending;
+			} catch {
+				if (this.agents.get(id) === pending) this.agents.delete(id);
+				this.pendingPluginRefresh.delete(id);
+				return;
+			}
+			if (this.busy.has(id) || this.updating.has(id)) {
+				this.pendingPluginRefresh.add(id);
+				return;
+			}
+			if (this.agents.get(id) !== pending) return;
+			this.agents.delete(id);
+			this.pendingPluginRefresh.delete(id);
+			await this.disposeAgent(session, "reload");
+		} finally {
+			this.refreshing.delete(id);
+		}
 	}
 	private async initialize(id: string): Promise<AgentSession> {
 		if (!this.createSession) throw new Error("会话工厂不可用");
 		const record = this.records.get(id);
 		if (!record) throw new HttpError(404, "Session not found");
 		const workspace = this.workspace(record.detail.workspaceId);
-		const cwd = workspace.path;
+		const pluginDevelopment = record.detail.purpose === "plugin-development";
+		const remoteWorkspace = workspace.remote !== undefined;
+		const remoteService = this.remoteWorkspaces;
+		if (remoteWorkspace && !remoteService) throw new HttpError(501, "远程主机服务不可用");
+		const remoteEnvironment = remoteWorkspace ? await remoteService!.workspaceEnvironment(workspace) : undefined;
+		const resourceCwd = remoteWorkspace ? join(this.directory, "remote-projects", workspace.id) : workspace.path;
+		if (remoteWorkspace) await mkdir(resourceCwd, { recursive: true });
+		if (remoteWorkspace) await remoteService!.prepareMcpConfigs(workspace, resourceCwd);
+		const cwd = remoteWorkspace ? resourceCwd : workspace.path;
+		if (pluginDevelopment) await mkdir(workspace.path, { recursive: true });
 		const agentDir = this.agentDirectory;
-		const settingsManager = SettingsManager.create(cwd, agentDir);
+		const settingsManager = SettingsManager.create(pluginDevelopment ? this.directory : cwd, agentDir);
 		// Workspace authorization also trusts its configuration/extensions. They execute native server code.
-		settingsManager.setProjectTrusted(true);
-		const cordisHostPath = await prepareDoomCordisHostExtension(agentDir);
+		if (!pluginDevelopment) settingsManager.setProjectTrusted(true);
+		const cordisHostPath = pluginDevelopment ? undefined : await prepareDoomCordisHostExtension(agentDir);
+		const appPlugins = this.appPlugins;
+		const agentService = this;
+		const pluginWorkspaceId = record.detail.workspaceId;
+		const remoteExtensions: InlineExtension[] = remoteWorkspace
+			? [
+					{ name: "codemode", factory: createCodemodeExtension(), builtin: true, replaceable: true },
+					{ name: "tool-search", factory: createToolSearchExtension(), builtin: true, replaceable: true },
+					{ name: "mcp", factory: createMcpExtension(), builtin: true, replaceable: true },
+				]
+			: [];
 		const resourceLoader = new DefaultResourceLoader({
-			cwd,
+			cwd: resourceCwd,
 			agentDir,
 			settingsManager,
 			additionalExtensionPaths: cordisHostPath ? [cordisHostPath] : [],
+			noExtensions: pluginDevelopment,
+			noSkills: pluginDevelopment,
+			noPromptTemplates: pluginDevelopment,
+			noThemes: pluginDevelopment,
+			noContextFiles: pluginDevelopment,
+			systemPrompt: pluginDevelopment
+				? "你是 AllWeave Build 的插件开发助手。用户直接在主聊天框描述需求，你在此默认插件开发工作区中协作。你可以读取、编辑和写入此工作区中的插件 JSON 清单；不能运行 shell、脚本或其他程序。清单路径使用 plugins/<plugin-id>.json。先调用 plugin_list 了解已安装插件，再按需要创建或升级清单；调用 plugin_validate 检查协议、版本和数据字段兼容性。只有用户明确要求安装或启用时才调用 plugin_install，该操作会请求用户确认。插件目前使用声明式 manifestVersion 1：字段驱动表单，页面使用 table 或 board 视图，navigation 生成软件侧栏入口；不得编造脚本执行能力。升级时必须提高版本号并保留现有字段 ID、类型、必填状态和选项。"
+				: workspace.remote
+					? `你正在 SSH 远程主机 ${workspace.remote.host} 的项目 ${workspace.path} 中工作。read、edit、write 和 bash 工具会在该远程项目中执行。文件工具请使用相对于项目根目录的路径。`
+					: undefined,
+			appendSystemPrompt: pluginDevelopment ? [] : undefined,
 			extensionFactories: [
-				(pi) => {
-					pi.registerTool(createBrowserTool(this.browser, id));
+				...remoteExtensions,
+				async (pi) => {
+					const pluginReadOnlyTools = new Set<string>();
+					if (pluginDevelopment) {
+						pluginReadOnlyTools.add("plugin_list");
+						pluginReadOnlyTools.add("plugin_validate");
+					}
 					pi.on("tool_call", async (event) => {
 						const input = event.input as Record<string, unknown>;
 						if (["read", "write", "edit", "ls", "find", "grep"].includes(event.toolName)) {
 							try {
-								await workspacePath(
-									cwd,
-									typeof input.path === "string" ? input.path : ".",
-									event.toolName === "write",
-								);
+								const path = typeof input.path === "string" ? input.path : ".";
+								if (remoteWorkspace) {
+									await remoteService!.checkedPath(workspace, path, event.toolName === "write");
+								} else {
+									await workspacePath(cwd, path, event.toolName === "write");
+								}
 							} catch (error) {
 								return { block: true, reason: error instanceof Error ? error.message : "Path denied" };
 							}
 						}
 						// Even innocuous shell commands can invoke scripts. Confirm every command, mutation,
 						// and custom tool instead of trying to identify danger with command-string heuristics.
-						const permission = toolPermission(this.get(id).accessMode, event.toolName);
+						const permission = toolPermission(this.get(id).accessMode, event.toolName, pluginReadOnlyTools);
 						if (permission === "deny") {
 							return { block: true, reason: "计划模式仅允许只读工具。切换权限模式后再执行此操作。" };
 						}
 						if (permission === "ask") {
 							const approved = await this.requestApproval(id, event.toolCallId, event.toolName, input);
 							if (!approved)
-								return { block: true, reason: "User denied or cancelled this tool call", terminate: true };
+								return {
+									block: true,
+									reason: "User denied or cancelled this tool call",
+									terminate: true,
+								};
 						}
 						return undefined;
 					});
+					if (pluginDevelopment) {
+						if (!appPlugins) return;
+						pi.registerTool({
+							name: "plugin_list",
+							label: "查看已安装插件",
+							description: "列出已安装应用插件及其清单，用于规划插件新增或升级。",
+							parameters: Type.Object({}, { additionalProperties: false }),
+							async execute() {
+								const registry = await appPlugins.list();
+								return {
+									content: [{ type: "text", text: JSON.stringify(registry, null, 2) }],
+									details: { revision: registry.revision, plugins: registry.plugins.length },
+								};
+							},
+						});
+						pi.registerTool({
+							name: "plugin_validate",
+							label: "校验插件清单",
+							description: "读取开发工作区中的插件 JSON 清单并检查协议、版本和数据兼容性。",
+							parameters: Type.Object({ path: Type.String() }, { additionalProperties: false }),
+							async execute(_toolCallId, params) {
+								const path = await workspacePath(cwd, params.path);
+								const manifest = parseAppPluginManifest(await readFile(path, "utf8"));
+								const result = await appPlugins.validate(manifest);
+								return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], details: result };
+							},
+						});
+						pi.registerTool({
+							name: "plugin_install",
+							label: "安装应用插件",
+							description: "在用户确认后安装并启用开发工作区中的有效插件清单。",
+							parameters: Type.Object({ path: Type.String() }, { additionalProperties: false }),
+							async execute(_toolCallId, params) {
+								const path = await workspacePath(cwd, params.path);
+								const manifest = parseAppPluginManifest(await readFile(path, "utf8"));
+								await appPlugins.validate(manifest);
+								const plugin = await appPlugins.install(manifest);
+								await agentService.refreshIdleAgentsForPluginChange();
+								return {
+									content: [
+										{
+											type: "text",
+											text: JSON.stringify(
+												{
+													pluginId: manifest.id,
+													version: manifest.version,
+													status: plugin.enabled ? "enabled" : "disabled",
+													pages: manifest.navigation.map((entry) => ({
+														title: entry.title,
+														path: `/plugins/${manifest.id}/${entry.viewId}?workspace={workspaceId}`,
+													})),
+												},
+												null,
+												2,
+											),
+										},
+									],
+									details: { pluginId: manifest.id, version: manifest.version },
+								};
+							},
+						});
+					}
+					if (!pluginDevelopment) pi.registerTool(createBrowserTool(this.browser, id));
+					if (!appPlugins) return;
+					for (const manifest of await appPlugins.enabledManifests()) {
+						const prefix = `plugin_${manifest.id.replaceAll("-", "_")}`;
+						const valuesSchema = Type.Record(Type.String(), Type.Unknown());
+						for (const operation of ["list", "create", "update", "delete"] as const) {
+							const parameters =
+								operation === "list"
+									? Type.Object({}, { additionalProperties: false })
+									: operation === "create"
+										? Type.Object({ values: valuesSchema }, { additionalProperties: false })
+										: operation === "update"
+											? Type.Object(
+													{ id: Type.String(), values: valuesSchema },
+													{ additionalProperties: false },
+												)
+											: Type.Object({ id: Type.String() }, { additionalProperties: false });
+							if (operation === "list") pluginReadOnlyTools.add(`${prefix}_list`);
+							pi.registerTool({
+								name: `${prefix}_${operation}`,
+								label: `${manifest.name} · ${operation}`,
+								description: `${manifest.description || manifest.name}. ${operation} records in the current workspace; use only fields from the plugin schema.`,
+								promptSnippet: `Manage ${manifest.name} records in the current workspace.`,
+								promptGuidelines: [`Use ${prefix}_list to inspect records before changing them.`],
+								parameters,
+								async execute(_toolCallId, params) {
+									const input = params as { id?: string; values?: Record<string, unknown> };
+									let result: unknown;
+									if (operation === "list")
+										result = await appPlugins.listRecords(manifest.id, pluginWorkspaceId);
+									else if (operation === "create")
+										result = await appPlugins.createRecord(
+											manifest.id,
+											pluginWorkspaceId,
+											input.values ?? {},
+										);
+									else if (operation === "update")
+										result = await appPlugins.updateRecord(
+											manifest.id,
+											pluginWorkspaceId,
+											input.id ?? "",
+											input.values ?? {},
+										);
+									else {
+										await appPlugins.deleteRecord(manifest.id, pluginWorkspaceId, input.id ?? "");
+										result = { deleted: true };
+									}
+									const serialized = JSON.stringify(result);
+									return {
+										content: [
+											{
+												type: "text",
+												text:
+													serialized.length > 32_000
+														? `${serialized.slice(0, 32_000)}\n[结果已截断]`
+														: serialized,
+											},
+										],
+										details: { pluginId: manifest.id, operation },
+									};
+								},
+							});
+						}
+					}
 				},
 			],
 		});
 		await resourceLoader.reload();
-		const checkedRead = async (path: string) => readFile(await workspacePath(cwd, path));
-		const checkedAccess = async (path: string) => access(await workspacePath(cwd, path));
-		const checkedWrite = async (path: string, content: string) =>
-			writeFile(await workspacePath(cwd, path, true), content, "utf8");
+		const pluginDevelopmentToolNames =
+			pluginDevelopment && appPlugins
+				? (await appPlugins.enabledManifests()).flatMap((manifest) => {
+						const prefix = `plugin_${manifest.id.replaceAll("-", "_")}`;
+						return [`${prefix}_list`, `${prefix}_create`, `${prefix}_update`, `${prefix}_delete`];
+					})
+				: [];
+		const checkedRead = async (path: string) =>
+			remoteWorkspace
+				? remoteService!.readBuffer(workspace, await remoteService!.toolPath(workspace, cwd, path))
+				: readFile(await workspacePath(cwd, path));
+		const checkedAccess = async (path: string) => {
+			if (remoteWorkspace) {
+				await remoteService!.checkedPath(workspace, await remoteService!.toolPath(workspace, cwd, path));
+				return;
+			}
+			await access(await workspacePath(cwd, path));
+		};
+		const checkedWrite = async (path: string, content: string) => {
+			if (remoteWorkspace) {
+				await remoteService!.writeFile(workspace, await remoteService!.toolPath(workspace, cwd, path), content);
+				return;
+			}
+			await writeFile(await workspacePath(cwd, path, true), content, "utf8");
+		};
 		const sessionManager = record.file
 			? SessionManager.open(record.file, join(this.directory, "sessions"), cwd)
 			: SessionManager.create(cwd, join(this.directory, "sessions"));
+		const customTools: ToolDefinition[] = [
+			// SDK customTools erases schema types, but renderers are contravariant under strict TS.
+			// These casts bridge that SDK boundary; each factory retains its runtime schema validation.
+			createReadToolDefinition(cwd, {
+				operations: {
+					readFile: checkedRead,
+					access: checkedAccess,
+					detectImageMimeType: async (path) => {
+						if (remoteWorkspace) {
+							const remotePath = await remoteService!.toolPath(workspace, cwd, path);
+							return remoteImageMimeType(remotePath);
+						}
+						return detectSupportedImageMimeTypeFromFile(await workspacePath(cwd, path));
+					},
+				},
+			}) as unknown as ToolDefinition,
+			createEditToolDefinition(cwd, {
+				operations: { readFile: checkedRead, access: checkedAccess, writeFile: checkedWrite },
+			}) as unknown as ToolDefinition,
+			createWriteToolDefinition(cwd, {
+				operations: {
+					writeFile: checkedWrite,
+					mkdir: async (path) => {
+						if (remoteWorkspace) {
+							await remoteService!.createDirectory(
+								workspace,
+								await remoteService!.toolPath(workspace, cwd, path),
+							);
+						} else await mkdir(await workspacePath(cwd, path, true), { recursive: true });
+					},
+				},
+			}) as unknown as ToolDefinition,
+		];
+		if (remoteEnvironment) {
+			for (const tool of customTools) {
+				const execute = tool.execute;
+				tool.execute = async (toolCallId, params, signal, onUpdate, context) => {
+					const input = params as Record<string, unknown>;
+					if (typeof input.path !== "string") throw new HttpError(400, "文件路径无效");
+					const checked = await remoteService!.checkedPath(workspace, input.path, tool.name === "write", signal);
+					const relativePath = checked.paths.relative(workspace.path, checked.path);
+					const args = { ...input, path: join(...relativePath.split(checked.paths.sep)) };
+					if (tool.name === "read") return execute(toolCallId, args, signal, onUpdate, context);
+					return withFileMutationQueue(remoteService!.mutationKey(workspace, checked.path, checked.paths), () =>
+						execute(toolCallId, args, signal, onUpdate, context),
+					);
+				};
+			}
+			customTools.push(
+				createBashToolDefinition(cwd, {
+					operations: {
+						exec: async (command, workingDirectory, { onData, signal, timeout }) => {
+							const context = signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT;
+							const remoteCwd = await remoteService!.toolPath(workspace, cwd, workingDirectory);
+							const checked = await remoteService!.checkedPath(workspace, remoteCwd);
+							const result = await checked.env.exec(
+								command,
+								{
+									cwd: remoteCwd,
+									timeout,
+									onOutput: (text) => onData(Buffer.from(text)),
+								},
+								context,
+							);
+							if (!result.ok) throw result.error;
+							return { exitCode: result.value.exitCode };
+						},
+					},
+				}) as unknown as ToolDefinition,
+			);
+		}
 		const { session, modelFallbackMessage } = await this.createSession({
 			cwd,
 			agentDir,
 			resourceLoader,
 			settingsManager,
 			sessionManager,
-			customTools: [
-				// SDK customTools erases schema types, but renderers are contravariant under strict TS.
-				// These casts bridge that SDK boundary; each factory retains its runtime schema validation.
-				createReadToolDefinition(cwd, {
-					operations: {
-						readFile: checkedRead,
-						access: checkedAccess,
-						detectImageMimeType: async (path) =>
-							detectSupportedImageMimeTypeFromFile(await workspacePath(cwd, path)),
-					},
-				}) as unknown as ToolDefinition,
-				createEditToolDefinition(cwd, {
-					operations: { readFile: checkedRead, access: checkedAccess, writeFile: checkedWrite },
-				}) as unknown as ToolDefinition,
-				createWriteToolDefinition(cwd, {
-					operations: {
-						writeFile: checkedWrite,
-						mkdir: async (path) => {
-							await mkdir(await workspacePath(cwd, path, true), { recursive: true });
-						},
-					},
-				}) as unknown as ToolDefinition,
-			],
+			...(pluginDevelopment
+				? {
+						tools: [
+							"read",
+							"edit",
+							"write",
+							"plugin_list",
+							"plugin_validate",
+							"plugin_install",
+							...pluginDevelopmentToolNames,
+						],
+						noTools: "all" as const,
+					}
+				: remoteWorkspace
+					? {
+							noTools: "builtin" as const,
+							tools: ["+read", "+bash", "+edit", "+write"],
+							excludeTools: ["ls", "find", "grep"],
+						}
+					: {}),
+			customTools,
 		});
 		try {
 			await session.bindExtensions({
@@ -297,7 +656,7 @@ export class AgentService {
 			this.emit(id, { type: "session.updated" });
 			return session;
 		} catch (error) {
-			session.dispose();
+			await this.disposeAgent(session, "quit");
 			throw error;
 		}
 	}
@@ -328,7 +687,7 @@ export class AgentService {
 		const updated = applyEvent(detail, event);
 		const record = this.records.get(id)!;
 		record.detail = updated;
-		this.store.saveSession(updated, record.file);
+		this.store.saveSession(updated, record.file, change.type === "message.delta" || change.type === "tool.updated");
 		for (const listener of this.listeners.get(id) ?? []) listener(event);
 	}
 	subscribe(id: string, listener: (event: SessionEvent) => void): () => void {
@@ -344,7 +703,8 @@ export class AgentService {
 	async prompt(id: string, text: string, references: string[]): Promise<void> {
 		if (this.closing) throw new HttpError(503, "Server is shutting down");
 		this.get(id);
-		if (this.busy.has(id) || this.updating.has(id)) throw new HttpError(409, "Agent is already running");
+		if (this.busy.has(id) || this.updating.has(id) || this.refreshing.has(id))
+			throw new HttpError(409, "Agent is already running");
 		this.busy.add(id);
 		this.cancelled.delete(id);
 		let finishRun!: () => void;
@@ -362,9 +722,23 @@ export class AgentService {
 			if (!session.model || !this.get(id).model)
 				throw new HttpError(400, "未配置模型。请先配置供应商凭据并选择模型。");
 			const workspace = this.workspace(this.get(id).workspaceId);
-			for (const reference of references) await workspacePath(workspace.path, reference);
+			const pluginDevelopment = this.get(id).purpose === "plugin-development";
+			if (pluginDevelopment && references.length) {
+				throw new HttpError(400, "插件开发会话不能引用工作区文件");
+			}
+			if (!pluginDevelopment) {
+				for (const reference of references) {
+					if (workspace.remote) {
+						if (!this.remoteWorkspaces) throw new HttpError(501, "远程主机服务不可用");
+						await this.remoteWorkspaces.checkedPath(workspace, reference);
+					} else {
+						await workspacePath(workspace.path, reference);
+					}
+				}
+			}
 			if (this.cancelled.has(id)) throw new HttpError(409, "Task was cancelled before execution");
-			fileSnapshot = await captureGitSnapshot(workspace.path).catch(() => undefined);
+			if (!pluginDevelopment && !workspace.remote)
+				fileSnapshot = await captureGitSnapshot(workspace.path).catch(() => undefined);
 			previousAssistantMessages = new Set(
 				this.get(id)
 					.messages.filter((message) => message.role === "assistant")
@@ -411,9 +785,10 @@ export class AgentService {
 						this.runs.delete(id);
 						finishRun();
 						const detail = this.get(id);
-						if (detail.status !== "error") detail.status = "idle";
 						const stats = session.getSessionStats();
 						detail.tokens = { ...stats.tokens, cost: stats.cost };
+						await this.refreshAgentAfterPluginChange(id);
+						if (detail.status !== "error") detail.status = "idle";
 						this.emit(id, { type: "agent.status" });
 					}
 				});
@@ -422,6 +797,7 @@ export class AgentService {
 			this.cancelled.delete(id);
 			this.runs.delete(id);
 			finishRun();
+			await this.refreshAgentAfterPluginChange(id);
 			throw error;
 		}
 	}
@@ -444,6 +820,7 @@ export class AgentService {
 			await this.abort(id);
 		} finally {
 			this.updating.delete(id);
+			await this.refreshAgentAfterPluginChange(id);
 		}
 		await this.prompt(id, text, references);
 	}
@@ -512,6 +889,7 @@ export class AgentService {
 			};
 		} finally {
 			this.updating.delete(id);
+			await this.refreshAgentAfterPluginChange(id);
 		}
 	}
 	async branch(id: string, messageId: string): Promise<SessionDetail> {
@@ -521,6 +899,7 @@ export class AgentService {
 			return (await this.navigateToMessage(id, messageId, "assistant")).session;
 		} finally {
 			this.updating.delete(id);
+			await this.refreshAgentAfterPluginChange(id);
 		}
 	}
 	rename(id: string, title: string): void {
@@ -528,7 +907,8 @@ export class AgentService {
 		this.emit(id, { type: "session.updated" });
 	}
 	async setModel(id: string, provider: string, modelId: string, thinkingLevel?: ThinkingLevel): Promise<void> {
-		if (this.busy.has(id) || this.updating.has(id)) throw new HttpError(409, "Stop the agent before changing models");
+		if (this.busy.has(id) || this.updating.has(id) || this.refreshing.has(id))
+			throw new HttpError(409, "Stop the agent before changing models");
 		this.busy.add(id);
 		try {
 			const session = await this.agent(id);
@@ -544,10 +924,14 @@ export class AgentService {
 			this.emit(id, { type: "session.updated" });
 		} finally {
 			this.busy.delete(id);
+			await this.refreshAgentAfterPluginChange(id);
 		}
 	}
 	async setAccessMode(id: string, accessMode: AccessMode): Promise<SessionDetail> {
 		const detail = this.get(id);
+		if (detail.purpose === "plugin-development" && accessMode !== "ask") {
+			throw new HttpError(409, "插件开发会话始终禁用工具调用");
+		}
 		detail.accessMode = accessMode;
 		this.emit(id, { type: "session.updated" });
 		return detail;
@@ -656,7 +1040,7 @@ export class AgentService {
 	}
 	private async removeSession(id: string, removeTranscript: boolean): Promise<void> {
 		const pending = this.agents.get(id);
-		if (pending) (await pending).dispose();
+		if (pending) await this.disposeAgent(await pending, "quit");
 		this.agents.delete(id);
 		await this.browser.release(id);
 		const file = this.records.get(id)?.file;
@@ -670,7 +1054,7 @@ export class AgentService {
 		for (const pending of this.agents.values()) {
 			const agent = await pending;
 			await agent.abort();
-			agent.dispose();
+			await this.disposeAgent(agent, "quit");
 		}
 		await this.browser.close();
 	}

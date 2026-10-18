@@ -68,6 +68,7 @@ export function PluginFeaturePanel({
 	const navigate = useNavigate();
 	const [sessionId, setSessionId] = useState(sessions[0]?.id ?? "");
 	const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+	const selectedWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
 	const [task, setTask] = useState("");
 	const [sending, setSending] = useState(false);
 	const [mcpContent, setMcpContent] = useState("");
@@ -98,10 +99,10 @@ export function PluginFeaturePanel({
 		if (!sessionId && sessions[0]) setSessionId(sessions[0].id);
 	}, [sessionId, sessions]);
 	useEffect(() => {
-		if (!workspaceId && workspaces[0]) setWorkspaceId(workspaces[0].id);
+		if (!workspaces.some((workspace) => workspace.id === workspaceId)) setWorkspaceId(workspaces[0]?.id ?? "");
 	}, [workspaceId, workspaces]);
 	useEffect(() => {
-		if (mcpConfig.data) setMcpContent(mcpConfig.data.content);
+		setMcpContent(mcpConfig.data?.content ?? "");
 	}, [mcpConfig.data]);
 	useEffect(() => {
 		const status = gitStatus.data;
@@ -140,7 +141,7 @@ export function PluginFeaturePanel({
 		}
 	};
 	const saveMcpConfig = async () => {
-		if (!workspaceId) return;
+		if (!workspaceId || !mcpConfig.data || mcpConfig.error) return;
 		setSavingMcp(true);
 		try {
 			await api("/plugins/mcp-config", { workspaceId, kind: mcpKind, content: mcpContent }, "PUT");
@@ -264,7 +265,8 @@ export function PluginFeaturePanel({
 								>
 									{workspaces.map((workspace) => (
 										<MenuItem key={workspace.id} value={workspace.id}>
-											{workspace.name} · {workspace.path}
+											{workspace.name} · {workspace.remote ? `SSH ${workspace.remote.host} · ` : ""}
+											{workspace.path}
 										</MenuItem>
 									))}
 								</Select>
@@ -289,11 +291,18 @@ export function PluginFeaturePanel({
 										inputProps={{ spellCheck: false, "aria-label": "MCP server JSON 配置" }}
 									/>
 									<Alert severity="warning">
-										保存后，MCP 插件可能启动本机命令或连接远程服务。工作台下次启动会读取此项目配置。
+										{selectedWorkspace?.remote
+											? `配置保存到 ${selectedWorkspace.remote.host}。stdio 服务以 SSH 账号权限运行，HTTP 连接由本机工作台发起；会话下一次运行时加载。`
+											: "MCP 插件可能启动本机命令或连接远程服务。会话下一次运行时读取此项目配置。"}
 									</Alert>
 									<Button
 										variant="contained"
-										disabled={!mcpContent.trim() || mcpContent === mcpConfig.data?.content}
+										disabled={
+											!mcpConfig.data ||
+											!!mcpConfig.error ||
+											!mcpContent.trim() ||
+											mcpContent === mcpConfig.data.content
+										}
 										onClick={() => setConfirmMcpSave(true)}
 									>
 										保存 MCP 配置
@@ -316,7 +325,8 @@ export function PluginFeaturePanel({
 							>
 								{workspaces.map((workspace) => (
 									<MenuItem key={workspace.id} value={workspace.id}>
-										{workspace.name} · {workspace.path}
+										{workspace.name} · {workspace.remote ? `SSH ${workspace.remote.host} · ` : ""}
+										{workspace.path}
 									</MenuItem>
 								))}
 							</Select>
@@ -418,7 +428,9 @@ export function PluginFeaturePanel({
 				<DialogTitle>确认保存 MCP 配置</DialogTitle>
 				<DialogContent>
 					<Alert severity="warning">
-						MCP server 的 command、args、环境变量和 URL 会在当前会话中使用，并具有工作台进程权限。
+						{selectedWorkspace?.remote
+							? `MCP 命令将在 ${selectedWorkspace.remote.host} 上以 SSH 账号权限执行；HTTP 服务由本机工作台连接。`
+							: "MCP server 的 command、args、环境变量和 URL 会在当前会话中使用，并具有工作台进程权限。"}
 					</Alert>
 				</DialogContent>
 				<DialogActions>

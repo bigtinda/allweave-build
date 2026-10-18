@@ -12,7 +12,7 @@ interface SpringCollapseProps extends TransitionProps {
 }
 
 function measureExpandedHeight(root: HTMLDivElement, content: HTMLDivElement, fillAvailable: boolean): number {
-	const contentHeight = content.scrollHeight;
+	const contentHeight = content.offsetHeight;
 	const parent = root.parentElement;
 	if (!fillAvailable || !parent) return contentHeight;
 	const parentStyle = window.getComputedStyle(parent);
@@ -81,7 +81,7 @@ export const SpringCollapse = forwardRef<HTMLDivElement, SpringCollapseProps>(fu
 		contentObserver.current = null;
 		if (!node || typeof ResizeObserver === "undefined") return;
 		const root = rootRef.current;
-		let previousHeight = root ? measureExpandedHeight(root, node, fillAvailableRef.current) : node.scrollHeight;
+		let previousHeight = root ? measureExpandedHeight(root, node, fillAvailableRef.current) : node.offsetHeight;
 		const observer = new ResizeObserver(() => {
 			const activeRoot = rootRef.current;
 			if (!openRef.current || !activeRoot) return;
@@ -110,6 +110,10 @@ export const SpringCollapse = forwardRef<HTMLDivElement, SpringCollapseProps>(fu
 	}, []);
 
 	useLayoutEffect(() => {
+		if (isIn && !mounted) {
+			setMounted(true);
+			return;
+		}
 		const root = rootRef.current;
 		const content = contentRef.current;
 		if (!root || !content) return;
@@ -123,10 +127,6 @@ export const SpringCollapse = forwardRef<HTMLDivElement, SpringCollapseProps>(fu
 			root.inert = !isIn;
 			initialized.current = true;
 			lastTarget.current = isIn;
-			return;
-		}
-		if (isIn && !mounted) {
-			setMounted(true);
 			return;
 		}
 		if (!mounted) return;

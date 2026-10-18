@@ -37,7 +37,7 @@ import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
 import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FileContent, FileEntry, SessionDetail, Workspace } from "../../../shared/src/protocol.ts";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
@@ -84,6 +84,8 @@ monaco.editor.defineTheme("pi-dark", {
 export function WorkspacePanel({
 	workspace,
 	session,
+	fileRequest,
+	onFileRequestHandled,
 	panelWidth,
 	onPanelWidthChange,
 	onResizeStateChange,
@@ -94,6 +96,8 @@ export function WorkspacePanel({
 }: {
 	workspace: Workspace;
 	session: SessionDetail;
+	fileRequest?: { requestId: number; sessionId: string; workspaceId: string; path: string };
+	onFileRequestHandled: (requestId: number) => void;
 	panelWidth: number;
 	onPanelWidthChange: (width: number) => void;
 	onResizeStateChange: (resizing: boolean) => void;
@@ -111,9 +115,11 @@ export function WorkspacePanel({
 	const [error, setError] = useState("");
 	const [confirmSave, setConfirmSave] = useState(false);
 	const [confirmDiscard, setConfirmDiscard] = useState(false);
+	const [pendingFilePath, setPendingFilePath] = useState<string>();
 	const [saving, setSaving] = useState(false);
 	const [savedPath, setSavedPath] = useState("");
 	const [fileMaximized, setFileMaximized] = useState(false);
+	const handledFileRequest = useRef<number | undefined>(undefined);
 	const previewOpenRef = useRef(previewOpen);
 	const previewTransitionId = useRef(0);
 	previewOpenRef.current = previewOpen;
@@ -195,22 +201,48 @@ export function WorkspacePanel({
 		);
 		return () => widthSpring.current.stop();
 	}, [panelWidth, reducedMotion]);
-	const open = async (path: string) => {
-		setSavedPath("");
-		try {
-			const content = await api<FileContent>(`/workspaces/${workspace.id}/file?path=${encodeURIComponent(path)}`);
-			previewTransitionId.current += 1;
-			previewOpenRef.current = true;
-			setFile(content);
-			setDraft(content.content);
-			setFileMaximized(false);
-			setPreviewOpen(true);
-			onFileOpen();
-			setError("");
-		} catch (error) {
-			setError(error instanceof Error ? error.message : String(error));
+	const loadFile = useCallback(
+		async (path: string) => {
+			setSavedPath("");
+			setTab(0);
+			try {
+				const content = await api<FileContent>(
+					`/workspaces/${workspace.id}/file?path=${encodeURIComponent(path)}&preview=true`,
+				);
+				previewTransitionId.current += 1;
+				previewOpenRef.current = true;
+				setFile(content);
+				setDraft(content.content);
+				setFileMaximized(false);
+				setPreviewOpen(true);
+				onFileOpen();
+				setError("");
+			} catch (error) {
+				setError(error instanceof Error ? error.message : String(error));
+			}
+		},
+		[onFileOpen, workspace.id],
+	);
+	const open = useCallback(
+		async (path: string) => {
+			if (file && draft !== file.content) {
+				setPendingFilePath(path);
+				setConfirmDiscard(true);
+				return;
+			}
+			await loadFile(path);
+		},
+		[draft, file, loadFile],
+	);
+	useEffect(() => {
+		if (!fileRequest || fileRequest.requestId === handledFileRequest.current) return;
+		handledFileRequest.current = fileRequest.requestId;
+		if (fileRequest.sessionId !== session.id || fileRequest.workspaceId !== workspace.id) {
+			onFileRequestHandled(fileRequest.requestId);
+			return;
 		}
-	};
+		void open(fileRequest.path).finally(() => onFileRequestHandled(fileRequest.requestId));
+	}, [fileRequest, onFileRequestHandled, open, session.id, workspace.id]);
 	const save = async () => {
 		if (!file) return;
 		setSaving(true);
@@ -234,6 +266,7 @@ export function WorkspacePanel({
 	const closePreview = () => {
 		if (!file) return;
 		if (draft !== file.content) {
+			setPendingFilePath(undefined);
 			setConfirmDiscard(true);
 			return;
 		}
@@ -242,9 +275,19 @@ export function WorkspacePanel({
 		setFileMaximized(false);
 	};
 	const discardPreview = () => {
+		const nextPath = pendingFilePath;
+		setPendingFilePath(undefined);
+		setConfirmDiscard(false);
+		if (nextPath) {
+			void loadFile(nextPath);
+			return;
+		}
 		setPreviewOpen(false);
 		previewOpenRef.current = false;
 		setFileMaximized(false);
+	};
+	const cancelDiscard = () => {
+		setPendingFilePath(undefined);
 		setConfirmDiscard(false);
 	};
 	const extension = file?.path.split(".").pop() ?? "";
@@ -341,7 +384,7 @@ export function WorkspacePanel({
 						<span className="panel-project-name" title={workspace.path}>
 							{workspace.name}
 						</span>
-						<span className="panel-project-label">工作区</span>
+						<span className="panel-project-label">{workspace.remote ? "SSH 远程项目" : "工作区"}</span>
 						<span className="grow" />
 					</>
 				)}
@@ -481,6 +524,9 @@ export function WorkspacePanel({
 													</IconButton>
 												</Tooltip>
 											</div>
+											{file.truncated && (
+												<Alert severity="info">文件超过 1 MB，仅预览前 256 KB；该预览为只读。</Alert>
+											)}
 											<div className="file-editor-frame">
 												<Editor
 													height="100%"
@@ -495,6 +541,7 @@ export function WorkspacePanel({
 													options={{
 														minimap: { enabled: false },
 														fontSize: 13,
+														readOnly: file.truncated,
 														scrollBeyondLastLine: false,
 														wordWrap: "on",
 														automaticLayout: true,
@@ -515,7 +562,7 @@ export function WorkspacePanel({
 												<Button
 													size="small"
 													variant="contained"
-													disabled={draft === file.content}
+													disabled={draft === file.content || file.truncated}
 													onClick={() => setConfirmSave(true)}
 												>
 													保存
@@ -566,15 +613,19 @@ export function WorkspacePanel({
 					</Button>
 				</DialogActions>
 			</Dialog>
-			<Dialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)}>
-				<DialogTitle>放弃未保存的修改？</DialogTitle>
+			<Dialog open={confirmDiscard} onClose={cancelDiscard}>
+				<DialogTitle>{pendingFilePath ? "放弃修改并打开其他文件？" : "放弃未保存的修改？"}</DialogTitle>
 				<DialogContent>
-					<p>取消预览会丢弃当前文件尚未保存的修改。</p>
+					<p>
+						{pendingFilePath
+							? `打开 ${pendingFilePath} 会丢弃当前文件尚未保存的修改。`
+							: "取消预览会丢弃当前文件尚未保存的修改。"}
+					</p>
 				</DialogContent>
 				<DialogActions>
-					<Button onClick={() => setConfirmDiscard(false)}>继续编辑</Button>
+					<Button onClick={cancelDiscard}>继续编辑</Button>
 					<Button color="error" onClick={discardPreview}>
-						放弃修改
+						{pendingFilePath ? "放弃并打开" : "放弃修改"}
 					</Button>
 				</DialogActions>
 			</Dialog>

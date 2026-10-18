@@ -64,6 +64,11 @@ function SpringPage({
 		(position: number) => {
 			const element = node.current;
 			if (!element) return;
+			if (active && position === 0) {
+				element.style.transform = "none";
+				element.style.opacity = "1";
+				return;
+			}
 			const offset = axis === "vertical" ? `0, ${position}px, 0` : `${position}px, 0, 0`;
 			element.style.transform = `translate3d(${offset})`;
 			element.style.opacity = active ? String(Math.max(0, 1 - Math.abs(position) / travelDistance)) : "0";
@@ -124,7 +129,12 @@ function SpringPage({
 			inert={!active}
 			style={{
 				opacity: active ? Math.max(0, 1 - Math.abs(position) / travelDistance) : 0,
-				transform: axis === "vertical" ? `translate3d(0, ${position}px, 0)` : `translate3d(${position}px, 0, 0)`,
+				transform:
+					active && position === 0
+						? "none"
+						: axis === "vertical"
+							? `translate3d(0, ${position}px, 0)`
+							: `translate3d(${position}px, 0, 0)`,
 				pointerEvents: active ? undefined : "none",
 			}}
 		>

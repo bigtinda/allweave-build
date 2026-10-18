@@ -66,6 +66,10 @@ test(
 				payload: payload as Record<string, unknown> | undefined,
 			});
 		try {
+			const initialWorkspaces = (await request("GET", "/api/workspaces")).json<Workspace[]>();
+			const workspace = initialWorkspaces.find((item) => item.path === root && !item.remote);
+			assert.ok(workspace);
+			const managedWorkspaces = initialWorkspaces.filter((item) => item.kind === "plugin-development");
 			await t.test("local origin, host and path guards without an access token", async () => {
 				assert.equal((await request("GET", "/api/health")).statusCode, 200);
 				assert.equal(
@@ -108,8 +112,7 @@ test(
 				const projectListing = projectFolders.json<LocalFolderListing>();
 				assert.equal(projectListing.currentPath, root);
 				assert.deepEqual(projectListing.directories, []);
-				const workspaces = (await request("GET", "/api/workspaces")).json<Workspace[]>();
-				const id = workspaces[0].id;
+				const id = workspace.id;
 				assert.equal((await request("GET", `/api/workspaces/${id}/file?path=../outside`)).statusCode, 403);
 				assert.equal((await request("POST", "/api/workspaces", { path: directory })).statusCode, 403);
 				const content = (await request("GET", `/api/workspaces/${id}/file?path=hello.txt`)).json<FileContent>();
@@ -122,7 +125,6 @@ test(
 				);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "edited");
 			});
-			const workspace = (await request("GET", "/api/workspaces")).json<Workspace[]>()[0];
 			const create = async () => {
 				const result = await request("POST", "/api/sessions", { workspaceId: workspace.id });
 				assert.equal(result.statusCode, 200, result.body);
@@ -289,7 +291,7 @@ test(
 				const removed = await request("DELETE", `/api/workspaces/${workspace.id}`);
 				assert.equal(removed.statusCode, 200, removed.body);
 				assert.deepEqual(removed.json(), { deleted: true, sessionsDeleted: 1 });
-				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), []);
+				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.deepEqual((await request("GET", "/api/sessions")).json(), []);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
 				await access(nativeSessionFile);
@@ -297,7 +299,7 @@ test(
 				socket.terminate();
 				await app.close();
 				({ app } = await createApp(options));
-				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), []);
+				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
 				await access(nativeSessionFile);
 			});

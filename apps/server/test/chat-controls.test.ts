@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
 import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
-import { applyEvent, type SessionDetail, type SocketMessage } from "../../shared/src/protocol.ts";
+import { applyEvent, type SessionDetail, type SocketMessage, type Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/app.ts";
 
 test(
@@ -39,8 +39,13 @@ test(
 		const request = (method: "GET" | "POST" | "PUT", url: string, payload?: Record<string, unknown>) =>
 			app.inject({ method, url, headers, payload });
 		try {
-			const workspace = (await request("GET", "/api/workspaces")).json<Array<{ id: string }>>()[0];
-			const id = (await request("POST", "/api/sessions", { workspaceId: workspace.id })).json<SessionDetail>().id;
+			const workspace = (await request("GET", "/api/workspaces"))
+				.json<Workspace[]>()
+				.find((item) => item.path === root && !item.remote);
+			assert.ok(workspace);
+			const created = await request("POST", "/api/sessions", { workspaceId: workspace.id });
+			assert.equal(created.statusCode, 200, created.body);
+			const id = created.json<SessionDetail>().id;
 			const get = async () => (await request("GET", `/api/sessions/${id}`)).json<SessionDetail>();
 			const waitFor = async (predicate: (session: SessionDetail) => boolean) => {
 				const deadline = Date.now() + 10_000;
@@ -52,10 +57,8 @@ test(
 				throw new Error(`Timed out waiting for chat state: ${JSON.stringify(await get())}`);
 			};
 			harness.setResponses([fauxAssistantMessage("keep this answer")]);
-			assert.equal(
-				(await request("POST", `/api/sessions/${id}/messages`, { text: "keep this task" })).statusCode,
-				202,
-			);
+			const firstMessage = await request("POST", `/api/sessions/${id}/messages`, { text: "keep this task" });
+			assert.equal(firstMessage.statusCode, 202, firstMessage.body);
 			await waitFor((session) => session.status === "idle");
 			harness.setResponses([
 				fauxAssistantMessage(

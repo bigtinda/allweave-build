@@ -1861,6 +1861,29 @@ body {
 	gap: 16px;
 	padding-top: 6px;
 }
+.workspace-source-switch {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.workspace-remote-fingerprints {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--surface);
+}
+.workspace-remote-fingerprints code {
+	width: 100%;
+	overflow-wrap: anywhere;
+	font-size: 11px;
+}
 .workspace-picker-browser,
 .workspace-picker-form {
 	min-width: 0;
@@ -3561,7 +3584,9 @@ body:has(.app-root[data-theme="dark"]) .access-mode-menu .MuiPaper-root {
 	grid-area: 1 / 1;
 	width: 100%;
 	min-width: 0;
-	will-change: transform;
+}
+.spring-page-layer[data-page-moving="true"] {
+	will-change: transform, opacity;
 }
 .workspace-panel-transition {
 	position: absolute;

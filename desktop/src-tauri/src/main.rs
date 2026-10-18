@@ -259,7 +259,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 			let origin = format!("http://127.0.0.1:{port}");
 			let url = origin.parse()?;
 			WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-				.title("AllWeave Build · 构序")
+				.title(format!("AllWeave Build · 构序 v{}", env!("CARGO_PKG_VERSION")))
 				.inner_size(1440.0, 960.0)
 				.min_inner_size(900.0, 640.0)
 				.center()

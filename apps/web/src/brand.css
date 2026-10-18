@@ -1,4 +1,90 @@
 /* AllWeave Build: neutral surfaces, Klein Blue accents, and interwoven code. */
+.allweave-build-family {
+	display: flex;
+	width: 100%;
+	min-width: 0;
+	align-items: center;
+	gap: 9px;
+}
+.family-parent-frame {
+	display: block;
+	width: 108px;
+	flex: 0 1 108px;
+	min-width: 0;
+	padding: 1px;
+	border: 1px solid #e5e7eb;
+	background: #fff;
+	line-height: 0;
+}
+.family-parent-frame img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.family-divider {
+	width: 1px;
+	height: 27px;
+	flex: 0 0 1px;
+	background: var(--line);
+}
+.family-product {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 6px;
+}
+.family-product-mark {
+	display: block;
+	width: 36px;
+	height: 20px;
+	flex: 0 0 36px;
+	color: var(--primary);
+}
+.family-product-name {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	line-height: 1.1;
+}
+.family-product-name strong {
+	font-size: 14px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+}
+.family-product-name small {
+	color: var(--muted);
+	font-size: 8px;
+	letter-spacing: 0.16em;
+}
+.welcome-family {
+	width: max-content;
+	max-width: 100%;
+	margin: 0 auto 24px;
+}
+.welcome-family .family-parent-frame {
+	width: 142px;
+	flex-basis: 142px;
+}
+.welcome-family .family-product-mark {
+	width: 43px;
+	height: 24px;
+	flex-basis: 43px;
+}
+.welcome-family .family-product-name strong {
+	font-size: 16px;
+}
+.welcome-family .family-product-name small {
+	font-size: 9px;
+}
+.service-brand-family {
+	width: max-content;
+	max-width: 100%;
+	margin: 0 auto;
+}
+.service-brand-family .family-parent-frame {
+	width: 142px;
+	flex-basis: 142px;
+}
 :root,
 .app-root {
 	--primary: #002fa7;
@@ -187,6 +273,23 @@ body:has(.app-root[data-theme="dark"]) .access-mode-menu .MuiPaper-root {
 	--card-outline: color-mix(in srgb, var(--line) 58%, transparent);
 }
 @media (max-width: 767px) {
+	.app-root .family-parent-frame {
+		width: 92px;
+		flex-basis: 92px;
+	}
+	.app-root .brand {
+		gap: 6px;
+	}
+	.app-root .family-product {
+		gap: 4px;
+	}
+	.app-root .family-product-mark {
+		width: 30px;
+		flex-basis: 30px;
+	}
+	.app-root .family-product-name strong {
+		font-size: 12px;
+	}
 	.welcome-content {
 		padding: 32px 20px;
 	}

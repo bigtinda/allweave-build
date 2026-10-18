@@ -41,6 +41,8 @@ const thinkingLevels: Array<{ id: ThinkingLevel; label: string }> = [
 	{ id: "max", label: "最大" },
 ];
 const modelsPerPage = 10;
+const longInputAttachmentThreshold = 8_000;
+const maxTextAttachmentCharacters = 100_000;
 
 export function Composer({
 	session,
@@ -107,19 +109,25 @@ export function Composer({
 	);
 	const submit = async () => {
 		if (pending || !text.trim() || !connected || !selectedModel) return;
+		if (text.length > maxTextAttachmentCharacters) {
+			onError("单个文本附件不能超过 100,000 个字符，请拆分后发送。");
+			return;
+		}
 		setPending(true);
 		onError("");
 		setFeedback("");
 		try {
-			const prompt =
-				text +
-				attachments
-					.map(
-						(file) =>
-							`\n\nAttached text file ${JSON.stringify(file.name)}:\n<attachment>\n${file.content}\n</attachment>`,
-					)
-					.join("");
-			await api(`/sessions/${session.id}/messages`, { text: prompt, references, interrupt: busy });
+			const attachLongInput = text.length > longInputAttachmentThreshold;
+			const messageText = attachLongInput ? "请阅读附件“用户输入.txt”，并根据其中内容完成任务。" : text;
+			const textAttachments = attachLongInput
+				? [{ name: "用户输入.txt", content: text }, ...attachments]
+				: attachments;
+			await api(`/sessions/${session.id}/messages`, {
+				text: messageText,
+				attachments: textAttachments,
+				references,
+				interrupt: busy,
+			});
 			setText("");
 			setAttachments([]);
 			references.forEach(removeReference);
@@ -272,46 +280,52 @@ export function Composer({
 							})();
 						}}
 					/>
-					<Tooltip title="权限与计划模式">
-						<Button
-							className="access-mode-button"
-							variant="text"
-							endIcon={<ChevronDown size={14} strokeWidth={2} />}
-							aria-label={`当前权限：${activeAccessMode.label}`}
-							aria-haspopup="menu"
-							aria-expanded={!!accessMenu}
-							disabled={busy || pending}
-							onClick={(event) => setAccessMenu(event.currentTarget)}
-						>
-							{activeAccessMode.label}
-						</Button>
-					</Tooltip>
-					<Menu
-						className="access-mode-menu"
-						anchorEl={accessMenu}
-						open={!!accessMenu}
-						onClose={() => setAccessMenu(null)}
-						anchorOrigin={{ vertical: "top", horizontal: "left" }}
-						transformOrigin={{ vertical: "bottom", horizontal: "left" }}
-					>
-						{accessModes.map((mode) => {
-							const ModeIcon = mode.icon;
-							return (
-								<MenuItem
-									key={mode.id}
-									selected={session.accessMode === mode.id}
-									onClick={() => void setAccessMode(mode.id)}
+					{session.purpose === "plugin-development" ? (
+						<span className="muted">默认插件开发工作区 · 文件修改与安装需确认</span>
+					) : (
+						<>
+							<Tooltip title="权限与计划模式">
+								<Button
+									className="access-mode-button"
+									variant="text"
+									endIcon={<ChevronDown size={14} strokeWidth={2} />}
+									aria-label={`当前权限：${activeAccessMode.label}`}
+									aria-haspopup="menu"
+									aria-expanded={!!accessMenu}
+									disabled={busy || pending}
+									onClick={(event) => setAccessMenu(event.currentTarget)}
 								>
-									<ModeIcon size={17} />
-									<span className="access-mode-copy">
-										<strong>{mode.label}</strong>
-										<small>{mode.description}</small>
-									</span>
-									{session.accessMode === mode.id && <Check size={16} />}
-								</MenuItem>
-							);
-						})}
-					</Menu>
+									{activeAccessMode.label}
+								</Button>
+							</Tooltip>
+							<Menu
+								className="access-mode-menu"
+								anchorEl={accessMenu}
+								open={!!accessMenu}
+								onClose={() => setAccessMenu(null)}
+								anchorOrigin={{ vertical: "top", horizontal: "left" }}
+								transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+							>
+								{accessModes.map((mode) => {
+									const ModeIcon = mode.icon;
+									return (
+										<MenuItem
+											key={mode.id}
+											selected={session.accessMode === mode.id}
+											onClick={() => void setAccessMode(mode.id)}
+										>
+											<ModeIcon size={17} />
+											<span className="access-mode-copy">
+												<strong>{mode.label}</strong>
+												<small>{mode.description}</small>
+											</span>
+											{session.accessMode === mode.id && <Check size={16} />}
+										</MenuItem>
+									);
+								})}
+							</Menu>
+						</>
+					)}
 					<span className="grow composer-actions-spacer" />
 					<Button
 						className="model-select"
@@ -501,7 +515,7 @@ export function Composer({
 							"正在处理，请稍候…"
 						) : (
 							<>
-								<kbd>Enter</kbd> 发送 · <kbd>Shift + Enter</kbd> 换行
+								<kbd>Enter</kbd> 发送 · <kbd>Shift + Enter</kbd> 换行 · 超过 8,000 字符自动作为文本附件
 							</>
 						))
 					)}

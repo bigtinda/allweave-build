@@ -149,7 +149,7 @@ export function PersonalizationPanel() {
 							))}
 						</Select>
 					</FormControl>
-					<div className="font-sample">AllWeave Build · 构序 · 一念成潮，万象成序。</div>
+					<div className="font-sample">万象成序 AllWeave · 构序 Build · 一念成潮，万象成序。</div>
 				</div>
 			</div>
 			{error && (

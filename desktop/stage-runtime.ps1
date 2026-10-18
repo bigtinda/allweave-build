@@ -1,16 +1,14 @@
 param(
 	[string]$OutputDirectory = (Join-Path $PSScriptRoot "dist"),
 	[string]$NodeExecutable = "",
-	[string]$WebView2FixedRuntime = "",
-	[switch]$BuildWeb
+	[string]$WebView2FixedRuntime = ""
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
-$staging = Join-Path $output "AllWeaveBuildPortable"
-$archive = Join-Path $output "AllWeaveBuildPortable.zip"
+$staging = Join-Path $output "installer-payload"
 $runtime = Join-Path $staging "runtime"
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
 $cargoExecutable = if ($cargo) { $cargo.Source } else { Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe" }
@@ -30,19 +28,22 @@ $npmPackage = Join-Path $nodeDirectory "node_modules/npm"
 if (-not (Test-Path -LiteralPath $npmCommand) -or -not (Test-Path -LiteralPath (Join-Path $npmPackage "bin/npm-cli.js"))) {
 	throw "The selected Node.js installation must include npm.cmd and node_modules/npm so bundled Pi package installation remains available."
 }
-if ($BuildWeb) {
-	Push-Location $repoRoot
-	try {
-		npm run build:web
-		if ($LASTEXITCODE -ne 0) { throw "Web frontend build failed with exit code $LASTEXITCODE." }
-	} finally {
-		Pop-Location
-	}
-}
 
 $frontend = Join-Path $repoRoot "apps/web/dist/index.html"
 if (-not (Test-Path -LiteralPath $frontend)) {
-	throw "The built frontend is missing at apps/web/dist. Run npm run build:web first, or pass -BuildWeb to this script."
+	throw "The built frontend is missing at apps/web/dist. Run desktop/build-installer.ps1 first."
+}
+$remoteDaemonNames = @(
+	"linux-x64", "linux-arm64", "android-x64", "android-arm64",
+	"darwin-x64", "darwin-arm64", "windows-x64", "windows-arm64"
+)
+$missingRemoteDaemons = @($remoteDaemonNames | Where-Object {
+	$executable = if ($_ -like "windows-*") { "pi-env.exe" } else { "pi-env" }
+	-not (Test-Path -LiteralPath (Join-Path $repoRoot "packages/env/bin/pi-env-$_/$executable"))
+})
+if ($missingRemoteDaemons.Count -gt 0) {
+	$names = $missingRemoteDaemons -join ", "
+	throw "Remote SSH projects require prebuilt pi-env daemons. Missing: $names. Run npm run hydrate:env-daemons, then retry."
 }
 
 Push-Location $PSScriptRoot
@@ -108,7 +109,7 @@ $nodeModules = Join-Path $repoRoot "node_modules"
 if (-not (Test-Path -LiteralPath $nodeModules)) { throw "Repository node_modules is missing. Run npm ci --ignore-scripts first." }
 Push-Location $repoRoot
 try {
-	$npmOutput = @(& $npmCommand ls --parseable --omit=dev --workspace=@pi-console/server 2>&1)
+	$npmOutput = @(& $npmCommand ls --parseable --all --omit=dev --workspace=@pi-console/server 2>&1)
 	$npmExitCode = $LASTEXITCODE
 } finally {
 	Pop-Location
@@ -165,9 +166,11 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 	""
 	"Double-click AllWeaveBuild.exe to open the desktop application. The program stores its sessions, Pi settings, and WebView data in the data folder next to the executable."
 	""
+	"AI application plugins are developed from the Plugin Development chat. Their default workspace, installed manifests, and project data persist under the data folder."
+	""
 	"By default, the workspaces folder is authorized. Add one existing folder path per line to workspace-roots.txt to allow other projects. Relative paths are resolved from this folder. Restart the application after editing the file."
 	""
-	"The application uses the Windows WebView2 Runtime. If it is not installed on the target PC, rebuild with -WebView2FixedRuntime pointing to an extracted Microsoft Fixed Version WebView2 runtime folder."
+	"The application requires the Windows WebView2 Runtime. The installer checks this prerequisite."
 	""
 	"The Pi coding-agent SDK is bundled from the project source and runs inside the application service."
 ), $utf8NoBom)
@@ -219,7 +222,6 @@ if ($WebView2FixedRuntime) {
 	}
 }
 
-if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
-& tar.exe -a -c -f $archive -C $output "AllWeaveBuildPortable"
-if ($LASTEXITCODE -ne 0) { throw "Creating the portable ZIP failed with exit code $LASTEXITCODE." }
-Write-Output "Portable desktop package created: $archive"
+$releaseVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "src-tauri/tauri.conf.json") -Raw | ConvertFrom-Json).version
+[IO.File]::WriteAllText((Join-Path $staging "version.txt"), "$releaseVersion`n", $utf8NoBom)
+Write-Output "Installer runtime staged: $staging"

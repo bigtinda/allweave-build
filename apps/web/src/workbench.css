@@ -425,7 +425,9 @@
 .app-root .composer-actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
+	align-items: center;
+	gap: 8px;
+	min-height: 36px;
 	border-top: 1px solid var(--line);
 	padding-top: 8px;
 }
@@ -437,6 +439,14 @@
 .app-root .composer .thinking-control {
 	width: auto;
 	flex: 0 0 auto;
+}
+.app-root .composer .attachment-control {
+	flex: 0 0 36px;
+}
+.app-root .composer .attachment-action.MuiIconButton-root {
+	width: 36px;
+	height: 36px;
+	padding: 8px;
 }
 .app-root .composer-actions-spacer {
 	flex: 1;
@@ -631,6 +641,60 @@ kbd {
 	border-radius: 16px;
 	background: var(--container-low);
 }
+.app-root .long-user-message {
+	max-width: min(100%, 720px);
+}
+.app-root .long-user-message summary {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	list-style: none;
+	cursor: pointer;
+}
+.app-root .long-user-message summary::-webkit-details-marker {
+	display: none;
+}
+.app-root .long-user-message-preview {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--muted);
+	font-size: 12px;
+}
+.app-root .long-user-message-meta {
+	flex: 0 0 auto;
+	color: var(--muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+.app-root .long-user-message-close-label {
+	display: none;
+}
+.app-root .long-user-message[open] .long-user-message-open-label {
+	display: none;
+}
+.app-root .long-user-message[open] .long-user-message-close-label {
+	display: inline;
+}
+.app-root .long-user-message-chevron {
+	flex: 0 0 auto;
+	color: var(--muted);
+	transition: transform 160ms ease;
+}
+.app-root .long-user-message[open] .long-user-message-chevron {
+	transform: rotate(180deg);
+}
+.app-root .long-user-message-content {
+	max-height: min(70vh, 680px);
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--line);
+	overflow: auto;
+	overscroll-behavior: contain;
+}
 .app-root .message-assistant {
 	margin-bottom: 32px;
 	padding: 0;
@@ -741,27 +805,44 @@ kbd {
 	transform: rotate(180deg);
 }
 .message-changes-list li {
-	display: flex;
-	align-items: center;
-	gap: 9px;
 	min-width: 0;
-	min-height: 34px;
-	padding: 6px 14px;
 	border-top: 1px solid var(--line);
 	font-size: 12px;
 }
-.message-changes-list li > svg {
+.message-changes-file {
+	display: flex;
+	width: 100%;
+	min-width: 0;
+	min-height: 40px;
+	align-items: center;
+	gap: 9px;
+	padding: 6px 14px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.message-changes-file:hover {
+	background: var(--container-low);
+}
+.message-changes-file:focus-visible {
+	position: relative;
+	z-index: 1;
+}
+.message-changes-file > svg {
 	flex: 0 0 auto;
 	color: var(--muted);
 }
-.message-changes-list li span {
+.message-changes-file > span {
 	min-width: 0;
 	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.message-changes-list li small {
+.message-changes-file > small {
 	flex: 0 0 auto;
 	color: var(--muted);
 }
@@ -806,7 +887,7 @@ kbd {
 	line-height: 1.7;
 }
 .app-root .composer-actions {
-	gap: 4px;
+	gap: 8px;
 	padding-top: 8px;
 	border-top: 0;
 }
@@ -816,31 +897,42 @@ kbd {
 .app-root .composer .model-select {
 	order: 1;
 	max-width: 200px;
+	min-height: 36px;
 	padding-inline: 6px;
-	font-size: 11px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.25;
 	color: var(--text);
 }
 .app-root .composer .access-mode-button {
 	order: 2;
+	min-height: 36px;
 	padding-inline: 6px;
-	font-size: 11px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.25;
 	color: var(--muted);
 }
 .app-root .composer .thinking-control {
 	order: 3;
-	font-size: 11px;
+	height: 36px;
+	font-size: 12px;
+}
+.app-root .composer .thinking-select.MuiInputBase-root {
+	height: 36px;
+	min-height: 36px;
 }
 .app-root .thinking-select .MuiSelect-select {
-	font-size: 11px;
+	font-size: 12px;
 }
 .app-root .composer-actions-spacer {
 	order: 4;
 }
 .app-root .composer .send-button {
 	order: 5;
-	width: 32px;
-	min-width: 32px;
-	height: 32px;
+	width: 36px;
+	min-width: 36px;
+	height: 36px;
 	padding: 0;
 	border-radius: 50%;
 	background: var(--text);
@@ -869,7 +961,7 @@ kbd {
 .app-root .composer-footer .composer-note {
 	min-height: 0;
 	margin: 0;
-	font-size: 10px;
+	font-size: 11px;
 	line-height: 1.6;
 	text-align: left;
 }
@@ -964,6 +1056,107 @@ kbd {
 	text-align: left;
 	max-width: 720px;
 }
+.app-plugin-manager {
+	display: grid;
+	gap: 18px;
+}
+.plugin-development-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	min-height: 40vh;
+	padding: 24px;
+}
+.app-plugin-workspace-select {
+	max-width: 360px;
+}
+.app-plugin-studio {
+	display: grid;
+	gap: 14px;
+	padding: 20px;
+}
+.app-plugin-identity {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+	gap: 12px;
+}
+.app-plugin-studio-actions,
+.app-plugin-card-links,
+.app-plugin-view-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.app-plugin-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	gap: 12px;
+}
+.app-plugin-empty {
+	padding: 18px;
+	border: 1px dashed var(--outline);
+	border-radius: 8px;
+}
+.app-plugin-page {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+	min-height: 100%;
+	padding: clamp(16px, 2.4vw, 28px);
+	overflow: auto;
+}
+.app-plugin-page-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+.app-root .app-plugin-page-heading h1 {
+	margin: 4px 0;
+	font-size: 24px;
+}
+.app-plugin-table {
+	max-width: 100%;
+	overflow: auto;
+}
+.app-plugin-board {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	align-items: start;
+	gap: 12px;
+}
+.app-plugin-board-column {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	padding: 12px;
+}
+.app-plugin-board-column > header,
+.app-plugin-board-record > footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.app-plugin-board-record {
+	display: grid;
+	gap: 8px;
+	padding: 12px;
+}
+.app-root .app-plugin-page .app-plugin-board-record > div {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+}
+.app-plugin-form {
+	display: grid;
+	gap: 14px;
+	padding-top: 12px;
+}
 .app-root .welcome-mark {
 	width: 100px;
 	height: 50px;
@@ -995,7 +1188,132 @@ kbd {
 .skip-link:focus {
 	transform: translateY(0);
 }
+.chat-conversation {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+.chat-conversation .chat-scroll {
+	width: 100%;
+}
+.message-timeline {
+	position: absolute;
+	z-index: 2;
+	top: 12px;
+	bottom: 12px;
+	width: 24px;
+	pointer-events: none;
+}
+.message-timeline-track {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 9px;
+	width: 1px;
+	background: repeating-linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--muted) 34%, transparent) 0 1px,
+		transparent 1px 5px
+	);
+}
+.message-timeline-marker {
+	position: absolute;
+	left: 0;
+	display: flex;
+	align-items: center;
+	width: 24px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+	transform: translateY(-50%);
+	pointer-events: auto;
+}
+.message-timeline-marker:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 1px;
+}
+.message-timeline-tick {
+	position: absolute;
+	left: 5px;
+	width: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--muted) 48%, transparent);
+	transition:
+		width 140ms ease,
+		background-color 140ms ease,
+		left 140ms ease;
+}
+.message-timeline-marker:hover .message-timeline-tick,
+.message-timeline-marker:focus-visible .message-timeline-tick {
+	left: 3px;
+	width: 12px;
+	background: var(--outline);
+}
+.message-timeline-marker.is-active .message-timeline-tick {
+	left: 0;
+	width: 18px;
+	height: 3px;
+	background: var(--primary);
+}
+.message-timeline-preview {
+	position: absolute;
+	z-index: 3;
+	left: 28px;
+	top: 50%;
+	display: grid;
+	gap: 5px;
+	width: min(320px, calc(100vw - 80px));
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--surface);
+	box-shadow: 0 8px 24px rgb(22 34 52 / 12%);
+	color: var(--text);
+	text-align: left;
+	white-space: normal;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(-46%) translateX(-4px);
+	transition:
+		opacity 120ms ease,
+		transform 120ms ease,
+		visibility 120ms ease;
+	pointer-events: none;
+}
+.message-timeline-preview strong {
+	font-size: 12px;
+	font-weight: 600;
+}
+.message-timeline-preview > span {
+	display: -webkit-box;
+	max-height: 3.6em;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.55;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+.message-timeline-marker:hover .message-timeline-preview,
+.message-timeline-marker:focus-visible .message-timeline-preview {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(-46%) translateX(0);
+}
 @media (max-width: 767px) {
+	.app-plugin-page {
+		padding: 14px;
+	}
+	.app-plugin-page-heading {
+		align-items: flex-start;
+	}
 	.app-root .composer-actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -1020,7 +1338,10 @@ kbd {
 		padding-inline: 8px;
 	}
 	.app-root .transcript {
-		padding: 16px;
+		padding: 16px 16px 16px 36px;
+	}
+	.message-timeline-preview {
+		width: min(300px, calc(100vw - 68px));
 	}
 	.app-root .composer-wrap {
 		padding: 8px 12px 12px;
@@ -1066,6 +1387,10 @@ kbd {
 	}
 	.app-root .MuiButton-root,
 	.app-root .MuiIconButton-root {
+		transition-duration: 0.01ms;
+	}
+	.message-timeline-tick,
+	.message-timeline-preview {
 		transition-duration: 0.01ms;
 	}
 }

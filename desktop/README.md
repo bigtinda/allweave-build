@@ -6,7 +6,7 @@
 
 GitHub 自动构建见 [Build Windows Desktop](https://github.com/bigtinda/allweave-build/actions/workflows/windows-desktop.yml)。推送桌面相关改动到 `main` 或手动运行后，会生成 Windows x64 安装 EXE 和 SHA-256 文件，存放在该次运行的 Artifacts 中，保留 14 天。流程会检查源码、版本同步以及安装、启动、升级和卸载，全部通过后才上传安装包。
 
-CI 使用提交中的桌面版本，通过 `-Rebuild` 构建。准备新版本时先运行 `./desktop/set-version.ps1` 并提交版本文件。模型数据从 `nix/model-catalog.json` 固定的目录快照恢复，下载后校验 SHA-256，避免实时模型列表变化破坏构建。
+CI 使用提交中的桌面版本，通过 `-Rebuild` 构建。准备新版本时先运行 `./desktop/set-version.ps1` 并提交版本文件。模型目录快照随源码提供，构建时先校验 SHA-256，再生成本地模型数据，避免实时模型列表变化破坏构建。
 
 需要 Windows x64、Rust 1.90+、Visual Studio C++ Build Tools、Node.js 24.3+、NSIS 3，以及已安装的仓库依赖。从仓库根目录运行：
 

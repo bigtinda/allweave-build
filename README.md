@@ -54,7 +54,7 @@ node scripts/hydrate-desktop-models.mjs
 Copy-Item apps/server/.env.example .env
 ```
 
-模型准备脚本需要网络连接，下载并校验与当前源码匹配的固定快照。已有 `.env` 时直接编辑现有文件，保留自己的配置。
+模型目录快照随源码提供。准备脚本会先校验 SHA-256，再生成与当前源码匹配的本地模型数据。已有 `.env` 时直接编辑现有文件，保留自己的配置。
 
 ### 2. 使用内置 Pi SDK
 

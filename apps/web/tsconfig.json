@@ -4,7 +4,8 @@
     "module": "ESNext", "moduleResolution": "Bundler", "jsx": "react-jsx",
     "strict": true, "skipLibCheck": true, "noEmit": true,
     "allowImportingTsExtensions": true, "verbatimModuleSyntax": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": { "@pi-console/protocol": ["../../packages/protocol/src/index.ts"] }
   },
   "include": ["src", "../shared/src", "vite.config.ts"]
 }

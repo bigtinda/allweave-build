@@ -306,7 +306,7 @@ async function runBuild(bundle) {
 				"--workspace",
 				"packages/agent",
 				"--workspace",
-				"packages/protocol",
+				"packages/pi-protocol",
 				"--workspace",
 				"packages/client",
 			],

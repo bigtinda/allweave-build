@@ -9,6 +9,7 @@
     "test:unit": "node --import ../../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.ts"
   },
   "dependencies": {
+    "@pi-console/protocol": "0.1.0",
     "@earendil-works/pi-ai": "^1.1.0",
     "@earendil-works/pi-coding-agent": "^1.1.0",
     "@earendil-works/pi-env": "1.1.0",

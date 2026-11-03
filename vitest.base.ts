@@ -22,7 +22,7 @@ export const workspaceSourcePaths = {
 	codemodeIndex: fileURLToPath(new URL("./packages/codemode/src/index.ts", import.meta.url)),
 	codemodeDeclarations: fileURLToPath(new URL("./packages/codemode/src/declarations.ts", import.meta.url)),
 	codemodeSource: fileURLToPath(new URL("./packages/codemode/src/source.ts", import.meta.url)),
-	protocolIndex: fileURLToPath(new URL("./packages/protocol/src/index.ts", import.meta.url)),
+	protocolIndex: fileURLToPath(new URL("./packages/pi-protocol/src/index.ts", import.meta.url)),
 	clientIndex: fileURLToPath(new URL("./packages/client/src/index.ts", import.meta.url)),
 	clientUnix: fileURLToPath(new URL("./packages/client/src/unix.ts", import.meta.url)),
 	serverIndex: fileURLToPath(new URL("./packages/server/src/index.ts", import.meta.url)),

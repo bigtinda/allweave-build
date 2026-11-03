@@ -736,7 +736,10 @@ describe("NodeExecutionEnv shell", () => {
 		} finally {
 			await env.cleanup(BACKGROUND_CONTEXT);
 		}
-		await expect(withTimeout(execution, 3000)).resolves.toMatchObject({ ok: true });
+		// Native taskkill may take several seconds while the whole workspace suite runs.
+		await expect(withTimeout(execution, process.platform === "win32" ? 10_000 : 3000)).resolves.toMatchObject({
+			ok: true,
+		});
 	}, 20_000);
 
 	it("streams combined stdout and stderr", async () => {

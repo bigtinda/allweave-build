@@ -14,9 +14,9 @@ test("Build defaults use the brand palette and preserve custom accent colors", (
 	const colors = createThemeColors(false, DEFAULT_ACCENT_COLOR);
 	assert.equal(colors.primary, "#002FA7");
 	assert.equal(colors.surface, "#FFFFFF");
-	assert.equal(colors.text, "#111111");
-	assert.equal(colors.muted, "#6B7280");
-	assert.equal(colors.line, "#E5E7EB");
+	assert.equal(colors.text, "#0B1020");
+	assert.equal(colors.muted, "#626262");
+	assert.equal(colors.line, "#E2E2DE");
 	assert.equal(createThemeColors(false, "#123456").primary, "#123456");
 	assert.equal(createThemeColors(false, "invalid").primary, DEFAULT_ACCENT_COLOR);
 });
@@ -29,6 +29,19 @@ test("primary button labels remain readable for every preset in light and dark m
 			const foreground = luminance(colors.onPrimary);
 			const contrast = (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05);
 			assert.ok(contrast >= 4.5, `${preset.name}, dark=${dark}: contrast ${contrast}`);
+		}
+	}
+});
+
+test("workbench body and secondary text stay readable on every neutral surface", () => {
+	for (const dark of [false, true]) {
+		const colors = createThemeColors(dark, DEFAULT_ACCENT_COLOR);
+		for (const background of [colors.surface, colors.container, colors.containerLow]) {
+			for (const foreground of [colors.text, colors.muted]) {
+				const values = [luminance(background), luminance(foreground)].sort((a, b) => a - b);
+				const contrast = (values[1] + 0.05) / (values[0] + 0.05);
+				assert.ok(contrast >= 4.5, `${foreground} on ${background}: contrast ${contrast}`);
+			}
 		}
 	}
 });

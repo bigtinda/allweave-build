@@ -42,7 +42,9 @@ describe("pi mcp", () => {
 		expect(output).toContain("fixture: connected, 1 tool (codemode, global)\n");
 		expect(output).toContain("  tools: echo");
 		expect(output).toContain(
-			"broken: failed (codemode, global)\n  pi-test-missing-mcp-server\n  spawn pi-test-missing-mcp-server ENOENT",
+			`broken: failed (codemode, global)\n  pi-test-missing-mcp-server\n  ${
+				process.platform === "win32" ? "MCP connection closed" : "spawn pi-test-missing-mcp-server ENOENT"
+			}`,
 		);
 		expect(output).toContain("parked: disabled (codemode, global)");
 		expect(output).toContain("config error: ");

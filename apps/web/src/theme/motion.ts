@@ -49,9 +49,8 @@ export class SpringValue {
 			return;
 		}
 		const settings = springPresets[preset];
-		let previousTime = 0;
+		let previousTime = performance.now();
 		const step = (time: number) => {
-			if (previousTime === 0) previousTime = time;
 			let remaining = Math.min((time - previousTime) / 1000, 0.032);
 			previousTime = time;
 			while (remaining > 0) {
@@ -93,6 +92,7 @@ export const motionTokens = {
 		scaleFade: { duration: 240, easing: "spring", scale: 0.985 },
 		slide: { duration: 300, easing: "spring", distance: 12 },
 		pageSlide: { minimumDistance: 32, interPageGap: 32, preset: "smooth" },
+		pageFade: { initialOpacity: 0.92, preset: "snappy" },
 		layout: { duration: 340, easing: "spring" },
 		sharedElement: { duration: 360, easing: "spring" },
 		springReturn: { duration: 320, preset: "smooth" },

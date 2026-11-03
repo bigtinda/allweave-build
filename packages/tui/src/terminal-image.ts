@@ -737,7 +737,8 @@ export function hyperlink(text: string, url: string): string {
 function shortenImagePath(filename: string): string {
 	const home = homedir();
 	if (home && (filename === home || filename.startsWith(`${home}/`) || filename.startsWith(`${home}\\`))) {
-		return `~${filename.slice(home.length)}`;
+		const suffix = filename.slice(home.length);
+		return `~${process.platform === "win32" ? suffix.replaceAll("\\", "/") : suffix}`;
 	}
 	return filename;
 }

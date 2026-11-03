@@ -67,8 +67,9 @@ describe("RemoteExecutionEnv", () => {
 			const result = await running;
 			expect(result.ok ? "ok" : result.error.code).toBe("aborted");
 		}
-		expect(Date.now() - started).toBeLessThan(10_000);
-	}, 30_000);
+		// Windows cancellation waits for native process-tree termination for each of the 20 commands.
+		expect(Date.now() - started).toBeLessThan(process.platform === "win32" ? 30_000 : 10_000);
+	}, 45_000);
 
 	it("times out a command that produces no output", async () => {
 		const { env } = environment();

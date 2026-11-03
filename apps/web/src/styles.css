@@ -186,9 +186,6 @@ a {
 .app-root[data-theme="dark"] .brand-wordmark {
 	filter: invert(1) hue-rotate(180deg);
 }
-.new-session {
-	min-height: 48px;
-}
 .nav-search {
 	display: flex;
 	gap: 8px;
@@ -218,7 +215,7 @@ a {
 	padding: 0 4px 0 12px;
 	gap: 8px;
 }
-.workspace-add-button.MuiButton-root {
+.project-create-button.MuiButton-root {
 	flex: 0 0 auto;
 	min-width: 0;
 	padding: 5px 8px;
@@ -304,6 +301,13 @@ a {
 .workspace-project-heading .workspace-project-collapse.MuiIconButton-root {
 	opacity: 1;
 	pointer-events: auto;
+}
+.workspace-project-heading .workspace-create-session.MuiIconButton-root {
+	opacity: 0.72;
+	pointer-events: auto;
+}
+.workspace-project-heading .workspace-create-session.MuiIconButton-root:hover {
+	opacity: 1;
 }
 .workspace-project-sessions-collapse {
 	margin: 2px 0 4px 15px;
@@ -1860,6 +1864,29 @@ body {
 	grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.85fr);
 	gap: 16px;
 	padding-top: 6px;
+}
+.workspace-source-switch {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.workspace-remote-fingerprints {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--surface);
+}
+.workspace-remote-fingerprints code {
+	width: 100%;
+	overflow-wrap: anywhere;
+	font-size: 11px;
 }
 .workspace-picker-browser,
 .workspace-picker-form {
@@ -3561,7 +3588,9 @@ body:has(.app-root[data-theme="dark"]) .access-mode-menu .MuiPaper-root {
 	grid-area: 1 / 1;
 	width: 100%;
 	min-width: 0;
-	will-change: transform;
+}
+.spring-page-layer[data-page-moving="true"] {
+	will-change: transform, opacity;
 }
 .workspace-panel-transition {
 	position: absolute;

@@ -29,6 +29,7 @@ interface SpringPagesProps {
 	className?: string;
 	axis?: SpringAxis;
 	animateHeight?: boolean;
+	transition?: "fade" | "slide";
 }
 
 function SpringPage({
@@ -41,6 +42,7 @@ function SpringPage({
 	onSizeChange,
 	children,
 	travelDistance,
+	transition,
 }: {
 	id: number;
 	active: boolean;
@@ -51,9 +53,11 @@ function SpringPage({
 	onSizeChange?: (id: number, height: number) => void;
 	children: ReactNode;
 	travelDistance: number;
+	transition: "fade" | "slide";
 }) {
 	const node = useRef<HTMLDivElement>(null);
 	const positionSpring = useRef(new SpringValue());
+	const hasMoved = useRef(false);
 	const initialized = useRef(false);
 	if (!initialized.current) {
 		initialized.current = true;
@@ -64,11 +68,19 @@ function SpringPage({
 		(position: number) => {
 			const element = node.current;
 			if (!element) return;
+			if (active && position === 0) {
+				element.style.transform = "none";
+				element.style.opacity = "1";
+				return;
+			}
 			const offset = axis === "vertical" ? `0, ${position}px, 0` : `${position}px, 0, 0`;
-			element.style.transform = `translate3d(${offset})`;
-			element.style.opacity = active ? String(Math.max(0, 1 - Math.abs(position) / travelDistance)) : "0";
+			element.style.transform = transition === "slide" ? `translate3d(${offset})` : "none";
+			const progress = Math.min(1, Math.abs(position) / travelDistance);
+			element.style.opacity = active
+				? String(1 - progress * (transition === "fade" ? 1 - motionTokens.transition.pageFade.initialOpacity : 1))
+				: "0";
 		},
-		[active, axis, travelDistance],
+		[active, axis, transition, travelDistance],
 	);
 	const measure = useCallback(() => {
 		const element = node.current;
@@ -87,20 +99,31 @@ function SpringPage({
 		const element = node.current;
 		if (!element) return;
 		const targetPosition = active ? 0 : -direction * travelDistance;
-		if (active && !animateOnMount) {
+		if (active && !animateOnMount && !hasMoved.current) {
 			positionSpring.current.set(0);
 			paintPosition(0);
 			return;
 		}
 		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+		hasMoved.current = true;
 		const finish = () => {
 			delete element.dataset.pageMoving;
 			if (!active) onExitComplete(id);
 		};
 		const animate = () => {
 			if (active) element.dataset.pageMoving = "true";
-			const preset = motionTokens.transition.pageSlide.preset;
-			positionSpring.current.animate(targetPosition, preset, paintPosition, finish, media.matches, 0.5, 2);
+			const preset = motionTokens.transition[transition === "fade" ? "pageFade" : "pageSlide"].preset;
+			positionSpring.current.animate(
+				targetPosition,
+				preset,
+				paintPosition,
+				finish,
+				media.matches ||
+					document.documentElement.dataset.navigationInput === "keyboard" ||
+					Boolean(element.parentElement?.closest('.spring-page-layer[data-page-moving="true"]')),
+				transition === "fade" ? 0.01 : 0.5,
+				transition === "fade" ? 0.1 : 2,
+			);
 		};
 		animate();
 		media.addEventListener("change", animate);
@@ -108,7 +131,7 @@ function SpringPage({
 			positionSpring.current.stop();
 			media.removeEventListener("change", animate);
 		};
-	}, [active, animateOnMount, direction, id, onExitComplete, paintPosition, travelDistance]);
+	}, [active, animateOnMount, direction, id, onExitComplete, paintPosition, transition, travelDistance]);
 	useLayoutEffect(
 		() => () => {
 			positionSpring.current.stop();
@@ -123,8 +146,17 @@ function SpringPage({
 			aria-hidden={!active}
 			inert={!active}
 			style={{
-				opacity: active ? Math.max(0, 1 - Math.abs(position) / travelDistance) : 0,
-				transform: axis === "vertical" ? `translate3d(0, ${position}px, 0)` : `translate3d(${position}px, 0, 0)`,
+				opacity: active
+					? 1 -
+						Math.min(1, Math.abs(position) / travelDistance) *
+							(transition === "fade" ? 1 - motionTokens.transition.pageFade.initialOpacity : 1)
+					: 0,
+				transform:
+					transition === "fade" || (active && position === 0)
+						? "none"
+						: axis === "vertical"
+							? `translate3d(0, ${position}px, 0)`
+							: `translate3d(${position}px, 0, 0)`,
 				pointerEvents: active ? undefined : "none",
 			}}
 		>
@@ -133,7 +165,7 @@ function SpringPage({
 	);
 }
 
-/** Overlaps adjacent pages and retargets their directional springs during quick changes. */
+/** Keeps navigation immediately readable and retargets interrupted transitions. */
 export function SpringPages({
 	id,
 	pageKey,
@@ -142,6 +174,7 @@ export function SpringPages({
 	className,
 	axis = "horizontal",
 	animateHeight = false,
+	transition = "fade",
 }: SpringPagesProps) {
 	const root = useRef<HTMLDivElement>(null);
 	const heightSpring = useRef(new SpringValue());
@@ -150,18 +183,19 @@ export function SpringPages({
 	const activeHeight = useRef(0);
 	const rendered = useRef({ pageKey, pageIndex, children });
 	const { minimumDistance, interPageGap } = motionTokens.transition.pageSlide;
+	const distance = transition === "fade" ? 1 : minimumDistance + interPageGap;
 	const [state, setState] = useState<PageState>({
 		pageKey,
 		pageIndex,
 		currentId: 0,
 		nextId: 1,
 		direction: 1,
-		travelDistance: minimumDistance + interPageGap,
+		travelDistance: distance,
 		exits: [],
 	});
 	if (state.pageKey !== pageKey) {
 		const previous = rendered.current;
-		const travelDistance = minimumDistance + interPageGap;
+		const travelDistance = distance;
 		setState((current) => {
 			if (current.pageKey === pageKey) return current;
 			const direction = pageIndex === current.pageIndex ? current.direction : pageIndex > current.pageIndex ? 1 : -1;
@@ -209,7 +243,9 @@ export function SpringPages({
 				return;
 			}
 			if (Math.abs(height - heightSpring.current.position) < 0.5) return;
-			const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+			const reducedMotion =
+				window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+				document.documentElement.dataset.navigationInput === "keyboard";
 			heightSpring.current.animate(height, "gentle", paintHeight, () => {}, reducedMotion, 0.5, 0.1);
 		},
 		[animateHeight, paintHeight],
@@ -252,6 +288,7 @@ export function SpringPages({
 						axis={axis}
 						animateOnMount={!active || page.id > 0}
 						travelDistance={state.travelDistance}
+						transition={transition}
 						onExitComplete={removeExit}
 						onSizeChange={animateHeight && active ? updatePageHeight : undefined}
 					>

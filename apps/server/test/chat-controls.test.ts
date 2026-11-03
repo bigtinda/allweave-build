@@ -7,7 +7,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat
 import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
 import { applyEvent, type SessionDetail, type SocketMessage } from "../../shared/src/protocol.ts";
-import { createApp } from "../src/app.ts";
+import { createApp } from "../src/bootstrap/create-app.ts";
 
 test(
 	"interrupt and recall change the native context, broadcast rewind and survive restart",
@@ -39,7 +39,10 @@ test(
 		const request = (method: "GET" | "POST" | "PUT", url: string, payload?: Record<string, unknown>) =>
 			app.inject({ method, url, headers, payload });
 		try {
-			const workspace = (await request("GET", "/api/workspaces")).json<Array<{ id: string }>>()[0];
+			const workspace = (await request("GET", "/api/workspaces"))
+				.json<Array<{ id: string; path: string }>>()
+				.find((item) => item.path === root);
+			assert.ok(workspace, "the project workspace should be listed");
 			const id = (await request("POST", "/api/sessions", { workspaceId: workspace.id })).json<SessionDetail>().id;
 			const get = async () => (await request("GET", `/api/sessions/${id}`)).json<SessionDetail>();
 			const waitFor = async (predicate: (session: SessionDetail) => boolean) => {

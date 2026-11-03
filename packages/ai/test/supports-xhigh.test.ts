@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getModel, getSupportedThinkingLevels } from "../src/compat.ts";
+import { getModel, getModels, getSupportedThinkingLevels } from "../src/compat.ts";
 
 describe("getSupportedThinkingLevels", () => {
 	it("includes max but not xhigh for Anthropic Opus 4.6 on anthropic-messages API", () => {
@@ -145,7 +145,7 @@ describe("getSupportedThinkingLevels", () => {
 						},
 					],
 				},
-				contextWindow: 272000,
+				contextWindow: modelId === "gpt-6.1-sol" && provider === "openai-codex" ? 500000 : 272000,
 				maxTokens: 128000,
 				compat: {
 					supportsAdditionalTools: true,
@@ -175,10 +175,8 @@ describe("getSupportedThinkingLevels", () => {
 		expect(getSupportedThinkingLevels(model!)).toEqual(["off", "low", "high", "max"]);
 	});
 
-	it("includes low/high/max plus off for DeepSeek V4 Flash on opencode-go", () => {
-		const model = getModel("opencode-go", "deepseek-v4-flash");
-		expect(model).toBeDefined();
-		expect(getSupportedThinkingLevels(model!)).toEqual(["off", "low", "high", "max"]);
+	it("does not expose the withdrawn DeepSeek V4 Flash entry on opencode-go", () => {
+		expect(getModels("opencode-go").map(({ id }) => id)).not.toContain("deepseek-v4-flash");
 	});
 
 	it("preserves low/high/max metadata for DeepSeek V4.1 Flash on OpenRouter", () => {

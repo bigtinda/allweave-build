@@ -1,18 +1,53 @@
 export function BuildMark({ className }: { className?: string }) {
 	return (
-		<svg className={className} viewBox="0 0 240 120" fill="none" aria-hidden="true">
-			<path
-				d="M108 45C80 14 59 13 43 19C6 33 6 87 43 101C77 114 99 77 132 45C160 14 181 13 197 19C234 33 234 87 197 101C163 114 141 77 108 45"
-				stroke="currentColor"
-				strokeWidth="8"
-			/>
-			<path
-				d="M60 42L42 60L60 78M180 42L198 60L180 78"
-				stroke="currentColor"
-				strokeWidth="7"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
+		<svg className={className} viewBox="0 0 120 108" fill="currentColor" aria-hidden="true">
+			<path d="M6 40 32 6H79L54 32H31L25 40ZM6 100 32 66H79L54 92H31L25 100Z" />
+			<circle cx="84.00" cy="8.00" r="2.55" />
+			<circle cx="91.00" cy="8.00" r="2.55" />
+			<circle cx="82.20" cy="13.00" r="2.55" />
+			<circle cx="89.20" cy="13.00" r="2.55" />
+			<circle cx="96.20" cy="13.00" r="2.55" />
+			<circle cx="80.40" cy="18.00" r="2.55" />
+			<circle cx="87.40" cy="18.00" r="2.55" />
+			<circle cx="94.40" cy="18.00" r="2.55" />
+			<circle cx="101.40" cy="18.00" r="2.55" />
+			<circle cx="78.60" cy="23.00" r="2.55" />
+			<circle cx="85.60" cy="23.00" r="2.55" />
+			<circle cx="92.60" cy="23.00" r="2.55" />
+			<circle cx="99.60" cy="23.00" r="2.55" />
+			<circle cx="106.60" cy="23.00" r="2.55" />
+			<circle cx="76.80" cy="28.00" r="2.55" />
+			<circle cx="83.80" cy="28.00" r="2.55" />
+			<circle cx="90.80" cy="28.00" r="2.55" />
+			<circle cx="97.80" cy="28.00" r="2.55" />
+			<circle cx="75.00" cy="33.00" r="2.55" />
+			<circle cx="82.00" cy="33.00" r="2.55" />
+			<circle cx="89.00" cy="33.00" r="2.55" />
+			<circle cx="73.20" cy="38.00" r="2.55" />
+			<circle cx="80.20" cy="38.00" r="2.55" />
+			<circle cx="84.00" cy="68.00" r="2.55" />
+			<circle cx="91.00" cy="68.00" r="2.55" />
+			<circle cx="82.20" cy="73.00" r="2.55" />
+			<circle cx="89.20" cy="73.00" r="2.55" />
+			<circle cx="96.20" cy="73.00" r="2.55" />
+			<circle cx="80.40" cy="78.00" r="2.55" />
+			<circle cx="87.40" cy="78.00" r="2.55" />
+			<circle cx="94.40" cy="78.00" r="2.55" />
+			<circle cx="101.40" cy="78.00" r="2.55" />
+			<circle cx="78.60" cy="83.00" r="2.55" />
+			<circle cx="85.60" cy="83.00" r="2.55" />
+			<circle cx="92.60" cy="83.00" r="2.55" />
+			<circle cx="99.60" cy="83.00" r="2.55" />
+			<circle cx="106.60" cy="83.00" r="2.55" />
+			<circle cx="76.80" cy="88.00" r="2.55" />
+			<circle cx="83.80" cy="88.00" r="2.55" />
+			<circle cx="90.80" cy="88.00" r="2.55" />
+			<circle cx="97.80" cy="88.00" r="2.55" />
+			<circle cx="75.00" cy="93.00" r="2.55" />
+			<circle cx="82.00" cy="93.00" r="2.55" />
+			<circle cx="89.00" cy="93.00" r="2.55" />
+			<circle cx="73.20" cy="98.00" r="2.55" />
+			<circle cx="80.20" cy="98.00" r="2.55" />
 		</svg>
 	);
 }

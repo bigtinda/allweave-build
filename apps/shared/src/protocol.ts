@@ -1,10 +1,13 @@
 export type AgentStatus = "idle" | "running" | "approval" | "error";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AccessMode = "plan" | "ask" | "auto" | "full";
+export type SessionPurpose = "plugin-development";
 export interface Workspace {
 	id: string;
 	name: string;
 	path: string;
+	remote?: { host: string };
+	kind?: "plugin-development";
 }
 export interface LocalFolder {
 	name: string;
@@ -170,11 +173,34 @@ export interface SessionSummary {
 	id: string;
 	workspaceId: string;
 	title: string;
+	purpose?: SessionPurpose;
+	archivedAt?: string;
 	status: AgentStatus;
 	updatedAt: string;
 	model?: ModelOption;
 	thinkingLevel: ThinkingLevel;
 	accessMode: AccessMode;
+}
+export interface SessionUsageRecord {
+	id: string;
+	workspaceId: string;
+	title: string;
+	updatedAt: string;
+	model?: ModelOption;
+	tokens?: SessionDetail["tokens"];
+	lastRunUsage?: RunUsage;
+	runs: RunUsage[];
+}
+export interface RunUsage {
+	startedAt: string;
+	durationMs: number;
+	model?: { provider: string; id: string };
+	outcome: "completed" | "aborted" | "error";
+	status: "available" | "unavailable";
+	tokens?: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number; cost?: number };
+	compactions?: number;
+	toolResultCharacters: number;
+	toolResults: Array<{ name: string; characters: number }>;
 }
 export interface SessionDetail extends SessionSummary {
 	messages: ChatMessage[];
@@ -184,7 +210,11 @@ export interface SessionDetail extends SessionSummary {
 	sequence: number;
 	tokens?: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number; cost?: number };
 	error?: string;
+	/** A failed projection left the workbench state behind; rebuild it from the transcript. */
+	recoveryRequired?: boolean;
+	lastRunUsage?: RunUsage;
 }
+export type UsageSummary = SessionUsageRecord[];
 export interface FileEntry {
 	name: string;
 	path: string;
@@ -196,6 +226,7 @@ export interface FileContent {
 	path: string;
 	content: string;
 	revision: string;
+	truncated?: boolean;
 }
 export interface SkillInfo {
 	name: string;
@@ -222,6 +253,7 @@ export interface PackageImportResult extends SkillImportResult {
 export type EventType =
 	| "session.started"
 	| "session.updated"
+	| "session.recovered"
 	| "message.delta"
 	| "message.completed"
 	| "conversation.rewound"
@@ -231,7 +263,8 @@ export type EventType =
 	| "tool.completed"
 	| "agent.status"
 	| "agent.error"
-	| "approval.requested";
+	| "approval.requested"
+	| "approval.expired";
 export interface SessionEvent {
 	type: EventType;
 	sessionId: string;
@@ -246,6 +279,9 @@ export interface SessionEvent {
 	approvals: Approval[];
 	tokens?: SessionDetail["tokens"];
 	error?: string;
+	/** Set by a recovery event; omitted events keep the current value. */
+	recoveryRequired?: boolean;
+	lastRunUsage?: RunUsage;
 }
 export type SocketMessage = { type: "session.snapshot"; session: SessionDetail } | SessionEvent;
 
@@ -270,6 +306,8 @@ export function applyEvent(session: SessionDetail, event: SessionEvent): Session
 		approvals: event.approvals,
 		tokens: event.tokens,
 		error: event.error,
+		recoveryRequired: event.recoveryRequired ?? session.recoveryRequired,
+		lastRunUsage: event.lastRunUsage ?? session.lastRunUsage,
 		activity: [
 			...session.activity,
 			{

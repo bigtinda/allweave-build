@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, type PlatformPath, posix, win32 } from "node:path";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import type { GitChange, GitChanges, GitDiff } from "../../shared/src/protocol.ts";
 import { HttpError, workspacePath } from "./security.ts";
@@ -27,15 +27,37 @@ function git(root: string, args: string[]): Promise<string> {
 	});
 }
 
-export async function gitRoot(workspace: string): Promise<string> {
+export interface GitOperations {
+	run: (root: string, args: string[]) => Promise<string>;
+	canonicalPath: (path: string) => Promise<string>;
+	checkedPath: (root: string, path: string, allowMissing?: boolean) => Promise<string>;
+	readFile: (path: string) => Promise<Buffer>;
+	stat: (path: string) => Promise<{ size: number }>;
+	paths: PlatformPath;
+	lockPath: (root: string) => string;
+}
+
+export const localGitOperations: GitOperations = {
+	run: git,
+	canonicalPath: realpath,
+	checkedPath: workspacePath,
+	readFile,
+	stat,
+	paths: process.platform === "win32" ? win32 : posix,
+	lockPath: (root) => join(root, ".git-console-index"),
+};
+
+export async function gitRoot(workspace: string, operations = localGitOperations): Promise<string> {
+	const { run: git, canonicalPath: realpath } = operations;
 	const canonical = await realpath(workspace);
 	let root: string;
 	try {
 		root = await realpath((await git(canonical, ["rev-parse", "--show-toplevel"])).trim());
 	} catch {
-		throw new HttpError(400, "该项目不是 Git 仓库，或本机尚未安装 Git。");
+		throw new HttpError(400, "该项目不是 Git 仓库，或项目所在主机尚未安装 Git。");
 	}
-	if (relative(canonical, root) !== "") throw new HttpError(403, "请将 Git 仓库根目录添加为项目，再管理其改动。");
+	if (operations.paths.relative(canonical, root) !== "")
+		throw new HttpError(403, "请将 Git 仓库根目录添加为项目，再管理其改动。");
 	return root;
 }
 
@@ -45,8 +67,9 @@ export interface GitSnapshot {
 	files: Map<string, string>;
 }
 
-export async function captureGitSnapshot(workspace: string): Promise<GitSnapshot> {
-	const root = await gitRoot(workspace);
+export async function captureGitSnapshot(workspace: string, operations = localGitOperations): Promise<GitSnapshot> {
+	const { run: git, checkedPath: workspacePath, readFile } = operations;
+	const root = await gitRoot(workspace, operations);
 	const [status, head] = await Promise.all([
 		git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"]),
 		git(root, ["rev-parse", "--verify", "HEAD"]).catch(() => ""),
@@ -57,7 +80,8 @@ export async function captureGitSnapshot(workspace: string): Promise<GitSnapshot
 		try {
 			const target = await workspacePath(root, path, true);
 			const content = await readFile(target).catch((error: unknown) => {
-				if (error instanceof Error && "code" in error && error.code === "ENOENT") return Buffer.from("<deleted>");
+				if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "not_found"))
+					return Buffer.from("<deleted>");
 				throw error;
 			});
 			const digest = createHash("sha256").update(content).digest("hex");
@@ -69,7 +93,12 @@ export async function captureGitSnapshot(workspace: string): Promise<GitSnapshot
 	return { root, head: head.trim(), files };
 }
 
-export async function changedGitFiles(before: GitSnapshot, after: GitSnapshot): Promise<string[]> {
+export async function changedGitFiles(
+	before: GitSnapshot,
+	after: GitSnapshot,
+	operations = localGitOperations,
+): Promise<string[]> {
+	const { run: git, checkedPath: workspacePath } = operations;
 	const changed = new Set<string>();
 	for (const path of new Set([...before.files.keys(), ...after.files.keys()])) {
 		if (before.files.get(path) !== after.files.get(path)) changed.add(path);
@@ -95,7 +124,8 @@ export async function changedGitFiles(before: GitSnapshot, after: GitSnapshot): 
 	return [...changed].sort((left, right) => left.localeCompare(right));
 }
 
-export async function gitChanges(root: string): Promise<GitChanges> {
+export async function gitChanges(root: string, operations = localGitOperations): Promise<GitChanges> {
+	const { run: git, checkedPath: workspacePath } = operations;
 	const [status, branch, head, index, branches] = await Promise.all([
 		git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"]),
 		git(root, ["branch", "--show-current"]),
@@ -135,9 +165,11 @@ export async function changeGitBranch(
 	name: string,
 	revision: string,
 	base?: string,
+	operations = localGitOperations,
 ): Promise<GitChanges> {
-	return withFileMutationQueue(join(root, ".git-console-index"), async () => {
-		const state = await gitChanges(root);
+	const { run: git } = operations;
+	return withFileMutationQueue(operations.lockPath(root), async () => {
+		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "仓库状态已变化，请刷新后重试。");
 		await git(root, ["check-ref-format", "--branch", name]);
 		if (action === "create") {
@@ -155,13 +187,19 @@ export async function changeGitBranch(
 				await git(root, ["branch", "--delete", name]);
 			}
 		}
-		return gitChanges(root);
+		return gitChanges(root, operations);
 	});
 }
 
-export async function gitDiff(root: string, path: string, staged: boolean): Promise<GitDiff> {
+export async function gitDiff(
+	root: string,
+	path: string,
+	staged: boolean,
+	operations = localGitOperations,
+): Promise<GitDiff> {
+	const { run: git, checkedPath: workspacePath, stat, readFile } = operations;
 	const target = await workspacePath(root, path, true);
-	const state = await gitChanges(root);
+	const state = await gitChanges(root, operations);
 	const file = state.files.find((item) => item.path === path);
 	if (!file) throw new HttpError(409, "文件改动已变化，请刷新列表。");
 	if (file.index === "?" && !staged) {
@@ -198,10 +236,12 @@ export async function changeGitIndex(
 	path: string,
 	staged: boolean,
 	revision: string,
+	operations = localGitOperations,
 ): Promise<GitChanges> {
-	return withFileMutationQueue(join(root, ".git-console-index"), async () => {
+	const { run: git, checkedPath: workspacePath } = operations;
+	return withFileMutationQueue(operations.lockPath(root), async () => {
 		await workspacePath(root, path, true);
-		const state = await gitChanges(root);
+		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "暂存区已被其他操作修改，请刷新后重试。");
 		const file = state.files.find((item) => item.path === path);
 		if (!file || file.conflict) throw new HttpError(409, "文件已变化或存在冲突，请先处理并刷新。");
@@ -213,13 +253,19 @@ export async function changeGitIndex(
 					? ["restore", "--staged", "--", path]
 					: ["update-index", "--force-remove", "--", path],
 		);
-		return gitChanges(root);
+		return gitChanges(root, operations);
 	});
 }
 
-export async function commitGit(root: string, message: string, revision: string): Promise<{ output: string }> {
-	return withFileMutationQueue(join(root, ".git-console-index"), async () => {
-		const state = await gitChanges(root);
+export async function commitGit(
+	root: string,
+	message: string,
+	revision: string,
+	operations = localGitOperations,
+): Promise<{ output: string }> {
+	const { run: git, checkedPath: workspacePath, stat } = operations;
+	return withFileMutationQueue(operations.lockPath(root), async () => {
+		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "暂存区或分支已变化，请重新检查提交文件。");
 		if (state.files.some((file) => file.conflict)) throw new HttpError(409, "请先解决合并冲突。");
 		const staged = state.files.filter((file) => file.index !== " " && file.index !== "?");
@@ -231,7 +277,7 @@ export async function commitGit(root: string, message: string, revision: string)
 		for (const path of paths) await workspacePath(root, path, true);
 		for (const name of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"]) {
 			const path = (await git(root, ["rev-parse", "--git-path", name])).trim();
-			if (await stat(resolve(root, path)).catch(() => undefined))
+			if (await stat(operations.paths.resolve(root, path)).catch(() => undefined))
 				throw new HttpError(409, "仓库正在合并、变基或拣选提交，请先在终端完成。");
 		}
 		return { output: (await git(root, ["commit", "-m", message])).trim() };

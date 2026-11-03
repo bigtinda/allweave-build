@@ -265,7 +265,12 @@ export class Connection {
 		const [program, ...args] = command;
 		if (program === undefined) throw new RemoteError({ code: "spawn_error", message: "No daemon command" });
 		const token = randomBytes(16).toString("hex");
-		const child = spawn(program, [...args, "serve", "--token", token], { stdio: ["pipe", "pipe", "pipe"] });
+		const script = /\.(?:mjs|cjs|js)$/u.test(program);
+		const child = spawn(
+			script ? process.execPath : program,
+			[...(script ? [program] : []), ...args, "serve", "--token", token],
+			{ stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+		);
 		const session = new Session(++this.#sessions, child, token);
 		this.#session = session;
 		let startTimer: ReturnType<typeof setTimeout> | undefined;

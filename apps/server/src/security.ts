@@ -21,6 +21,31 @@ export function contained(root: string, target: string): boolean {
 	return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));
 }
 
+/**
+ * Private configuration paths the console never reads.
+ * The list is shared with the remote host implementation, so the policy has a
+ * single source.
+ */
+export const privatePathNames: readonly string[] = [".git", ".pi", ".env", ".pi-console"];
+
+/** Additional names refused on remote hosts, where the project home is shared. */
+export const remotePrivatePathNames: readonly string[] = [
+	".ssh",
+	"node_modules",
+	"system volume information",
+	"$recycle.bin",
+];
+
+/** Preserve the distinct local and SSH policies behind one predicate. */
+export function isPrivatePathName(name: string, scope: "local" | "remote", windows: boolean): boolean {
+	const normalized = windows ? name.replace(/[ .]+$/u, "").toLowerCase() : name;
+	return (
+		privatePathNames.includes(normalized) ||
+		normalized.startsWith(".env.") ||
+		(scope === "remote" && remotePrivatePathNames.includes(normalized))
+	);
+}
+
 // Reject links/junctions as well as lexical traversal. Resolve missing parents for writes.
 // Trusted local processes must not swap directory links during an operation; this is not a sandbox.
 export async function workspacePath(root: string, input: string, allowMissing = false): Promise<string> {
@@ -46,7 +71,7 @@ export async function workspacePath(root: string, input: string, allowMissing = 
 	const parts = relative(canonicalRoot, target)
 		.split(sep)
 		.map((part) => (process.platform === "win32" ? part.replace(/[ .]+$/, "").toLowerCase() : part));
-	if (parts.some((part) => [".git", ".pi", ".env", ".pi-console"].includes(part) || part.startsWith(".env."))) {
+	if (parts.some((part) => isPrivatePathName(part, "local", process.platform === "win32"))) {
 		throw new HttpError(403, "Private configuration paths cannot be accessed through the console");
 	}
 	return target;

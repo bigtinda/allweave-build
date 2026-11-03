@@ -2,6 +2,7 @@ import { type ChildProcess, fork } from "node:child_process";
 import { once } from "node:events";
 import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { Server as RuntimeServer } from "../../server/src/server.ts";
@@ -16,7 +17,7 @@ const rawSockets = new Set<Socket>();
 const children = new Set<ChildProcess>();
 
 async function makeDirectory(): Promise<string> {
-	const directory = await mkdtemp(join("/tmp", "pc-"));
+	const directory = await mkdtemp(join(tmpdir(), "pc-"));
 	tempDirectories.add(directory);
 	return directory;
 }
@@ -90,7 +91,17 @@ afterEach(async () => {
 	tempDirectories.clear();
 });
 
-describe("discoverUnixServers", () => {
+test.runIf(process.platform === "win32")(
+	"rejects Unix discovery on Windows before accessing the filesystem",
+	async () => {
+		await expect(discoverUnixServers({ directory: join(tmpdir(), "missing-unix-server") })).rejects.toThrow(
+			"Unix transport is not supported on Windows",
+		);
+	},
+);
+
+// The public Unix transport explicitly rejects Windows; these exercise POSIX socket files and inodes.
+describe.skipIf(process.platform === "win32")("discoverUnixServers", () => {
 	test("returns no routes when the server directory is missing", async () => {
 		const directory = join(await makeDirectory(), "missing");
 		await expect(discoverUnixServers({ directory })).resolves.toEqual([]);

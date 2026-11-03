@@ -100,7 +100,7 @@ describe("SessionManager.inMemory with preloaded entries", () => {
 
 		expect(session.getSessionId()).toBe("restored-session");
 		expect(session.getHeader()!.id).toBe("restored-session");
-		expect(session.getHeader()!.cwd).toBe("/project");
+		expect(session.getHeader()!.cwd).toBe(resolve("/project"));
 	});
 
 	it("generates a session id when the options carry none", () => {
@@ -180,3 +180,5 @@ describe("SessionManager.inMemory with preloaded entries", () => {
 		expect(restored.message.role).toBe("hookMessage");
 	});
 });
+
+import { resolve } from "node:path";

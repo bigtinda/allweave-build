@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxThinking } from "@earendil-works/pi-ai/compat";
 import { applyEvent, type SessionDetail, type SessionEvent } from "../../shared/src/protocol.ts";
-import { adaptSdkEvent } from "../src/adapter.ts";
+import { adaptSdkEvent } from "../src/sessions/pi-events.ts";
 
 test("SDK adapter retains streamed message identity, real thinking and tool failures", () => {
 	const state: SessionDetail = {

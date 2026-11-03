@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "check": "tsc --noEmit",
+    "test": "node --import ../../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.ts",
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {

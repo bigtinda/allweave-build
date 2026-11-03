@@ -41,6 +41,7 @@ export function GitPanel({
 	const [confirmation, setConfirmation] = useState<GitChanges>();
 	const [selection, setSelection] = useState<{ path: string; staged: boolean }>();
 	const [wide, setWide] = useState(false);
+	const [limits, setLimits] = useState({ staged: 5, unstaged: 5 });
 	const [branchAction, setBranchAction] = useState<"create" | "switch" | "delete">();
 	const [branchName, setBranchName] = useState("");
 	const [baseBranch, setBaseBranch] = useState("");
@@ -140,7 +141,9 @@ export function GitPanel({
 					刷新
 				</Button>
 			</div>
-			{status.isLoading && <LinearProgress aria-label="加载 Git 状态" />}
+			{(status.isFetching || pending) && (
+				<LinearProgress aria-label={pending ? "正在执行 Git 操作" : "加载 Git 状态"} />
+			)}
 			{status.error && <Alert severity="info">{status.error.message}</Alert>}
 			{!confirmation && !branchAction && error && (
 				<Alert severity="error" onClose={() => setError("")}>
@@ -196,7 +199,7 @@ export function GitPanel({
 							{!group.files.length && (
 								<p className="muted">{group.staged ? "还没有暂存文件。" : "没有未暂存改动。"}</p>
 							)}
-							{group.files.map((file) => (
+							{group.files.slice(0, group.staged ? limits.staged : limits.unstaged).map((file) => (
 								<div key={file.path} className="git-file-row">
 									<button
 										type="button"
@@ -224,6 +227,47 @@ export function GitPanel({
 									</Button>
 								</div>
 							))}
+							{group.files.length > 5 && (
+								<div>
+									{group.files.length > (group.staged ? limits.staged : limits.unstaged) && (
+										<>
+											<Button
+												size="small"
+												onClick={() =>
+													setLimits((current) => ({
+														...current,
+														[group.staged ? "staged" : "unstaged"]:
+															(group.staged ? current.staged : current.unstaged) + 10,
+													}))
+												}
+											>
+												显示更多
+											</Button>
+											<Button
+												size="small"
+												onClick={() =>
+													setLimits((current) => ({
+														...current,
+														[group.staged ? "staged" : "unstaged"]: group.files.length,
+													}))
+												}
+											>
+												全部展开
+											</Button>
+										</>
+									)}
+									{(group.staged ? limits.staged : limits.unstaged) > 5 && (
+										<Button
+											size="small"
+											onClick={() =>
+												setLimits((current) => ({ ...current, [group.staged ? "staged" : "unstaged"]: 5 }))
+											}
+										>
+											收起
+										</Button>
+									)}
+								</div>
+							)}
 						</section>
 					))}
 					{!status.data.files.length && <Alert severity="success">工作区干净，没有待提交改动。</Alert>}

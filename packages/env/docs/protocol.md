@@ -51,11 +51,9 @@ between chunks with `aborted`. `watch` stops and finishes with `{}`. Other opera
 
 ## Scheduling
 
-File operations run on a fixed pool of worker threads; `exec` and `watch` run on their own threads. Chunk writes to one
-handle run in arrival order. Results, errors, pings and `watch` events are sent before queued command output, and
-results with payloads above 64 KiB queue behind output too, so a slow link delays bulk data, not replies. Output of a
-command without an output window waits while more than 4 MiB of output is unsent, which slows the command as a full
-pipe would.
+File operations use Node.js asynchronous filesystem APIs. Operations on one handle run in arrival order.
+Commands and watchers run concurrently; outgoing frames are serialized through the stdout stream.
+Commands with an output window coalesce their output and report exact omitted-byte and newline counts.
 
 ## Liveness
 
@@ -67,7 +65,7 @@ handles belong to the daemon that opened them, so requests on them fail instead 
 ## Operations
 
 `hello { protocol }` → `{ protocol, version, os, arch, home, tmpdir, cwd, driveCwds, pid }`. The first request.
-`version` is the npm package version the daemon shipped with; `os` and `arch` are Rust's `std::env::consts` values;
+`version` is the npm package version the daemon shipped with; `os` and `arch` follow Node.js values (`win32` is reported as `windows`);
 `tmpdir` follows the remote Node's `os.tmpdir()` rules; `cwd` and `driveCwds` (Windows' `=C:` variables) are what
 Node's `path.resolve` falls back to for drive-relative paths.
 

@@ -102,7 +102,7 @@ export const SpringTransition = forwardRef<HTMLElement, SpringTransitionProps>(f
 								? `translate(0, ${offset}px)`
 								: "";
 			node.style.opacity = String(value);
-			node.style.transform = `${translation} scale(${0.985 + value * 0.015})`.trim();
+			node.style.transform = direction ? translation : `scale(${0.985 + value * 0.015})`;
 			node.style.pointerEvents = isIn ? "" : "none";
 		};
 		const finish = () => {
@@ -113,7 +113,8 @@ export const SpringTransition = forwardRef<HTMLElement, SpringTransitionProps>(f
 				if (unmountOnExit) setMounted(false);
 			}
 		};
-		const reduceMotion = () => spring.current.animate(target, preset, paint, finish, motionQuery?.matches ?? false);
+		const reduceMotion = () =>
+			spring.current.animate(target, preset, paint, finish, motionQuery?.matches ?? false, 0.01, 0.1);
 		motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 		reduceMotion();
 		motionQuery.addEventListener("change", reduceMotion);
@@ -137,7 +138,7 @@ export const SpringTransition = forwardRef<HTMLElement, SpringTransitionProps>(f
 					: direction === "down"
 						? `translate(0, ${offset}px)`
 						: "";
-	const currentTransform = `${translation} scale(${0.985 + currentPosition * 0.015})`.trim();
+	const currentTransform = direction ? translation : `scale(${0.985 + currentPosition * 0.015})`;
 	return cloneElement(styledChild, {
 		ref: setNode,
 		inert: !isIn,

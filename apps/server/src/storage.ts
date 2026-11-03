@@ -62,22 +62,23 @@ export class StorageManager {
 			"console.sqlite-journal",
 		].map((name) => join(this.dataDirectory, name));
 		const currentSessions = new Map(this.agents.list().map((session) => [session.id, session]));
+		const sessionFiles = this.store.sessionFiles();
 		const sessions = await Promise.all(
-			this.store.sessions().map(async (record): Promise<StoredSession> => {
+			[...currentSessions.values()].map(async (current): Promise<StoredSession> => {
 				let bytes = 0;
-				if (record.file) {
-					const file = resolve(record.file);
+				const transcript = sessionFiles.get(current.id);
+				if (transcript) {
+					const file = resolve(transcript);
 					if (inside(resolve(sessionsDirectory), file)) {
 						const fileStat = await lstat(file).catch(() => undefined);
 						if (fileStat?.isFile() && !fileStat.isSymbolicLink()) bytes = fileStat.size;
 					}
 				}
-				const current = currentSessions.get(record.detail.id);
 				return {
-					id: record.detail.id,
-					title: record.detail.title,
-					status: current?.status ?? "idle",
-					updatedAt: record.detail.updatedAt,
+					id: current.id,
+					title: current.title,
+					status: current.status,
+					updatedAt: current.updatedAt,
 					bytes,
 				};
 			}),

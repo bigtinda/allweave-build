@@ -8,7 +8,7 @@
 
 ```powershell
 npm install --ignore-scripts
-npm run hydrate:model-data
+node --use-env-proxy scripts/hydrate-pinned-model-data.mjs
 Copy-Item apps/server/.env.example .env
 ```
 
@@ -47,7 +47,10 @@ apps/server/              Fastify / WebSocket / Zod / SQLite
   src/providers.ts        Pi 原生认证、供应商目录和自定义模型配置
   src/agent.ts            会话生命周期、事件适配、恢复和工具确认
   src/browser.ts          共用浏览器、页面操作与 Agent 工具
-  src/app.ts              REST / WebSocket 路由和访问控制
+  src/bootstrap/          唯一应用组合根、访问控制和生命周期
+  src/transport/          按功能拆分的 REST / WebSocket 入口
+  src/sessions/           会话编排、Pi 适配、授权、事件和每轮用量
+  src/persistence/        轻量投影与按需 transcript 恢复
 apps/shared/src/          前后端共享的 TypeScript 协议
 ```
 
@@ -55,6 +58,6 @@ apps/shared/src/          前后端共享的 TypeScript 协议
 
 ## 安全边界
 
-服务端使用随机或 `.env` 指定的访问令牌，浏览器换取 HttpOnly Cookie；API 与 WebSocket 校验 Host 和 Origin。文件工具检查授权根目录、真实路径、符号链接和私有配置路径。命令、写文件和自定义工具都要逐项确认，等待五分钟后自动拒绝。
+API 与 WebSocket 校验本机 Host、Origin 和同源请求；当前没有通用访问令牌或 Cookie 登录层。文件工具检查授权根目录、真实路径、符号链接和私有配置路径。本地与远程共用策略入口，保留各自已有拒绝集合；远程额外拒绝 `.ssh`、`node_modules` 等目录。默认 ask 模式下，命令、写文件和自定义工具逐项确认，等待五分钟后自动拒绝。
 
 Pi SDK、获准的命令和可信扩展以当前 Windows 用户权限执行。工具批准不是 OS 沙箱；此应用面向本机可信项目，不应绑定公网或用于多用户隔离。

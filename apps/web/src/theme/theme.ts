@@ -22,7 +22,7 @@ export function consoleTheme(
 			divider: colors.line,
 			error: { main: dark ? "#FFB4AB" : "#B3261E" },
 		},
-		shape: { borderRadius: 8 },
+		shape: { borderRadius: 6 },
 		spacing: 8,
 		transitions: {
 			easing: {
@@ -43,20 +43,38 @@ export function consoleTheme(
 		},
 		typography: {
 			fontFamily: fontPresets.find((font) => font.id === fontId)?.family ?? fontPresets[0].family,
-			body1: { fontSize: "0.9375rem", lineHeight: 1.6 },
-			body2: { fontSize: "0.875rem", lineHeight: 1.55 },
+			body1: { fontSize: "0.875rem", lineHeight: 1.6 },
+			body2: { fontSize: "0.875rem", lineHeight: 1.6 },
 			h4: { fontSize: "2.25rem", fontWeight: 600, letterSpacing: "-0.04em" },
 			h5: { fontWeight: 600, letterSpacing: "-0.025em" },
-			button: { fontSize: "0.875rem", textTransform: "none", fontWeight: 600 },
+			button: { fontSize: "0.8125rem", textTransform: "none", fontWeight: 500 },
 		},
 		components: {
+			MuiCircularProgress: {
+				defaultProps: { disableShrink: true, size: 20, thickness: 4, "aria-label": "正在加载" },
+				styleOverrides: { root: { animation: reducedMotion ? "none" : undefined } },
+			},
+			MuiButtonBase: { defaultProps: { disableRipple: true } },
 			MuiButton: {
 				defaultProps: { disableElevation: true },
-				styleOverrides: { root: { borderRadius: 6, paddingInline: 16, minHeight: 36 } },
+				styleOverrides: {
+					root: { borderRadius: 6, paddingInline: 12, minHeight: 34, lineHeight: 1.4 },
+					outlined: { borderColor: colors.outline },
+				},
 			},
-			MuiIconButton: { styleOverrides: { root: { padding: 10 } } },
+			MuiIconButton: { styleOverrides: { root: { padding: 8, borderRadius: 6, color: colors.muted } } },
 			MuiTextField: { defaultProps: { size: "small" } },
-			MuiPaper: { defaultProps: { elevation: 0 } },
+			MuiOutlinedInput: {
+				styleOverrides: {
+					root: { borderRadius: 6, fontSize: 13, background: colors.surface },
+					input: { padding: "9px 12px" },
+					notchedOutline: { borderColor: colors.outline },
+				},
+			},
+			MuiPaper: {
+				defaultProps: { elevation: 0 },
+				styleOverrides: { root: { backgroundImage: "none" } },
+			},
 			MuiDrawer: {
 				defaultProps: {
 					slots: { transition: SpringTransition },
@@ -64,8 +82,26 @@ export function consoleTheme(
 				},
 				styleOverrides: { paper: { backgroundImage: "none" } },
 			},
-			MuiAccordion: { defaultProps: { slots: { transition: SpringCollapse } } },
+			MuiAccordion: {
+				defaultProps: { slots: { transition: SpringCollapse }, disableGutters: true },
+				styleOverrides: {
+					root: {
+						background: "transparent",
+						boxShadow: "none",
+						borderBottom: `1px solid ${colors.line}`,
+						"&::before": { display: "none" },
+					},
+				},
+			},
+			MuiAccordionSummary: {
+				styleOverrides: { root: { minHeight: 48, paddingInline: 16 }, content: { marginBlock: 12 } },
+			},
+			MuiTab: {
+				styleOverrides: { root: { textTransform: "none", minHeight: 38, fontSize: 13, fontWeight: 500 } },
+			},
+			MuiMenuItem: { styleOverrides: { root: { minHeight: 34, fontSize: 13, borderRadius: 4 } } },
 			MuiDialog: {
+				styleOverrides: { paper: { borderRadius: 10, border: `1px solid ${colors.line}` } },
 				defaultProps: {
 					slots: { transition: SpringTransition },
 					transitionDuration: motionDuration(motionTokens.duration.normal),
@@ -84,7 +120,7 @@ export function consoleTheme(
 				},
 			},
 			MuiSnackbar: { defaultProps: { slots: { transition: SpringTransition } } },
-			MuiChip: { styleOverrides: { root: { borderRadius: 8 } } },
+			MuiChip: { styleOverrides: { root: { borderRadius: 4, fontSize: 12, height: 24 } } },
 		},
 	});
 }

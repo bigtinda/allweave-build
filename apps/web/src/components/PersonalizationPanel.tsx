@@ -1,4 +1,4 @@
-import { Alert, Button, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import { Alert, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { ImagePlus, Palette, Type, X } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useRef, useState } from "react";
@@ -68,7 +68,7 @@ export function PersonalizationPanel() {
 						/>
 						<Button
 							variant="contained"
-							startIcon={<ImagePlus size={16} />}
+							startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : <ImagePlus size={16} />}
 							disabled={uploading}
 							onClick={() => fileInput.current?.click()}
 						>
@@ -149,7 +149,7 @@ export function PersonalizationPanel() {
 							))}
 						</Select>
 					</FormControl>
-					<div className="font-sample">AllWeave Build · 构序 · 一念成潮，万象成序。</div>
+					<div className="font-sample">万象成序 AllWeave · 构序 Build · 一念成潮，万象成序。</div>
 				</div>
 			</div>
 			{error && (

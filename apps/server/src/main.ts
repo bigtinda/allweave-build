@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { configuredRoots, createApp } from "./app.ts";
+import { configuredRoots, createApp } from "./bootstrap/create-app.ts";
 
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const port = Number(process.env.PI_CONSOLE_PORT ?? 8787);

@@ -6,6 +6,7 @@ import type { SkillImportResult, SkillInfo } from "../../../shared/src/protocol.
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
 import { encodeResourceImportFiles } from "../services/resource-import.ts";
+import { LoadingState } from "./LoadingState.tsx";
 
 const pageSize = 8;
 
@@ -133,7 +134,7 @@ export function SkillLibraryPanel({ skills, loading }: { skills: SkillInfo[]; lo
 				<ImportControls />
 			</div>
 			{loading ? (
-				<CircularProgress size={22} />
+				<LoadingState label="正在读取已加载技能…" />
 			) : skills.length ? (
 				<>
 					<div ref={skillGrid} className="skill-card-grid">
@@ -177,7 +178,7 @@ export function LoadedExtensionsPanel({ extensions, loading }: { extensions: str
 				</div>
 			</div>
 			{loading ? (
-				<CircularProgress size={22} />
+				<LoadingState label="正在读取已加载插件入口…" />
 			) : extensions.length ? (
 				<>
 					<div ref={extensionGrid} className="loaded-plugin-grid">

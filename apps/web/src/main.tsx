@@ -7,6 +7,7 @@ import "highlight.js/styles/github.css";
 import "./styles.css";
 import "./brand.css";
 import "./workbench.css";
+import "./product.css";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 const root = document.getElementById("root");

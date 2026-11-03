@@ -3,7 +3,7 @@
 Remote execution environments for [Pi Durable](../durable): an agent's tools run on another machine, usually over SSH,
 while the Durable worker, its storage and credentials stay local.
 
-- `pi-env` (`daemon/`): a small Rust program that runs on the remote machine. It speaks a framed protocol on stdin and
+- `pi-env` (`src/daemon.ts`): a bundled TypeScript program that runs on the remote machine. It speaks a framed protocol on stdin and
   stdout ([docs/protocol.md](docs/protocol.md)) and performs file operations and commands there.
 - `RemoteExecutionEnv`: a Durable `ExecutionEnv` that talks to the daemon through a `Connection`. Its results match
   `NodeExecutionEnv` running on the remote machine; only error messages may differ
@@ -28,7 +28,7 @@ const lazy = sshConnection(target);
 const lazyEnv = new RemoteExecutionEnv({ connection: lazy.connection, id: "pi-env:gpu", cwd: "/home/me/project" });
 ```
 
-The package ships the daemon for every supported remote system in `bin/`. `ssh` runs with `BatchMode`, strict host-key
+The package ships one cross-platform daemon in `bin/pi-env.mjs`. Remote hosts require Node.js 22.19 or newer. `ssh` runs with `BatchMode`, strict host-key
 checking against the application's own known-hosts file under a fixed alias, no forwarding of any kind, no shared
 connections or configured commands, and without forwarding the local locale. On Windows, detection and deployment go
 through PowerShell, and the daemon starts through the server's default shell (cmd.exe or PowerShell).
@@ -38,7 +38,7 @@ run through Git Bash as `NodeExecutionEnv` runs them there; argv commands run di
 
 ## Development
 
-`npm run build:daemon` builds the daemon with Cargo; the tests talk to `daemon/target/debug/pi-env` over a pipe, or to
-the binary named by `PI_ENV_DAEMON` (CI tests the release builds this way). They run Durable's env conformance suite
+`npm run build:daemon` bundles the TypeScript daemon with esbuild; the tests talk to `bin/pi-env.mjs` over a pipe, or to
+the bundle named by `PI_ENV_DAEMON` (CI tests the release builds this way). They run Durable's env conformance suite
 against `RemoteExecutionEnv` and compare random operation sequences and Durable's tools against `NodeExecutionEnv` on
 the same machine. `test/ssh-external.test.ts` runs the suite over a real SSH server when `PI_ENV_SSH_HOST` is set.

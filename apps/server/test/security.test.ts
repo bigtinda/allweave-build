@@ -3,7 +3,19 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { contained, tokenMatches, workspacePath } from "../src/security.ts";
+import { contained, isPrivatePathName, tokenMatches, workspacePath } from "../src/security.ts";
+
+test("the shared path predicate preserves local and remote access differences", () => {
+	for (const scope of ["local", "remote"] as const) {
+		assert.equal(isPrivatePathName(".ENV. ", scope, true), true);
+		assert.equal(isPrivatePathName(".pi", scope, false), true);
+		assert.equal(isPrivatePathName("src", scope, false), false);
+	}
+	for (const name of [".ssh", "node_modules"]) {
+		assert.equal(isPrivatePathName(name, "local", true), false);
+		assert.equal(isPrivatePathName(name, "remote", true), true);
+	}
+});
 
 test("workspace paths reject traversal, private configuration and directory links", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "pi-console-security-"));

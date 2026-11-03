@@ -1,5 +1,4 @@
 node_modules/
-desktop/src-tauri/target/
 .pi-console/
 dist/
 .artifacts/
@@ -13,6 +12,10 @@ packages/*/dist-firefox/
 packages/ai/src/providers/data/
 packages/ai/src/providers/.model-generation-*/
 *.cpuprofile
+
+# Local-only artifacts (never part of the product)
+backups/
+.agents/
 
 # Environment
 .env
@@ -40,7 +43,6 @@ pi-*.html
 out.html
 packages/coding-agent/binaries/
 packages/env/bin/
-packages/env/daemon/target/
 todo.md
 plans/
 .pi/hf-sessions/

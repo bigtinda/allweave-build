@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { DefaultPackageManager, type ProgressEvent, SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { ProgressEvent } from "@earendil-works/pi-coding-agent";
+import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { packageIdentity } from "../../shared/src/plugins.ts";
 import type { DefaultPluginStatus, PiConfiguredPackage, PiPackageJob } from "../../shared/src/protocol.ts";
 import { HttpError } from "./security.ts";
 
@@ -84,13 +86,6 @@ function sourceFromDeclaration(declaration: unknown): string | undefined {
 	if (typeof declaration === "string") return declaration;
 	if (isObject(declaration) && typeof declaration.source === "string") return declaration.source;
 	return undefined;
-}
-
-function packageIdentity(source: string): string {
-	if (!source.startsWith("npm:")) return source;
-	const name = source.slice(4);
-	const versionAt = name.startsWith("@") ? name.indexOf("@", name.indexOf("/") + 1) : name.indexOf("@");
-	return `npm:${versionAt === -1 ? name : name.slice(0, versionAt)}`;
 }
 
 function isDefaultSource(source: string): boolean {

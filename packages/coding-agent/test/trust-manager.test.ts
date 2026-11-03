@@ -1,8 +1,10 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { join, sep } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../src/core/trust-manager.ts";
+
+vi.mock("node:fs", { spy: true });
 
 describe("ProjectTrustStore", () => {
 	let tempDir: string;
@@ -18,6 +20,7 @@ describe("ProjectTrustStore", () => {
 	});
 
 	afterEach(() => {
+		vi.restoreAllMocks();
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 
@@ -37,8 +40,20 @@ describe("ProjectTrustStore", () => {
 	});
 
 	it("detects trust-requiring project resources", () => {
+		// Parent directories outside this fixture can contain the developer's .agents/skills.
+		vi.mocked(existsSync).mockImplementation((path) => {
+			if (!String(path).startsWith(`${tempDir}${sep}`)) return false;
+			try {
+				statSync(path);
+				return true;
+			} catch {
+				return false;
+			}
+		});
 		const originalHome = process.env.HOME;
+		const originalUserProfile = process.env.USERPROFILE;
 		process.env.HOME = tempDir;
+		process.env.USERPROFILE = tempDir;
 		try {
 			mkdirSync(join(tempDir, ".pi", "agent"), { recursive: true });
 			mkdirSync(join(tempDir, ".agents", "skills"), { recursive: true });
@@ -57,6 +72,8 @@ describe("ProjectTrustStore", () => {
 			mkdirSync(join(cwd, ".agents", "skills"), { recursive: true });
 			expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
 		} finally {
+			if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+			else process.env.USERPROFILE = originalUserProfile;
 			if (originalHome === undefined) {
 				delete process.env.HOME;
 			} else {

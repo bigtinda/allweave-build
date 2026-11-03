@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
@@ -24,7 +24,11 @@ describe("package boundary", () => {
 			for (const match of source.matchAll(IMPORT_SPECIFIER)) {
 				const specifier = match[1]!;
 				if (specifier.startsWith("@earendil-works/pi-")) violations.push(`${path}: ${specifier}`);
-				if (specifier.startsWith(".") && !resolve(dirname(file), specifier).startsWith(`${sourceDirectory}/`)) {
+				const pathFromSource = relative(sourceDirectory, resolve(dirname(file), specifier));
+				if (
+					specifier.startsWith(".") &&
+					(isAbsolute(pathFromSource) || pathFromSource === ".." || pathFromSource.startsWith(`..${sep}`))
+				) {
 					violations.push(`${path}: ${specifier}`);
 				}
 			}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
 type FakeUi = {
@@ -22,10 +22,16 @@ function callHandleCtrlZ(context: HandleCtrlZThis): void {
 }
 
 const interactiveModePrototype = InteractiveMode.prototype as unknown;
+const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
 
 describe("InteractiveMode.handleCtrlZ", () => {
+	beforeEach(() => {
+		// Exercise the POSIX branch independently of the operating system running Vitest.
+		Object.defineProperty(process, "platform", { configurable: true, value: "linux" });
+	});
 	afterEach(() => {
 		vi.restoreAllMocks();
+		if (originalPlatformDescriptor) Object.defineProperty(process, "platform", originalPlatformDescriptor);
 	});
 
 	test("shows a status message and skips suspend on Windows", () => {

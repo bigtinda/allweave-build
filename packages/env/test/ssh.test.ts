@@ -30,7 +30,7 @@ import {
 import { daemon } from "./daemon.ts";
 
 /** The deployed daemon is named by its content. */
-const deployedName = `pi-env-${createHash("sha256").update(readFileSync(daemon)).digest("hex").slice(0, 32)}`;
+const deployedName = `pi-env-${createHash("sha256").update(readFileSync(daemon)).digest("hex").slice(0, 32)}.mjs`;
 const context = BACKGROUND_CONTEXT;
 
 function which(program: string): string | undefined {

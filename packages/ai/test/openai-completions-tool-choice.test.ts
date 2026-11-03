@@ -1237,6 +1237,7 @@ describe("openai-completions tool_choice", () => {
 			const model = getModel(provider, "mimo-v2.5-pro")!;
 			expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
 			expect(model.compat?.thinkingFormat).toBe("deepseek");
+			expect(model.compat?.supportsReasoningEffort).toBe(false);
 			expect(model.compat?.maxTokensField).toBeUndefined();
 			expect(model.compat?.supportsDeveloperRole).toBeUndefined();
 		}
@@ -1309,7 +1310,7 @@ describe("openai-completions tool_choice", () => {
 		const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
 		expect(replayedAssistant).toMatchObject({ role: "assistant", reasoning_content: "" });
 		expect(params.thinking).toEqual({ type: "enabled" });
-		expect(params.reasoning_effort).toBe("high");
+		expect(params).not.toHaveProperty("reasoning_effort");
 	});
 
 	it("normalizes OpenCode Go reasoning deltas to reasoning_content for replay", async () => {

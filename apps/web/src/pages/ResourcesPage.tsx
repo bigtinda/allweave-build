@@ -27,6 +27,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { packageIdentity } from "../../../shared/src/plugins.ts";
 import type {
 	DefaultPluginStatus,
 	KernelInfo,
@@ -45,6 +46,8 @@ import type {
 	ThinkingLevel,
 	Workspace,
 } from "../../../shared/src/protocol.ts";
+import { AppPluginManagerPanel } from "../components/AppPluginManagerPanel.tsx";
+import { LoadingState } from "../components/LoadingState.tsx";
 import { PersonalizationPanel } from "../components/PersonalizationPanel.tsx";
 import { type PluginFeatureId, PluginFeaturePanel } from "../components/PluginFeaturePanel.tsx";
 import { ProviderLogo } from "../components/ProviderLogo.tsx";
@@ -66,13 +69,18 @@ import {
 	RefreshCw,
 	Search,
 	Settings2,
-	Trash2,
 } from "../components/WorkbenchIcons.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { ApiError, api } from "../services/api.ts";
 import { encodeResourceImportFiles } from "../services/resource-import.ts";
 import { usePreferences } from "../stores/preferences.ts";
 import { SpringValue } from "../theme/motion.ts";
+import {
+	ArchiveManagementPanel,
+	BrowserManagementPanel,
+	SubagentManagementPanel,
+	UsageStatisticsPanel,
+} from "./WorkbenchSettingsPanels.tsx";
 
 interface Settings {
 	mode: string;
@@ -85,7 +93,7 @@ interface Settings {
 	kernel?: KernelInfo;
 }
 
-type SettingsSection = "providers" | "plugins" | "storage" | "system";
+type SettingsSection = "providers" | "plugins" | "browser" | "subagents" | "usage" | "archive" | "storage" | "system";
 
 function SettingsNavigation({ section }: { section: SettingsSection }) {
 	const root = useRef<HTMLElement>(null);
@@ -166,6 +174,34 @@ function SettingsNavigation({ section }: { section: SettingsSection }) {
 				插件
 			</NavLink>
 			<NavLink
+				to="/settings/browser"
+				className={section === "browser" ? "active" : ""}
+				aria-current={section === "browser" ? "page" : undefined}
+			>
+				浏览器
+			</NavLink>
+			<NavLink
+				to="/settings/subagents"
+				className={section === "subagents" ? "active" : ""}
+				aria-current={section === "subagents" ? "page" : undefined}
+			>
+				子智能体
+			</NavLink>
+			<NavLink
+				to="/settings/usage"
+				className={section === "usage" ? "active" : ""}
+				aria-current={section === "usage" ? "page" : undefined}
+			>
+				使用统计
+			</NavLink>
+			<NavLink
+				to="/settings/archive"
+				className={section === "archive" ? "active" : ""}
+				aria-current={section === "archive" ? "page" : undefined}
+			>
+				归档管理
+			</NavLink>
+			<NavLink
 				to="/settings/storage"
 				className={section === "storage" ? "active" : ""}
 				aria-current={section === "storage" ? "page" : undefined}
@@ -229,13 +265,6 @@ const packagePageSize = 8;
 interface PackageCardData extends PiConfiguredPackage {
 	configured: boolean;
 	defaultStatus?: DefaultPluginStatus;
-}
-
-function packageIdentity(source: string): string {
-	if (!source.startsWith("npm:")) return source;
-	const name = source.slice(4);
-	const versionAt = name.startsWith("@") ? name.indexOf("@", name.indexOf("/") + 1) : name.indexOf("@");
-	return `npm:${versionAt === -1 ? name : name.slice(0, versionAt)}`;
 }
 
 function promptIsSelect(prompt: ProviderAuthPrompt): prompt is Extract<ProviderAuthPrompt, { type: "select" }> {
@@ -541,7 +570,7 @@ function PackageManagerPanel({
 				</IconButton>
 			</div>
 			{packages.isPending ? (
-				<CircularProgress size={22} />
+				<LoadingState label="正在读取已安装插件…" />
 			) : packages.error ? (
 				<Alert severity="error">{packages.error.message}</Alert>
 			) : packageCards.length ? (
@@ -744,7 +773,6 @@ function PackageManagerPanel({
 function StoragePanel({ onError }: { onError: (message: string) => void }) {
 	const client = useQueryClient();
 	const [sessionPage, setSessionPage] = useState(1);
-	const [selectedSession, setSelectedSession] = useState<StorageSummary["sessions"][number]>();
 	const [pending, setPending] = useState(false);
 	const sessionsList = useRef<HTMLDivElement>(null);
 	const storage = useQuery({ queryKey: ["storage"], queryFn: () => api<StorageSummary>("/storage") });
@@ -767,28 +795,10 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 			setPending(false);
 		}
 	};
-	const removeSession = async () => {
-		if (!selectedSession) return;
-		setPending(true);
-		try {
-			await api(`/sessions/${selectedSession.id}`, undefined, "DELETE");
-			await Promise.all([
-				client.invalidateQueries({ queryKey: ["storage"] }),
-				client.invalidateQueries({ queryKey: ["sessions"] }),
-			]);
-			client.removeQueries({ queryKey: ["session", selectedSession.id] });
-			setSelectedSession(undefined);
-			onError("");
-		} catch (error) {
-			onError(error instanceof Error ? error.message : String(error));
-		} finally {
-			setPending(false);
-		}
-	};
 	return (
 		<>
 			{storage.isPending ? (
-				<CircularProgress size={22} />
+				<LoadingState label="正在读取存储数据…" />
 			) : storage.error ? (
 				<Alert severity="error">{storage.error.message}</Alert>
 			) : (
@@ -840,15 +850,20 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 					<div className="section-heading-row storage-sessions-heading">
 						<div>
 							<h2>会话记录</h2>
-							<p className="muted">删除会话会同时移除内核记录和工作台历史。</p>
+							<p className="muted">归档与永久删除在归档管理中完成。</p>
 						</div>
-						<Button
-							startIcon={pending ? <CircularProgress size={16} /> : <RefreshCw size={16} />}
-							disabled={pending}
-							onClick={() => void storage.refetch()}
-						>
-							刷新
-						</Button>
+						<div className="storage-session-actions">
+							<Button component={NavLink} to="/settings/archive" size="small">
+								归档管理
+							</Button>
+							<Button
+								startIcon={pending ? <CircularProgress size={16} /> : <RefreshCw size={16} />}
+								disabled={pending}
+								onClick={() => void storage.refetch()}
+							>
+								刷新
+							</Button>
+						</div>
 					</div>
 					{storage.data?.sessions.length ? (
 						<div ref={sessionsList} className="stored-session-cards">
@@ -869,14 +884,6 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 											]
 										}
 									/>
-									<IconButton
-										aria-label={`删除会话 ${session.title}`}
-										color="error"
-										disabled={pending || session.status === "running" || session.status === "approval"}
-										onClick={() => setSelectedSession(session)}
-									>
-										<Trash2 size={16} />
-									</IconButton>
 								</article>
 							))}
 						</div>
@@ -905,18 +912,6 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 					</div>
 				</>
 			)}
-			<Dialog open={!!selectedSession} onClose={() => setSelectedSession(undefined)} maxWidth="xs" fullWidth>
-				<DialogTitle>删除会话记录</DialogTitle>
-				<DialogContent>
-					<p>将永久删除“{selectedSession?.title}”的聊天记录和内核会话文件。</p>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={() => setSelectedSession(undefined)}>取消</Button>
-					<Button color="error" disabled={pending} onClick={() => void removeSession()}>
-						删除会话
-					</Button>
-				</DialogActions>
-			</Dialog>
 		</>
 	);
 }
@@ -961,16 +956,21 @@ export function ResourcesPage({
 	kind,
 	section = "providers",
 	sessions,
+	sessionsLoading = false,
 	workspaces,
+	onBrowserRequest,
 }: {
 	kind: "skills" | "settings";
 	section?: SettingsSection;
 	sessions: SessionSummary[];
+	sessionsLoading?: boolean;
 	workspaces: Workspace[];
+	onBrowserRequest?: (sessionId: string, text: string) => void;
 }) {
 	const [selected, setSelected] = useState("");
 	const [resourceTab, setResourceTab] = useState<"skills" | "plugins">("skills");
-	const id = selected || sessions[0]?.id;
+	const activeSessions = sessions.filter((session) => !session.archivedAt && session.purpose !== "plugin-development");
+	const id = selected || activeSessions[0]?.id;
 	const [error, setError] = useState("");
 	const [loginId, setLoginId] = useState("");
 	const [loginProvider, setLoginProvider] = useState<ProviderOption>();
@@ -1196,7 +1196,7 @@ export function ResourcesPage({
 					onChange={(event) => setSelected(event.target.value)}
 					inputProps={{ "aria-label": "选择设置对应的会话" }}
 				>
-					{sessions.map((session) => (
+					{activeSessions.map((session) => (
 						<MenuItem key={session.id} value={session.id}>
 							{session.title}
 						</MenuItem>
@@ -1204,7 +1204,7 @@ export function ResourcesPage({
 				</Select>
 			)}
 			{kind === "skills" && !id && <Alert severity="info">请先创建会话，以查看实际加载的资源。</Alert>}
-			{kind === "settings" && section === "providers" && !!sessions.length && (
+			{kind === "settings" && section === "providers" && !!activeSessions.length && (
 				<div className="settings-session-select">
 					<span className="muted">当前会话</span>
 					<Select
@@ -1213,7 +1213,7 @@ export function ResourcesPage({
 						onChange={(event) => setSelected(event.target.value)}
 						inputProps={{ "aria-label": "选择查看当前模型的会话" }}
 					>
-						{sessions.map((session) => (
+						{activeSessions.map((session) => (
 							<MenuItem key={session.id} value={session.id}>
 								{session.title}
 							</MenuItem>
@@ -1288,7 +1288,16 @@ export function ResourcesPage({
 				<SpringPages
 					className="settings-page-switch"
 					pageKey={section ?? "providers"}
-					pageIndex={["providers", "plugins", "storage", "system"].indexOf(section ?? "providers")}
+					pageIndex={[
+						"providers",
+						"plugins",
+						"browser",
+						"subagents",
+						"usage",
+						"archive",
+						"storage",
+						"system",
+					].indexOf(section ?? "providers")}
 					axis="horizontal"
 				>
 					{section === "providers" && (
@@ -1425,7 +1434,7 @@ export function ResourcesPage({
 										添加兼容接口
 									</Button>
 									{providers.isPending ? (
-										<CircularProgress size={22} />
+										<LoadingState label="正在读取模型供应商…" />
 									) : (
 										availableProviderGroups.map(([category, items]) => (
 											<section className="provider-picker-group" key={category}>
@@ -1529,7 +1538,28 @@ export function ResourcesPage({
 						</>
 					)}
 					{section === "plugins" && (
-						<PackageManagerPanel onError={setError} sessions={sessions} workspaces={workspaces} />
+						<>
+							<AppPluginManagerPanel onError={setError} workspaces={workspaces} />
+							<PackageManagerPanel onError={setError} sessions={activeSessions} workspaces={workspaces} />
+						</>
+					)}
+					{section === "browser" && (
+						<BrowserManagementPanel
+							sessions={activeSessions}
+							sessionsLoading={sessionsLoading}
+							onRequest={onBrowserRequest ?? (() => {})}
+						/>
+					)}
+					{section === "subagents" && (
+						<SubagentManagementPanel sessions={activeSessions} sessionsLoading={sessionsLoading} />
+					)}
+					{section === "usage" && <UsageStatisticsPanel workspaces={workspaces} />}
+					{section === "archive" && (
+						<ArchiveManagementPanel
+							sessions={sessions}
+							sessionsLoading={sessionsLoading}
+							workspaces={workspaces}
+						/>
 					)}
 					{section === "storage" && <StoragePanel onError={setError} />}
 					{section === "system" && (
@@ -1611,7 +1641,7 @@ export function ResourcesPage({
 					)}
 					{(login.data?.status === "running" || login.isFetching) && !login.data?.prompt && (
 						<div className="provider-login-waiting">
-							<CircularProgress size={20} /> 等待认证流程…
+							<LoadingState label="等待认证流程…" />
 						</div>
 					)}
 				</DialogContent>

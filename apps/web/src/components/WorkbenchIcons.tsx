@@ -68,6 +68,8 @@ export const PackageOpen = icon("m12 3 9 5-9 5-9-5 9-5ZM3 8v10l9 4 9-4V8m-9 5v9M
 export const FileCode = icon("M5 2h9l5 5v15H5V2Zm9 0v5h5m-9 5-3 3 3 3m4-6 3 3-3 3");
 export const Maximize2 = icon("M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5");
 export const Minimize2 = icon("M3 8h5V3m13 5h-5V3M3 16h5v5m13-5h-5v5");
+export const Minus = icon("M5 12h14");
+export const Restore = icon("M8 8h11v11H8V8ZM5 5h11v3M5 5v11h3");
 export const Globe = icon("M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c4 5 4 13 0 18-4-5-4-13 0-18Z");
 export const GitBranch = icon(
 	"M6 3v12m0 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 0c0-6 12 0 12-9m0-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",

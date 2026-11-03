@@ -526,6 +526,33 @@ if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 		expect(settingsManager.getProjectSettings().packages).toEqual([]);
 	});
 
+	it("cycles existing Windows package filters without keeping duplicate overrides", () => {
+		const storage = new InMemorySettingsStorage();
+		storage.withLock("global", () => JSON.stringify({ packages: ["npm:pi-tools"] }));
+		storage.withLock("project", () =>
+			JSON.stringify({
+				packages: [{ source: "npm:pi-tools", autoload: false, extensions: ["-extensions\\bar.ts"] }],
+			}),
+		);
+		const settingsManager = SettingsManager.fromStorage(storage, { projectTrusted: true });
+		const resolvedPaths = extensionPaths(join(tempDir, "pkg"), "npm:pi-tools", "user", ["bar.ts"]);
+		const selector = new ConfigSelectorComponent(
+			{ global: resolvedPaths, project: resolvedPaths },
+			settingsManager,
+			projectDir,
+			agentDir,
+			() => {},
+			() => {},
+			() => {},
+			24,
+			"project",
+		);
+		selector.getResourceList().handleInput(" ");
+		expect(settingsManager.getProjectSettings().packages).toEqual([
+			{ source: "npm:pi-tools", autoload: false, extensions: ["+extensions/bar.ts"] },
+		]);
+	});
+
 	it("toggles built-in extensions in config global mode", async () => {
 		const settingsManager = SettingsManager.fromStorage(new InMemorySettingsStorage(), { projectTrusted: true });
 		const resolvedPaths = await new DefaultPackageManager({
@@ -550,6 +577,7 @@ if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 		initTheme("dark");
 		expect(list.render(80).join("\n")).toContain("Built-in");
 		expect(list.render(80).join("\n")).toContain("llama.cpp");
+		list.handleInput("builtin:llama.cpp");
 		list.handleInput(" ");
 		expect(settingsManager.getGlobalSettings().extensions).toEqual(["-builtin:llama.cpp"]);
 		list.handleInput(" ");
@@ -579,6 +607,7 @@ if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 		);
 
 		const list = selector.getResourceList();
+		list.handleInput("builtin:mcp");
 		list.handleInput(" ");
 		expect(settingsManager.getProjectSettings().extensions).toEqual(["+builtin:mcp"]);
 		list.handleInput(" ");
@@ -942,7 +971,7 @@ else {
 		writeFileSync(join(selfPackageDir, "package.json"), JSON.stringify({ name: PACKAGE_NAME, version: VERSION }));
 		const fakePnpmScript =
 			process.platform === "win32"
-				? `@echo off\r\nif "%1"=="root" if "%2"=="-g" (echo ${globalRoot} & exit /b 0)\r\nexit /b 23\r\n`
+				? `@echo off\r\nif "%~1"=="root" if "%~2"=="-g" (echo ${globalRoot} & exit /b 0)\r\nexit /b 23\r\n`
 				: `#!/bin/sh\nif [ "$1" = "root" ] && [ "$2" = "-g" ]; then\n\tprintf '%s\\n' '${globalRoot.replaceAll("'", "'\\''")}'\n\texit 0\nfi\nexit 23\n`;
 		writeFileSync(fakePnpmPath, fakePnpmScript);
 		chmodSync(fakePnpmPath, 0o755);

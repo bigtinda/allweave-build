@@ -113,7 +113,7 @@ describe("formatCwdForFooter", () => {
 
 	it("abbreviates the home directory and descendants", () => {
 		expect(formatCwdForFooter("/home/user", "/home/user")).toBe("~");
-		expect(formatCwdForFooter("/home/user/project", "/home/user")).toBe("~/project");
+		expect(formatCwdForFooter("/home/user/project", "/home/user")).toBe(join("~", "project"));
 	});
 });
 
@@ -280,3 +280,5 @@ describe("FooterComponent width handling", () => {
 		expect(stats).not.toContain("(sub)");
 	});
 });
+
+import { join } from "node:path";

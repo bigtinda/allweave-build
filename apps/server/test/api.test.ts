@@ -11,10 +11,11 @@ import type {
 	FileContent,
 	LocalFolderListing,
 	SessionDetail,
+	SessionEvent,
 	SocketMessage,
 	Workspace,
 } from "../../shared/src/protocol.ts";
-import { createApp } from "../src/app.ts";
+import { createApp } from "../src/bootstrap/create-app.ts";
 import { contained } from "../src/security.ts";
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -66,6 +67,10 @@ test(
 				payload: payload as Record<string, unknown> | undefined,
 			});
 		try {
+			const initialWorkspaces = (await request("GET", "/api/workspaces")).json<Workspace[]>();
+			const workspace = initialWorkspaces.find((item) => item.path === root && !item.remote);
+			assert.ok(workspace);
+			const managedWorkspaces = initialWorkspaces.filter((item) => item.kind === "plugin-development");
 			await t.test("local origin, host and path guards without an access token", async () => {
 				assert.equal((await request("GET", "/api/health")).statusCode, 200);
 				assert.equal(
@@ -108,8 +113,7 @@ test(
 				const projectListing = projectFolders.json<LocalFolderListing>();
 				assert.equal(projectListing.currentPath, root);
 				assert.deepEqual(projectListing.directories, []);
-				const workspaces = (await request("GET", "/api/workspaces")).json<Workspace[]>();
-				const id = workspaces[0].id;
+				const id = workspace.id;
 				assert.equal((await request("GET", `/api/workspaces/${id}/file?path=../outside`)).statusCode, 403);
 				assert.equal((await request("POST", "/api/workspaces", { path: directory })).statusCode, 403);
 				const content = (await request("GET", `/api/workspaces/${id}/file?path=hello.txt`)).json<FileContent>();
@@ -122,7 +126,6 @@ test(
 				);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "edited");
 			});
-			const workspace = (await request("GET", "/api/workspaces")).json<Workspace[]>()[0];
 			const create = async () => {
 				const result = await request("POST", "/api/sessions", { workspaceId: workspace.id });
 				assert.equal(result.statusCode, 200, result.body);
@@ -157,6 +160,17 @@ test(
 					messages.some((message) => message.type === "agent.status" && message.summary.status === "idle"),
 				);
 				assert.ok(messages.some((message) => message.type === "message.delta" && message.message?.text));
+				const events = messages.filter((message): message is SessionEvent => "eventId" in message);
+				assert.ok(events.length > 1, "the run publishes several events");
+				for (let index = 1; index < events.length; index += 1) {
+					assert.ok(events[index].eventId > events[index - 1].eventId, "event ids increase");
+				}
+				const runningIndex = events.findIndex(
+					(message) => message.type === "agent.status" && message.summary.status === "running",
+				);
+				const deltaIndex = events.findIndex((message) => message.type === "message.delta");
+				assert.ok(runningIndex >= 0, "the run is announced before it streams");
+				assert.ok(deltaIndex > runningIndex, "the stream starts after the run was announced");
 				const current = (await request("GET", `/api/sessions/${first.id}`)).json<SessionDetail>();
 				assert.equal(
 					current.messages.filter((message) => message.role === "assistant").at(-1)?.text,
@@ -235,11 +249,120 @@ test(
 				assert.equal((await request("POST", `/api/sessions/${second.id}/abort`, {})).statusCode, 200);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
 			});
+			await t.test("a rejected approval fails the tool while other sessions keep running", async () => {
+				const rejected = (
+					await request("POST", "/api/sessions", { workspaceId: workspace.id })
+				).json<SessionDetail>();
+				harness.setResponses([
+					fauxAssistantMessage(
+						fauxToolCall("write", { path: "rejected.txt", content: "must not write" }, { id: "rejected-write" }),
+						{ stopReason: "toolUse" },
+					),
+					fauxAssistantMessage("independent answer"),
+					fauxAssistantMessage("write rejected"),
+				]);
+				assert.equal(
+					(await request("POST", `/api/sessions/${rejected.id}/messages`, { text: "write file" })).statusCode,
+					202,
+				);
+				await waitFor(() => harness.getPendingResponseCount() === 2);
+				let pending: SessionDetail;
+				const deadline = Date.now() + 5000;
+				do {
+					pending = (await request("GET", `/api/sessions/${rejected.id}`)).json<SessionDetail>();
+					if (pending.approvals.length) break;
+					if (Date.now() > deadline) throw new Error(`Approval did not arrive: ${JSON.stringify(pending)}`);
+					await new Promise((resolve) => setTimeout(resolve, 10));
+				} while (!pending.approvals.length);
+				assert.equal(pending.approvals.length, 1);
+				assert.equal(
+					(await request("POST", `/api/sessions/${rejected.id}/messages`, { text: "conflicting" })).statusCode,
+					409,
+					"the same session cannot run twice",
+				);
+				assert.equal(
+					(await request("POST", `/api/sessions/${first.id}/messages`, { text: "independent" })).statusCode,
+					202,
+					"other sessions keep running",
+				);
+				assert.equal(
+					(
+						await request("POST", `/api/sessions/${rejected.id}/approvals/${pending.approvals[0].id}`, {
+							approved: false,
+						})
+					).statusCode,
+					200,
+				);
+				const failedDeadline = Date.now() + 5000;
+				let rejectedDetail: SessionDetail;
+				do {
+					rejectedDetail = (await request("GET", `/api/sessions/${rejected.id}`)).json<SessionDetail>();
+					if (rejectedDetail.tools.some((tool) => tool.id === "rejected-write" && tool.status === "failed")) break;
+					await new Promise((resolve) => setTimeout(resolve, 10));
+				} while (Date.now() <= failedDeadline);
+				assert.ok(
+					rejectedDetail.tools.some((tool) => tool.id === "rejected-write" && tool.status === "failed"),
+					"the rejected tool call failed",
+				);
+				await assert.rejects(() => access(join(root, "rejected.txt")));
+				const idleDeadline = Date.now() + 5000;
+				while (Date.now() <= idleDeadline) {
+					const detail = (await request("GET", `/api/sessions/${rejected.id}`)).json<SessionDetail>();
+					if (detail.status === "idle") break;
+					await new Promise((resolve) => setTimeout(resolve, 10));
+				}
+				assert.equal((await request("DELETE", `/api/sessions/${rejected.id}`)).statusCode, 200);
+			});
+			await t.test("api and agent tools reject the same path with the same reason", async () => {
+				const denied = await request(
+					"GET",
+					`/api/workspaces/${workspace.id}/file?path=${encodeURIComponent("../outside")}`,
+				);
+				assert.equal(denied.statusCode, 403, denied.body);
+				const apiReason = denied.json<{ error: string }>().error;
+				harness.setResponses([
+					fauxAssistantMessage(fauxToolCall("read", { path: "../outside" }, { id: "denied-read" }), {
+						stopReason: "toolUse",
+					}),
+					fauxAssistantMessage("read blocked", { timestamp: Date.now() + 3 }),
+				]);
+				assert.equal(
+					(await request("POST", `/api/sessions/${first.id}/messages`, { text: "read outside" })).statusCode,
+					202,
+				);
+				await waitFor(() => harness.getPendingResponseCount() === 0);
+				let tool: SessionDetail["tools"][number] | undefined;
+				const deadline = Date.now() + 5000;
+				while (!tool && Date.now() <= deadline) {
+					const detail = (await request("GET", `/api/sessions/${first.id}`)).json<SessionDetail>();
+					tool = detail.tools.find((item) => item.id === "denied-read");
+					if (!tool) await new Promise((resolve) => setTimeout(resolve, 10));
+				}
+				assert.ok(tool, "the rejected tool call should still be recorded");
+				assert.equal(tool.status, "failed");
+				const toolOutput = tool.output as { content?: Array<{ text?: string }> } | undefined;
+				const toolReason = toolOutput?.content?.[0]?.text ?? "";
+				assert.match(toolReason, new RegExp(apiReason.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
+			});
 			await t.test("restart restores metadata and native SDK transcript", async () => {
 				socket.terminate();
 				await app.close();
+				const failedDb = new DatabaseSync(join(data, "console.sqlite"));
+				const row = failedDb.prepare("SELECT data FROM session_summaries WHERE id = ?").get(first.id);
+				const meta = JSON.parse(String(row?.data)) as { failure?: string };
+				meta.failure = "injected persisted projection failure";
+				failedDb.prepare("UPDATE session_summaries SET data = ? WHERE id = ?").run(JSON.stringify(meta), first.id);
+				failedDb.close();
 				({ app } = await createApp(options));
 				const restored = (await request("GET", `/api/sessions/${first.id}`)).json<SessionDetail>();
+				assert.equal(restored.recoveryRequired, true);
+				assert.equal(
+					(await request("POST", `/api/sessions/${first.id}/messages`, { text: "blocked" })).statusCode,
+					409,
+				);
+				const recovered = await request("POST", `/api/sessions/${first.id}/recover`, {});
+				assert.equal(recovered.statusCode, 200, recovered.body);
+				assert.equal(recovered.json<SessionDetail>().recoveryRequired, false);
 				assert.equal(restored.status, "idle");
 				assert.ok(restored.messages.some((message) => message.text === "first prompt"));
 				harness.setResponses([
@@ -289,7 +412,7 @@ test(
 				const removed = await request("DELETE", `/api/workspaces/${workspace.id}`);
 				assert.equal(removed.statusCode, 200, removed.body);
 				assert.deepEqual(removed.json(), { deleted: true, sessionsDeleted: 1 });
-				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), []);
+				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.deepEqual((await request("GET", "/api/sessions")).json(), []);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
 				await access(nativeSessionFile);
@@ -297,7 +420,7 @@ test(
 				socket.terminate();
 				await app.close();
 				({ app } = await createApp(options));
-				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), []);
+				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
 				await access(nativeSessionFile);
 			});

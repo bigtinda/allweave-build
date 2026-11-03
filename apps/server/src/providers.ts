@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type AuthEvent, type AuthPrompt, type AuthType, isModelType } from "@earendil-works/pi-ai";
+import type { AuthEvent, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
+import { isModelType } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { z } from "zod";
 import type { ModelOption } from "../../shared/src/protocol.ts";
@@ -138,6 +139,9 @@ function toModelOption(model: { id: string; provider: string; name: string; reas
 export class ProviderManager {
 	private agentDir: string;
 	private runtimePromise: Promise<ModelRuntime>;
+	private modelCache?: { values: ModelOption[]; refreshedAt: number };
+	private modelCachePromise?: Promise<ModelOption[]>;
+	private modelRevision = 0;
 	private jobs = new Map<string, LoginJob>();
 	private beforeChange: () => Promise<void> = async () => {};
 
@@ -164,18 +168,33 @@ export class ProviderManager {
 	}
 
 	async models(): Promise<ModelOption[]> {
-		const runtime = await this.runtime();
-		await runtime.refresh({ allowNetwork: false });
-		const available = new Set((await runtime.getAvailable()).map((model) => `${model.provider}/${model.id}`));
-		return runtime
-			.getAllModels()
-			.filter((model) => isModelType(model, "chat"))
-			.map((model) => ({ ...toModelOption(model), available: available.has(`${model.provider}/${model.id}`) }));
+		if (this.modelCache && Date.now() - this.modelCache.refreshedAt < 5 * 60_000)
+			return this.modelCache.values.map((model) => ({ ...model }));
+		if (this.modelCachePromise) return (await this.modelCachePromise).map((model) => ({ ...model }));
+		const revision = this.modelRevision;
+		const loading = (async () => {
+			const runtime = await this.runtime();
+			await runtime.refresh({ allowNetwork: false });
+			const available = new Set((await runtime.getAvailable()).map((model) => `${model.provider}/${model.id}`));
+			return runtime
+				.getAllModels()
+				.filter((model) => isModelType(model, "chat"))
+				.map((model) => ({ ...toModelOption(model), available: available.has(`${model.provider}/${model.id}`) }));
+		})();
+		this.modelCachePromise = loading;
+		try {
+			const values = await loading;
+			if (revision === this.modelRevision) this.modelCache = { values, refreshedAt: Date.now() };
+			return values.map((model) => ({ ...model }));
+		} finally {
+			if (this.modelCachePromise === loading) this.modelCachePromise = undefined;
+		}
 	}
 
 	async list(): Promise<ProviderOption[]> {
 		const runtime = await this.runtime();
 		await runtime.refresh({ allowNetwork: false });
+		this.invalidateModels();
 		await runtime.getAvailable();
 		return runtime.getProviders().map((provider) => {
 			const status = runtime.getProviderAuthStatus(provider.id);
@@ -230,6 +249,7 @@ export class ProviderManager {
 			.login(providerId, type, interaction, { agentName: "AllWeave Build" })
 			.then(() => {
 				job.status = "succeeded";
+				this.invalidateModels();
 			})
 			.catch((error: unknown) => {
 				job.status = job.controller.signal.aborted ? "cancelled" : "failed";
@@ -280,6 +300,7 @@ export class ProviderManager {
 		const runtime = await this.runtime();
 		if (!runtime.getProvider(providerId)) throw new HttpError(404, "模型供应商不存在");
 		await runtime.logout(providerId);
+		this.invalidateModels();
 	}
 
 	async addCustomProvider(input: unknown): Promise<ProviderOption> {
@@ -312,11 +333,13 @@ export class ProviderManager {
 		await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 		await rename(temporary, file);
 		await runtime.refresh({ allowNetwork: false });
+		this.invalidateModels();
 		const error = runtime.getError();
 		if (error?.includes("models.json")) {
 			if (previous === undefined) await rm(file, { force: true });
 			else await writeFile(file, previous, { encoding: "utf8", mode: 0o600 });
 			await runtime.refresh({ allowNetwork: false });
+			this.invalidateModels();
 			throw new HttpError(400, error);
 		}
 		const created = runtime.getProvider(provider.id);
@@ -336,6 +359,12 @@ export class ProviderManager {
 
 	async close(): Promise<void> {
 		for (const job of this.jobs.values()) this.cancelLogin(job.id);
+	}
+
+	private invalidateModels(): void {
+		this.modelRevision++;
+		this.modelCache = undefined;
+		this.modelCachePromise = undefined;
 	}
 
 	private waitForAnswer(job: LoginJob, prompt: AuthPrompt): Promise<string> {

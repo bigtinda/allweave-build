@@ -24,7 +24,7 @@
 	"scripts": {
 		"clean": "shx rm -rf dist",
 		"build": "tsc -p tsconfig.build.json",
-		"build:daemon": "cargo build --manifest-path daemon/Cargo.toml --locked",
+		"build:daemon": "node ../../scripts/hydrate-env-daemons.mjs",
 		"test": "vitest --run",
 		"prepublishOnly": "npm run clean && npm run build"
 	},

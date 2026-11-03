@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { DEFAULT_ACCENT_COLOR } from "../theme/personalization.ts";
+import { DEFAULT_ACCENT_COLOR, migrateBrandPreferences } from "../theme/personalization.ts";
+import { type ThemeTransitionOrigin, transitionTheme } from "../theme/theme-transition.ts";
 
 interface Preferences {
 	dark: boolean;
@@ -10,7 +11,7 @@ interface Preferences {
 	fontId: string;
 	wallpaper: string;
 	wallpaperAccentColor: string;
-	toggleTheme: () => void;
+	toggleTheme: (origin?: ThemeTransitionOrigin) => void;
 	togglePanel: () => void;
 	toggleSidebar: () => void;
 	setAccentColor: (accentColor: string) => void;
@@ -28,7 +29,7 @@ export const usePreferences = create<Preferences>()(
 			fontId: "system",
 			wallpaper: "",
 			wallpaperAccentColor: "",
-			toggleTheme: () => set((state) => ({ dark: !state.dark })),
+			toggleTheme: (origin) => transitionTheme(() => set((state) => ({ dark: !state.dark })), origin),
 			togglePanel: () => set((state) => ({ panel: !state.panel })),
 			toggleSidebar: () => set((state) => ({ sidebar: !state.sidebar })),
 			setAccentColor: (accentColor) => set({ accentColor }),
@@ -37,7 +38,11 @@ export const usePreferences = create<Preferences>()(
 				set({ wallpaper, wallpaperAccentColor, accentColor: wallpaperAccentColor }),
 			clearWallpaper: () => set({ wallpaper: "", wallpaperAccentColor: "" }),
 		}),
-		{ name: "pi-console-preferences" },
+		{
+			name: "pi-console-preferences",
+			version: 1,
+			migrate: (persistedState): Partial<Preferences> => migrateBrandPreferences(persistedState),
+		},
 	),
 );
 

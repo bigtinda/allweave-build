@@ -551,7 +551,7 @@ class ResourceList implements Component, Focusable {
 		// Filter out existing patterns for this resource
 		const updated = current.filter((p) => {
 			const stripped = p.startsWith("!") || p.startsWith("+") || p.startsWith("-") ? p.slice(1) : p;
-			return stripped !== pattern;
+			return stripped.replaceAll("\\", "/") !== pattern.replaceAll("\\", "/");
 		});
 
 		if (enabled) {
@@ -616,7 +616,7 @@ class ResourceList implements Component, Focusable {
 		// Filter out existing patterns for this resource
 		const updated = current.filter((p) => {
 			const stripped = p.startsWith("!") || p.startsWith("+") || p.startsWith("-") ? p.slice(1) : p;
-			return stripped !== pattern;
+			return stripped.replaceAll("\\", "/") !== pattern;
 		});
 
 		if (enabled) {
@@ -724,7 +724,7 @@ class ResourceList implements Component, Focusable {
 		}
 		const pattern = this.getPackageResourcePattern(item);
 		const updated = ((pkg[item.resourceType] ?? []) as string[]).filter(
-			(entry) => this.getPatternEntryTarget(entry) !== pattern,
+			(entry) => this.getPatternEntryTarget(entry).replaceAll("\\", "/") !== pattern,
 		);
 		if (state !== "inherit") updated.push(`${state === "load" ? "+" : "-"}${pattern}`);
 		(pkg as Record<string, unknown>)[item.resourceType] = updated.length > 0 ? updated : undefined;
@@ -759,7 +759,7 @@ class ResourceList implements Component, Focusable {
 		if (entries === undefined) return "inherit";
 		return this.getOverrideStateFromEntries(
 			entries,
-			new Set([this.getPackageResourcePattern(item)]),
+			new Set([this.getPackageResourcePattern(item), this.getPackageResourcePattern(item).replaceAll("/", "\\")]),
 			pkg.autoload !== false,
 		);
 	}
@@ -868,7 +868,7 @@ class ResourceList implements Component, Focusable {
 
 	private getPackageResourcePattern(item: ResourceItem): string {
 		const baseDir = item.metadata.baseDir ?? dirname(item.path);
-		return relative(baseDir, item.path);
+		return relative(baseDir, item.path).replaceAll("\\", "/");
 	}
 }
 

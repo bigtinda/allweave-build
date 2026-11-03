@@ -1,5 +1,12 @@
 export const DEFAULT_ACCENT_COLOR = "#002FA7";
 
+export function migrateBrandPreferences(persistedState: unknown) {
+	return {
+		...(persistedState && typeof persistedState === "object" ? persistedState : {}),
+		accentColor: DEFAULT_ACCENT_COLOR,
+	};
+}
+
 export const accentPresets = [
 	{ name: "构序 · 克莱因蓝", color: DEFAULT_ACCENT_COLOR },
 	{ name: "紫罗兰", color: "#6750A4" },
@@ -86,19 +93,19 @@ function contrastingText(color: string): string {
 export function createThemeColors(dark: boolean, accentColor: string): ThemeColors {
 	const accent = /^#[\da-f]{6}$/iu.test(accentColor) ? accentColor : DEFAULT_ACCENT_COLOR;
 	const primary = dark ? mixColors(accent, "#FFFFFF", 0.58) : accent;
-	const surface = dark ? "#111318" : "#FFFFFF";
+	const surface = dark ? "#151515" : "#FFFFFF";
 	return {
 		primary,
 		onPrimary: contrastingText(primary),
 		surface,
-		container: dark ? "#1D2028" : "#F7F6F3",
-		containerLow: dark ? "#171A21" : "#FBFBFA",
+		container: dark ? "#242424" : "#F0F0EE",
+		containerLow: dark ? "#1C1C1C" : "#F7F7F5",
 		selected: dark ? mixColors("#202735", accent, 0.3) : mixColors("#FFFFFF", accent, 0.08),
-		onSelected: dark ? "#EEF2FF" : "#111111",
-		text: dark ? "#F3F4F6" : "#2F3437",
-		muted: dark ? "#B1B8C7" : "#71706C",
-		outline: dark ? "#7B8496" : "#9CA3AF",
-		line: dark ? "#303644" : "#EAEAEA",
+		onSelected: dark ? "#EEF2FF" : "#0B1020",
+		text: dark ? "#F3F4F6" : "#0B1020",
+		muted: dark ? "#B5B5B5" : "#626262",
+		outline: dark ? "#858585" : "#858585",
+		line: dark ? "#363636" : "#E2E2DE",
 	};
 }
 

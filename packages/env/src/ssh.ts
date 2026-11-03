@@ -353,9 +353,8 @@ export async function detectPlatform(target: SshTarget): Promise<RemotePlatform>
 }
 
 /** The daemon binary this package ships for a remote system. */
-export function packagedDaemon(remote: Pick<RemotePlatform, "platform" | "arch">): string {
-	const name = `pi-env-${remote.platform}-${remote.arch}`;
-	return join(packageRoot, "bin", name, remote.platform === "windows" ? "pi-env.exe" : "pi-env");
+export function packagedDaemon(_remote: Pick<RemotePlatform, "platform" | "arch">): string {
+	return join(packageRoot, "bin", "pi-env.mjs");
 }
 
 function quotePosix(text: string): string {
@@ -370,8 +369,8 @@ function quotePowerShell(text: string): string {
 function daemonPath(remote: RemotePlatform, sha256: string): string {
 	const name = `pi-env-${sha256.slice(0, 32)}`;
 	return remote.platform === "windows"
-		? `${remote.home}\\.pi\\mobile\\tools\\${name}.exe`
-		: `${remote.home}/.pi/mobile/tools/${name}`;
+		? `${remote.home}\\.pi\\mobile\\tools\\${name}.mjs`
+		: `${remote.home}/.pi/mobile/tools/${name}.mjs`;
 }
 
 const POSIX_HASH = `hash() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; elif command -v openssl >/dev/null 2>&1; then openssl dgst -sha256 "$1" | sed 's/.*= //'; else echo none; fi; }`;
@@ -423,7 +422,7 @@ export async function deployDaemon(
 				// A running daemon or a virus scanner can hold the old file for a moment.
 				"for ($i = 0; ; $i++) { try { Move-Item -Force -LiteralPath $t -Destination $f; break } catch { if ($i -ge 20) { throw }; Start-Sleep -Milliseconds 250 } }",
 				// Older daemons; one that is running stays until it exits.
-				"Get-ChildItem -LiteralPath $d -Filter 'pi-env-*.exe' | Where-Object { $_.FullName -ne $f } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -ErrorAction SilentlyContinue }",
+				"Get-ChildItem -LiteralPath $d -Filter 'pi-env-*.mjs' | Where-Object { $_.FullName -ne $f } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -ErrorAction SilentlyContinue }",
 				"'deployed'",
 			].join("; "),
 		);
@@ -466,12 +465,12 @@ export interface SshConnectOptions extends SshTarget {
 function launchCommand(remote: RemotePlatform, file: string, loginShell: boolean): string {
 	if (remote.platform === "windows") {
 		// PowerShell runs a quoted path only with the call operator; cmd.exe keeps one pair of quotes around a program.
-		if (remote.shell === "powershell") return `& ${quotePowerShell(file)}`;
-		return file.includes(" ") ? `"${file}"` : file;
+		if (remote.shell === "powershell") return `& node ${quotePowerShell(file)}`;
+		return `node "${file}"`;
 	}
 	// `$0` is the daemon, `"$@"` its arguments; `$SHELL` is the login shell's own name for itself.
-	if (loginShell) return `exec "$SHELL" -lc 'exec "$0" "$@"' ${quotePosix(file)}`;
-	return quotePosix(file);
+	if (loginShell) return `exec "$SHELL" -lc 'exec node "$0" "$@"' ${quotePosix(file)}`;
+	return `node ${quotePosix(file)}`;
 }
 
 /** What an SSH connection learned about its remote system, and the daemon it verified last. */

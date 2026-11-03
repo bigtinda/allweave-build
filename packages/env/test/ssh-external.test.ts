@@ -65,7 +65,7 @@ describe.skipIf(host === undefined)("SSH to this machine's server", () => {
 	it("reaches the remote system through its default shell", async () => {
 		const { connection, remote } = await connect();
 		const info = await connection.info();
-		expect(info.os).toBe(windows ? "windows" : process.platform === "darwin" ? "macos" : process.platform);
+		expect(info.os).toBe(windows ? "windows" : process.platform);
 		if (windows) expect(remote.shell).toBe(process.env.PI_ENV_SSH_SHELL ?? "cmd");
 	}, 120_000);
 });

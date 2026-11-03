@@ -4,7 +4,7 @@
 
 ## 启动
 
-需要 Node.js 24.3 或更新版本。首次在仓库根目录执行：
+需要 Node.js 22.19 或更新版本（与仓库 `engines.node` 一致）。首次在仓库根目录执行：
 
 ```powershell
 npm install --ignore-scripts
@@ -40,17 +40,22 @@ SQLite 在 `.pi-console/console.sqlite` 保存会话界面状态，Pi JSONL 会�
 
 ```text
 apps/web/                 React / Vite / MUI / Monaco
-  src/pages/              会话、模型供应商、Skills 与设置
-  src/hooks/              HTTP 状态和 WebSocket 重连
+  src/pages/              页面级组件（资源、设置、插件页）
+  src/features/chat/      聊天域（会话、输入、Markdown、用量）
+  src/components/         跨页面组件（工作区面板、浏览器、Git 等）
+  src/services/           api.ts 是唯一 HTTP 入口
 apps/server/              Fastify / WebSocket / Zod / SQLite
   src/kernel.ts           Doom Cordis 宿主扩展兼容加载
   src/providers.ts        Pi 原生认证、供应商目录和自定义模型配置
-  src/agent.ts            会话生命周期、事件适配、恢复和工具确认
+  src/agent.ts            会话子系统门面，具体编排在 sessions/coordinator.ts
+  src/app-plugins.ts      声明式应用插件注册表、版本与记录
   src/browser.ts          共用浏览器、页面操作与 Agent 工具
   src/bootstrap/          唯一应用组合根、访问控制和生命周期
   src/transport/          按功能拆分的 REST / WebSocket 入口
   src/sessions/           会话编排、Pi 适配、授权、事件和每轮用量
+  src/workspaces/         授权目录、文件/Git 与 Office 预览
   src/persistence/        轻量投影与按需 transcript 恢复
+  src/store.ts            console.sqlite 元数据、事件与投影
 apps/shared/src/          前后端共享的 TypeScript 协议
 ```
 

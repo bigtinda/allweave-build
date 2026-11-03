@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 1080" width="1420" height="1080" font-family="'Microsoft YaHei','Segoe UI',sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9ca3af"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="1420" height="1080" fill="#ffffff"/>
+  <text x="48" y="56" font-size="27" font-weight="700" fill="#111827">目标架构 · 自研内核 + 可替换适配器</text>
+  <text x="48" y="86" font-size="13" fill="#6b7280">Strangler fig（绞杀者）模式：不重写 Pi，而是把内核所有权逐步搬到 packages/kernel-*，Pi 退化为一个可删除的 adapter。</text>
+
+  <!-- surfaces -->
+  <rect x="48" y="118" width="252" height="66" rx="10" fill="#fafafa" stroke="#e5e7eb"/>
+  <text x="174" y="146" font-size="14" font-weight="600" fill="#111827" text-anchor="middle">Web 工作台</text>
+  <text x="174" y="167" font-size="11.5" fill="#6b7280" text-anchor="middle">apps/web（React）</text>
+
+  <rect x="320" y="118" width="252" height="66" rx="10" fill="#fafafa" stroke="#e5e7eb"/>
+  <text x="446" y="146" font-size="14" font-weight="600" fill="#111827" text-anchor="middle">Desktop 宿主</text>
+  <text x="446" y="167" font-size="11.5" fill="#6b7280" text-anchor="middle">Electron（desktop/）</text>
+
+  <rect x="592" y="118" width="252" height="66" rx="10" fill="#fafafa" stroke="#e5e7eb"/>
+  <text x="718" y="146" font-size="14" font-weight="600" fill="#111827" text-anchor="middle">CLI / IDE</text>
+  <text x="718" y="167" font-size="11.5" fill="#6b7280" text-anchor="middle">后续自研客户端</text>
+
+  <rect x="864" y="118" width="252" height="66" rx="10" fill="#fafafa" stroke="#e5e7eb"/>
+  <text x="990" y="146" font-size="14" font-weight="600" fill="#111827" text-anchor="middle">第三方 API</text>
+  <text x="990" y="167" font-size="11.5" fill="#6b7280" text-anchor="middle">自动化 / 集成</text>
+
+  <line x1="174" y1="184" x2="174" y2="212" stroke="#9ca3af" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="446" y1="184" x2="446" y2="212" stroke="#9ca3af" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="718" y1="184" x2="718" y2="212" stroke="#9ca3af" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="990" y1="184" x2="990" y2="212" stroke="#9ca3af" stroke-width="1.4" marker-end="url(#a)"/>
+
+  <!-- protocol -->
+  <rect x="48" y="216" width="1068" height="58" rx="10" fill="#ffffff" stroke="#002FA7" stroke-width="1.6"/>
+  <text x="64" y="240" font-size="13.5" font-weight="600" fill="#002FA7">会话协议 v2：版本协商 · 请求关联 · 多订阅者 · resume cursor · 事件 schema 显式版本</text>
+  <text x="64" y="261" font-size="11.5" fill="#6b7280">v1（现有 14 种事件 + snapshot）保留一个兼容版本，客户端可分批迁移；协议是前后端唯一契约</text>
+
+  <line x1="582" y1="274" x2="582" y2="306" stroke="#6b7280" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- kernel -->
+  <rect x="48" y="310" width="1068" height="300" rx="14" fill="#f5f8ff" stroke="#002FA7" stroke-width="1.8"/>
+  <text x="64" y="336" font-size="14" font-weight="700" fill="#002FA7">OWN KERNEL · packages/kernel-*（自研；不依赖 Fastify / SQLite / node:fs / pi）</text>
+
+  <rect x="64" y="348" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="82" y="372" font-size="13" font-weight="600" fill="#111827">AgentLoop</text>
+  <text x="82" y="392" font-size="10.5" fill="#6b7280">turn 状态机 / 流式</text>
+  <text x="82" y="409" font-size="10.5" fill="#6b7280">并行工具 / steering</text>
+  <text x="82" y="426" font-size="10.5" fill="#6b7280">abort / 重试分类</text>
+
+  <rect x="322" y="348" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="340" y="372" font-size="13" font-weight="600" fill="#111827">ContextManager</text>
+  <text x="340" y="392" font-size="10.5" fill="#6b7280">CJK 感知 token 预算</text>
+  <text x="340" y="409" font-size="10.5" fill="#6b7280">压缩（cache-safe fork）</text>
+  <text x="340" y="426" font-size="10.5" fill="#6b7280">结果 spill / 进度工件</text>
+
+  <rect x="580" y="348" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="598" y="372" font-size="13" font-weight="600" fill="#111827">ToolPlane</text>
+  <text x="598" y="392" font-size="10.5" fill="#6b7280">注册表 / loadout</text>
+  <text x="598" y="409" font-size="10.5" fill="#6b7280">tool-search / deferred</text>
+  <text x="598" y="426" font-size="10.5" fill="#6b7280">结构化 diagnostics</text>
+
+  <rect x="838" y="348" width="262" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="856" y="372" font-size="13" font-weight="600" fill="#111827">PolicyEngine</text>
+  <text x="856" y="392" font-size="10.5" fill="#6b7280">规则 tool:path/cmd</text>
+  <text x="856" y="409" font-size="10.5" fill="#6b7280">持久审批 / 显式 trust</text>
+  <text x="856" y="426" font-size="10.5" fill="#6b7280">egress / 密钥隔离</text>
+
+  <rect x="64" y="476" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="82" y="500" font-size="13" font-weight="600" fill="#111827">ModelGateway</text>
+  <text x="82" y="520" font-size="10.5" fill="#6b7280">routing / fallback</text>
+  <text x="82" y="537" font-size="10.5" fill="#6b7280">cache 语义归一</text>
+  <text x="82" y="554" font-size="10.5" fill="#6b7280">成本模型 / 预算</text>
+
+  <rect x="322" y="476" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="340" y="500" font-size="13" font-weight="600" fill="#111827">EventLog</text>
+  <text x="340" y="520" font-size="10.5" fill="#6b7280">append-only entries</text>
+  <text x="340" y="537" font-size="10.5" fill="#6b7280">checkpoint / resume</text>
+  <text x="340" y="554" font-size="10.5" fill="#6b7280">单一事实来源</text>
+
+  <rect x="580" y="476" width="246" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="598" y="500" font-size="13" font-weight="600" fill="#111827">Orchestrator</text>
+  <text x="598" y="520" font-size="10.5" fill="#6b7280">run 队列 / 并发</text>
+  <text x="598" y="537" font-size="10.5" fill="#6b7280">subagent / workflow</text>
+  <text x="598" y="554" font-size="10.5" fill="#6b7280">worktree 并行</text>
+
+  <rect x="838" y="476" width="262" height="112" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="856" y="500" font-size="13" font-weight="600" fill="#111827">Telemetry</text>
+  <text x="856" y="520" font-size="10.5" fill="#6b7280">OTel GenAI span</text>
+  <text x="856" y="537" font-size="10.5" fill="#6b7280">8 项 harness 指标</text>
+  <text x="856" y="554" font-size="10.5" fill="#6b7280">任务级 eval</text>
+
+  <text x="64" y="602" font-size="11" fill="#7b8db3">门禁：kernel-* 不得 import pi-*/fastify/zod；只有 kernel-store 碰 SQLite；只有 kernel-sandbox 起子进程；依赖图无环。</text>
+
+  <line x1="582" y1="610" x2="582" y2="636" stroke="#6b7280" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- adapters -->
+  <rect x="48" y="640" width="1068" height="182" rx="14" fill="#fafafa" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="64" y="666" font-size="13.5" font-weight="700" fill="#111827">ADAPTERS · packages/adapters-*（薄、可替换、可退役；pi 只允许出现在 adapters/pi）</text>
+
+  <rect x="64" y="680" width="160" height="104" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="144" y="706" font-size="12" font-weight="600" fill="#111827" text-anchor="middle">Provider SDKs</text>
+  <text x="144" y="726" font-size="10" fill="#6b7280" text-anchor="middle">官方 SDK / pi-ai</text>
+  <text x="144" y="743" font-size="10" fill="#6b7280" text-anchor="middle">api 层复用</text>
+
+  <rect x="240" y="680" width="160" height="104" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="320" y="706" font-size="12" font-weight="600" fill="#111827" text-anchor="middle">MCP</text>
+  <text x="320" y="726" font-size="10" fill="#6b7280" text-anchor="middle">协议实现</text>
+  <text x="320" y="743" font-size="10" fill="#6b7280" text-anchor="middle">commodity，保留</text>
+
+  <rect x="416" y="680" width="160" height="104" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="496" y="706" font-size="12" font-weight="600" fill="#111827" text-anchor="middle">Skills / AGENTS</text>
+  <text x="496" y="726" font-size="10" fill="#6b7280" text-anchor="middle">语义保留，实现</text>
+  <text x="496" y="743" font-size="10" fill="#6b7280" text-anchor="middle">迁入 ContextManager</text>
+
+  <rect x="592" y="680" width="160" height="104" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="672" y="706" font-size="12" font-weight="600" fill="#111827" text-anchor="middle">Remote SSH</text>
+  <text x="672" y="726" font-size="10" fill="#6b7280" text-anchor="middle">pi-env daemon</text>
+  <text x="672" y="743" font-size="10" fill="#6b7280" text-anchor="middle">已是端口</text>
+
+  <rect x="768" y="680" width="160" height="104" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="848" y="706" font-size="12" font-weight="600" fill="#111827" text-anchor="middle">Browser</text>
+  <text x="848" y="726" font-size="10" fill="#6b7280" text-anchor="middle">Playwright</text>
+  <text x="848" y="743" font-size="10" fill="#6b7280" text-anchor="middle">会话级 Context</text>
+
+  <rect x="944" y="680" width="156" height="104" rx="9" fill="#fff7f7" stroke="#b91c1c" stroke-dasharray="5 4"/>
+  <text x="1022" y="706" font-size="12" font-weight="600" fill="#b91c1c" text-anchor="middle">Legacy Pi</text>
+  <text x="1022" y="726" font-size="10" fill="#b91c1c" text-anchor="middle">AgentSession 等</text>
+  <text x="1022" y="743" font-size="10" fill="#b91c1c" text-anchor="middle">过渡期后删除</text>
+
+  <!-- right rail -->
+  <rect x="1140" y="118" width="232" height="704" rx="12" fill="#fafafa" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="1156" y="144" font-size="13" font-weight="700" fill="#111827">过渡期约束</text>
+  <text x="1156" y="176" font-size="11" fill="#374151">1. 双轨一致性：同一组</text>
+  <text x="1156" y="192" font-size="11" fill="#374151">golden traces 同时跑 pi</text>
+  <text x="1156" y="208" font-size="11" fill="#374151">adapter 与自研实现</text>
+  <text x="1156" y="238" font-size="11" fill="#374151">2. 每阶段一个 flag，</text>
+  <text x="1156" y="254" font-size="11" fill="#374151">可整层回退</text>
+  <text x="1156" y="284" font-size="11" fill="#374151">3. 依赖方向门禁：</text>
+  <text x="1156" y="300" font-size="11" fill="#374151">kernel-* 不得 import pi</text>
+  <text x="1156" y="316" font-size="11" fill="#374151">（check-entry-graphs）</text>
+  <text x="1156" y="346" font-size="11" fill="#374151">4. 单一事实来源先行：</text>
+  <text x="1156" y="362" font-size="11" fill="#374151">先换 store，再换 loop</text>
+  <text x="1156" y="392" font-size="11" fill="#374151">5. 先度量后替换：</text>
+  <text x="1156" y="408" font-size="11" fill="#374151">没有指标证明收益，</text>
+  <text x="1156" y="424" font-size="11" fill="#374151">不进入下一阶段</text>
+  <text x="1156" y="454" font-size="11" fill="#374151">6. 生态兼容：pi 扩展</text>
+  <text x="1156" y="470" font-size="11" fill="#374151">走 shim，不破坏用户</text>
+  <text x="1156" y="486" font-size="11" fill="#374151">现有 skills / 包</text>
+
+  <text x="1156" y="538" font-size="12" font-weight="700" fill="#111827">所有权交棒</text>
+  <rect x="1156" y="552" width="200" height="10" rx="5" fill="#e5e7eb"/>
+  <rect x="1156" y="552" width="200" height="10" rx="5" fill="#002FA7" opacity="0.35"/>
+  <text x="1156" y="584" font-size="10.5" fill="#6b7280">S0 自研 0% · S9 自研 85%</text>
+  <text x="1156" y="602" font-size="10.5" fill="#6b7280">pi 只剩 provider/SDK 适配</text>
+
+  <text x="1156" y="640" font-size="12" font-weight="700" fill="#111827">不做什么</text>
+  <text x="1156" y="662" font-size="10.5" fill="#6b7280">微服务 / MQ / 向量库</text>
+  <text x="1156" y="679" font-size="10.5" fill="#6b7280">第二套 Agent 框架</text>
+  <text x="1156" y="696" font-size="10.5" fill="#6b7280">默认多代理（token 约 15×）</text>
+
+  <!-- bottom row -->
+  <line x1="582" y1="822" x2="582" y2="848" stroke="#9ca3af" stroke-width="1.4" marker-end="url(#a)"/>
+
+  <rect x="48" y="852" width="252" height="96" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="174" y="880" font-size="12.5" font-weight="600" fill="#111827" text-anchor="middle">Event Store</text>
+  <text x="174" y="902" font-size="10.5" fill="#6b7280" text-anchor="middle">kernel-store</text>
+  <text x="174" y="920" font-size="10.5" fill="#6b7280" text-anchor="middle">sqlite / jsonl 后端，单一权威</text>
+
+  <rect x="320" y="852" width="252" height="96" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="446" y="880" font-size="12.5" font-weight="600" fill="#111827" text-anchor="middle">Checkpoints</text>
+  <text x="446" y="902" font-size="10.5" fill="#6b7280" text-anchor="middle">turn / 压缩 / 审批</text>
+  <text x="446" y="920" font-size="10.5" fill="#6b7280" text-anchor="middle">崩溃后补 interrupted</text>
+
+  <rect x="592" y="852" width="252" height="96" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="718" y="880" font-size="12.5" font-weight="600" fill="#111827" text-anchor="middle">Sandbox Runtime</text>
+  <text x="718" y="902" font-size="10.5" fill="#6b7280" text-anchor="middle">Windows Job Object / WSL2</text>
+  <text x="718" y="920" font-size="10.5" fill="#6b7280" text-anchor="middle">macOS Seatbelt · Linux Landlock</text>
+
+  <rect x="864" y="852" width="252" height="96" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="990" y="880" font-size="12.5" font-weight="600" fill="#111827" text-anchor="middle">Workspace</text>
+  <text x="990" y="902" font-size="10.5" fill="#6b7280" text-anchor="middle">本地 / SSH / 容器</text>
+  <text x="990" y="920" font-size="10.5" fill="#6b7280" text-anchor="middle">worktree · 写时复制</text>
+
+  <!-- diff -->
+  <rect x="48" y="976" width="1324" height="80" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="64" y="1000" font-size="12.5" font-weight="700" fill="#111827">与现状的差别</text>
+  <text x="64" y="1022" font-size="11" fill="#374151">1. 内核从 4398 行单体变成有显式端口的包集合，可独立测试、发布、按层替换。</text>
+  <text x="64" y="1042" font-size="11" fill="#374151">2. 沙箱、事件日志、上下文预算、可观测性成为内核一等公民，不再是工作台外挂。</text>
+  <text x="700" y="1022" font-size="11" fill="#374151">3. pi 只留在 adapters/pi 与 provider 适配中，删除它不影响产品。</text>
+  <text x="700" y="1042" font-size="11" fill="#374151">4. Web / Desktop / CLI 共享同一协议，不再是三种私有实现。</text>
+</svg>

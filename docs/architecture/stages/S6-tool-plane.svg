@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 900" width="1360" height="900" font-family="'Microsoft YaHei','Segoe UI',sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="1360" height="900" fill="#ffffff"/>
+  <text x="48" y="58" font-size="26" font-weight="700" fill="#111827">S6 · 工具面：可见性、策略、执行各归各位</text>
+  <text x="48" y="88" font-size="13" fill="#6b7280">改之前：策略写死在 17 行函数里、审批只在内存；改之后：规则表 + 落库审批 + 注册表。工具实现不动。</text>
+
+  <rect x="48" y="120" width="560" height="470" rx="14" fill="#fafafa" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="72" y="152" font-size="15" font-weight="700" fill="#111827">修改前架构 · 三件事互锁</text>
+  <text x="72" y="172" font-size="11.5" fill="#9ca3af">apps/server/src/tool-policy.ts · sessions/tool-factory.ts · core/agent-session.ts</text>
+
+  <rect x="72" y="188" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="212" font-size="13.5" font-weight="600" fill="#111827">策略：17 行三元分支</text>
+  <text x="90" y="233" font-size="11.5" fill="#6b7280">tool-policy.ts:3-4 两个 Set，8-17 四个分支，加规则要发版</text>
+
+  <rect x="72" y="262" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="286" font-size="13.5" font-weight="600" fill="#111827">审批：内存 Map，5 分钟超时</text>
+  <text x="90" y="307" font-size="11.5" fill="#6b7280">tool-authorization.ts:39 重启即丢，31 行写死 300000ms</text>
+
+  <rect x="72" y="336" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="360" font-size="13.5" font-weight="600" fill="#111827">执行：判断藏在插件钩子里</text>
+  <text x="90" y="381" font-size="11.5" fill="#6b7280">tool-factory.ts:110-136 路径检查、122 策略、126 审批</text>
+
+  <rect x="72" y="410" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="434" font-size="13.5" font-weight="600" fill="#111827">可见性：同一集合算三遍</text>
+  <text x="90" y="455" font-size="11.5" fill="#6b7280">1495 / 1562 / 1575 各算一次，_setActiveTools 末尾重建提示</text>
+
+  <rect x="72" y="484" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="508" font-size="13.5" font-weight="600" fill="#111827">提示：注册表与片段同处重建</text>
+  <text x="90" y="529" font-size="11.5" fill="#6b7280">3495 方法内建 registry（3560）与 guidelines（3538），字段在 472</text>
+
+  <line x1="628" y1="352" x2="700" y2="352" stroke="#6b7280" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="664" y="316" font-size="12" font-weight="600" fill="#002FA7" text-anchor="middle">本阶段</text>
+  <text x="664" y="334" font-size="12" font-weight="600" fill="#002FA7" text-anchor="middle">拆三件</text>
+  <text x="664" y="380" font-size="10.5" fill="#9ca3af" text-anchor="middle">契约不变</text>
+
+  <rect x="712" y="120" width="600" height="470" rx="14" fill="#f5f8ff" stroke="#bfd0f5" stroke-width="1.5"/>
+  <text x="736" y="152" font-size="15" font-weight="700" fill="#111827">修改后架构 · 注册表 + 规则表 + 落库审批</text>
+  <text x="736" y="172" font-size="11.5" fill="#7b8db3">新增：kernel-tools 注册表、kernel-policy 规则引擎、approvals 表；tool_call 同步契约不变</text>
+
+  <rect x="736" y="188" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="212" font-size="13.5" font-weight="600" fill="#111827">注册表：一个对象管可见性</text>
+  <text x="754" y="233" font-size="11.5" fill="#6b7280">loadout(mode, policy) 纯函数，同时返回工具与提示文本</text>
+
+  <rect x="736" y="262" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="286" font-size="13.5" font-weight="600" fill="#111827">策略：规则表，带 ruleId</text>
+  <text x="754" y="307" font-size="11.5" fill="#6b7280">policies/default.json，默认 deny，未命中即拒绝并记 id</text>
+
+  <rect x="736" y="336" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="360" font-size="13.5" font-weight="600" fill="#111827">审批：落库，可重放</text>
+  <text x="754" y="381" font-size="11.5" fill="#6b7280">approvals 表，键为 toolCallId 加参数 hash，超时可配</text>
+
+  <rect x="736" y="410" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="434" font-size="13.5" font-weight="600" fill="#111827">执行：只做翻译</text>
+  <text x="754" y="455" font-size="11.5" fill="#6b7280">tool-factory 把 decision 翻成 block 或 requestApproval</text>
+
+  <rect x="736" y="484" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="508" font-size="13.5" font-weight="600" fill="#111827">边界：内核不读工作台配置</text>
+  <text x="754" y="529" font-size="11.5" fill="#6b7280">engine 由工作台注入，registry 不反向依赖 apps/server</text>
+
+  <rect x="48" y="620" width="1264" height="238" rx="14" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="72" y="652" font-size="15" font-weight="700" fill="#111827">与现状的差别</text>
+
+  <text x="72" y="684" font-size="12.5" fill="#374151">1. 加一条"某目录只读"从改代码发版变成改一行 JSON，既有 24 行权限测试不改也要继续绿。</text>
+  <text x="72" y="710" font-size="12.5" fill="#374151">2. 审批不再是进程内状态：重启后同一次调用命中已有决定，"为什么问两次"有记录可查。</text>
+  <text x="72" y="736" font-size="12.5" fill="#374151">3. 工具清单成为可 diff 的对象，可见性与提示文本同源，模型不再看到没注册的工具。</text>
+
+  <text x="72" y="778" font-size="12.5" font-weight="600" fill="#111827">关键约束</text>
+  <text x="72" y="802" font-size="12" fill="#6b7280">· tool_call 钩子同步返回 block，engine 不得变成异步 RPC。</text>
+  <text x="72" y="824" font-size="12" fill="#6b7280">· 旧签名 toolPermission 保留，工作台其余调用点不改。</text>
+  <text x="72" y="846" font-size="12" fill="#6b7280">· 默认 deny；插件工具迁移期用 allowlist 加 ask 兜底。</text>
+
+  <text x="760" y="778" font-size="12.5" font-weight="600" fill="#111827">本阶段完成定义</text>
+  <text x="760" y="802" font-size="12" fill="#6b7280">· 服务端单测全绿，tool-policy.test.ts 未修改</text>
+  <text x="760" y="824" font-size="12" fill="#6b7280">· 工具清单 diff 为空，npm run check 0 error</text>
+  <text x="760" y="846" font-size="12" fill="#6b7280">· approvals 重放测试通过，每次决策带 ruleId</text>
+</svg>

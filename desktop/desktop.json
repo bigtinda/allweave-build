@@ -1,0 +1,7 @@
+{
+	"name": "allweave-build",
+	"author": "AllWeave Build contributors",
+	"productName": "AllWeave Build",
+	"version": "1.1.6",
+	"main": "main.cjs"
+}

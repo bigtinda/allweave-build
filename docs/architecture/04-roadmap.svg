@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 900" width="1420" height="900" font-family="'Microsoft YaHei','Segoe UI',sans-serif">
+  <rect width="1420" height="900" fill="#ffffff"/>
+  <text x="48" y="56" font-size="27" font-weight="700" fill="#111827">S0–S9 路线图 · 28 周，内核所有权从 pi 交棒到自研</text>
+  <text x="48" y="86" font-size="13" fill="#6b7280">每个阶段可独立发布、独立回退；横轴为单人累计周数（S2+S3 合并或 S8 并入 S6 可压到约 20 周）。</text>
+
+  <!-- axis -->
+  <line x1="280" y1="150" x2="1360" y2="150" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="280" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">0 周</text>
+  <text x="466" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">5</text>
+  <text x="652" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">10</text>
+  <text x="838" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">15</text>
+  <text x="1024" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">20</text>
+  <text x="1210" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">25</text>
+  <text x="1352" y="140" font-size="10.5" fill="#9ca3af" text-anchor="middle">28</text>
+  <line x1="466" y1="150" x2="466" y2="760" stroke="#f3f4f6"/>
+  <line x1="652" y1="150" x2="652" y2="760" stroke="#f3f4f6"/>
+  <line x1="838" y1="150" x2="838" y2="760" stroke="#f3f4f6"/>
+  <line x1="1024" y1="150" x2="1024" y2="760" stroke="#f3f4f6"/>
+  <line x1="1210" y1="150" x2="1210" y2="760" stroke="#f3f4f6"/>
+
+  <!-- rows -->
+  <text x="48" y="186" font-size="13" font-weight="600" fill="#111827">S0 基线固化</text>
+  <text x="48" y="204" font-size="10.5" fill="#6b7280">测试门 · traces · 指标</text>
+  <rect x="280" y="172" width="74" height="30" rx="7" fill="#e0e7ff" stroke="#bfd0f5"/>
+  <text x="317" y="192" font-size="11" fill="#002FA7" text-anchor="middle">1–2w</text>
+
+  <text x="48" y="242" font-size="13" font-weight="600" fill="#111827">S1 内核门面</text>
+  <text x="48" y="260" font-size="10.5" fill="#6b7280">接缝收敛 · 零行为变化</text>
+  <rect x="355" y="228" width="37" height="30" rx="7" fill="#e0e7ff" stroke="#bfd0f5"/>
+  <text x="374" y="248" font-size="11" fill="#002FA7" text-anchor="middle">1w</text>
+
+  <text x="48" y="298" font-size="13" font-weight="600" fill="#111827">S2 可观测与成本</text>
+  <text x="48" y="316" font-size="10.5" fill="#6b7280">OTel span · 8 指标</text>
+  <rect x="392" y="284" width="74" height="30" rx="7" fill="#dbeafe" stroke="#bfd0f5"/>
+  <text x="429" y="304" font-size="11" fill="#002FA7" text-anchor="middle">2w</text>
+
+  <text x="48" y="354" font-size="13" font-weight="600" fill="#111827">S3 持久化单一事实</text>
+  <text x="48" y="372" font-size="10.5" fill="#6b7280">checkpoint · resume</text>
+  <rect x="466" y="340" width="112" height="30" rx="7" fill="#dbeafe" stroke="#bfd0f5"/>
+  <text x="522" y="360" font-size="11" fill="#002FA7" text-anchor="middle">3w</text>
+
+  <text x="48" y="410" font-size="13" font-weight="600" fill="#111827">S4 上下文预算</text>
+  <text x="48" y="428" font-size="10.5" fill="#6b7280">CJK 估算 · cache-safe</text>
+  <rect x="578" y="396" width="74" height="30" rx="7" fill="#dbeafe" stroke="#bfd0f5"/>
+  <text x="615" y="416" font-size="11" fill="#002FA7" text-anchor="middle">2w</text>
+
+  <text x="48" y="466" font-size="13" font-weight="600" fill="#111827">S5 压缩子系统抽取</text>
+  <text x="48" y="484" font-size="10.5" fill="#6b7280">AgentSession −550 行</text>
+  <rect x="652" y="452" width="112" height="30" rx="7" fill="#c7d7fb" stroke="#bfd0f5"/>
+  <text x="708" y="472" font-size="11" fill="#002FA7" text-anchor="middle">3w</text>
+
+  <text x="48" y="522" font-size="13" font-weight="600" fill="#111827">S6 工具面重构</text>
+  <text x="48" y="540" font-size="10.5" fill="#6b7280">注册表 · policy/执行分离</text>
+  <rect x="764" y="508" width="112" height="30" rx="7" fill="#c7d7fb" stroke="#bfd0f5"/>
+  <text x="820" y="528" font-size="11" fill="#002FA7" text-anchor="middle">3w</text>
+
+  <text x="48" y="578" font-size="13" font-weight="600" fill="#111827">S7 扩展宿主与信任</text>
+  <text x="48" y="596" font-size="10.5" fill="#6b7280">显式启用 · shim</text>
+  <rect x="876" y="564" width="149" height="30" rx="7" fill="#c7d7fb" stroke="#bfd0f5"/>
+  <text x="950" y="584" font-size="11" fill="#002FA7" text-anchor="middle">4w</text>
+
+  <text x="48" y="634" font-size="13" font-weight="600" fill="#111827">S8 执行隔离</text>
+  <text x="48" y="652" font-size="10.5" fill="#6b7280">Job Object · egress</text>
+  <rect x="1025" y="620" width="149" height="30" rx="7" fill="#c7d7fb" stroke="#bfd0f5"/>
+  <text x="1099" y="640" font-size="11" fill="#002FA7" text-anchor="middle">4w</text>
+
+  <text x="48" y="690" font-size="13" font-weight="600" fill="#111827">S9 内核 loop 与编排</text>
+  <text x="48" y="708" font-size="10.5" fill="#6b7280">自研接管 · legacy-pi 删除</text>
+  <rect x="1174" y="676" width="186" height="30" rx="7" fill="#002FA7"/>
+  <text x="1267" y="696" font-size="11" fill="#ffffff" text-anchor="middle">5w · 交棒完成</text>
+
+  <!-- ownership band -->
+  <text x="48" y="770" font-size="13" font-weight="700" fill="#111827">自研内核占比</text>
+  <rect x="280" y="756" width="1080" height="16" rx="8" fill="#e5e7eb"/>
+  <rect x="280" y="756" width="72" height="16" rx="8" fill="#bfd0f5"/>
+  <rect x="352" y="756" width="324" height="16" fill="#9db8f0"/>
+  <rect x="676" y="756" width="216" height="16" fill="#6f96e8"/>
+  <rect x="892" y="756" width="216" height="16" fill="#3f6fd8"/>
+  <rect x="1108" y="756" width="252" height="16" rx="8" fill="#002FA7"/>
+  <text x="352" y="792" font-size="10.5" fill="#6b7280">0% · 只加测量</text>
+  <text x="676" y="792" font-size="10.5" fill="#6b7280">10–20% · 上下文与压缩</text>
+  <text x="892" y="792" font-size="10.5" fill="#6b7280">35–50% · 工具与扩展</text>
+  <text x="1108" y="792" font-size="10.5" fill="#6b7280">60–85% · 执行与主循环</text>
+
+  <!-- legend / rules -->
+  <rect x="48" y="818" width="1324" height="62" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="64" y="842" font-size="12" font-weight="700" fill="#111827">每阶段完成定义</text>
+  <text x="64" y="864" font-size="11" fill="#374151">① 阶段文档六要素写全且与图一致  ② 测试/回归全绿，npm run check 0 error  ③ 指标前后对比写回 04 文档</text>
+  <text x="760" y="842" font-size="12" font-weight="700" fill="#111827">回退纪律</text>
+  <text x="760" y="864" font-size="11" fill="#374151">④ 每阶段一个 PI_KERNEL_* flag，演练一次回退  ⑤ 独立 commit/PR  ⑥ 60% 阶段起，golden traces 双轨对拍</text>
+</svg>

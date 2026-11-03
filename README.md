@@ -109,7 +109,7 @@ Pi SDK、可信扩展和获准命令使用当前 Windows 用户权限。界面�
 .\desktop\build-installer.ps1
 ```
 
-产物为 `desktop/dist/AllWeaveBuild-<版本>-windows-x64-setup.exe`。安装后通过快捷方式启动，升级安装保留用户数据。包内自带 Node.js 和 Pi SDK 源码。目录必须可写，会话、模型配置和 WebView 数据保存在程序旁的 `data/` 目录。
+产物为 `desktop/dist/AllWeaveBuild-<版本>-windows-x64-setup.exe`。安装后通过快捷方式启动，升级安装保留用户数据。包内自带 Node.js 和 Pi SDK 源码。目录必须可写，会话、模型配置和浏览器数据（Electron `userData`）保存在程序旁的 `data/` 目录。
 
 默认授权安装目录下的 `workspaces/`。在 `workspace-roots.txt` 中逐行加入其他项目目录后重启程序。打包方式见 [桌面版说明](desktop/README.md)。
 

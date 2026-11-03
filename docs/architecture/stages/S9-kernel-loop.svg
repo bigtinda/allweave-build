@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 900" width="1360" height="900" font-family="'Microsoft YaHei','Segoe UI',sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="1360" height="900" fill="#ffffff"/>
+  <text x="48" y="58" font-size="26" font-weight="700" fill="#111827">S9 · 内核 loop 与编排：交棒完成</text>
+  <text x="48" y="88" font-size="13" fill="#6b7280">改之前：两层循环、两套队列、编排在第三方扩展里；改之后：RunController 独占循环与队列，pi 降为 adapter。</text>
+
+  <rect x="48" y="120" width="560" height="470" rx="14" fill="#fafafa" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="72" y="152" font-size="15" font-weight="700" fill="#111827">修改前架构 · 两个所有者</text>
+  <text x="72" y="172" font-size="11.5" fill="#9ca3af">agent-loop.ts · core/agent-session.ts · packages.ts</text>
+
+  <rect x="72" y="188" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="212" font-size="13.5" font-weight="600" fill="#111827">两层循环，两个退出条件</text>
+  <text x="90" y="233" font-size="11.5" fill="#6b7280">agent-loop.ts:163 外面套 agent-session.ts:1822</text>
+
+  <rect x="72" y="262" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="286" font-size="13.5" font-weight="600" fill="#111827">steer 写两处，顺序靠时序</text>
+  <text x="90" y="307" font-size="11.5" fill="#6b7280">agent-session.ts:2239 与 :2245 同写，前端收两种更新</text>
+
+  <rect x="72" y="336" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="360" font-size="13.5" font-weight="600" fill="#111827">编排在第三方扩展里</text>
+  <text x="90" y="381" font-size="11.5" fill="#6b7280">packages.ts:17 默认装 npm:pi-subagents</text>
+
+  <rect x="72" y="410" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="434" font-size="13.5" font-weight="600" fill="#111827">交棒点缺失</text>
+  <text x="90" y="455" font-size="11.5" fill="#6b7280">工作台直接调 AgentSession.prompt，没有端口</text>
+
+  <rect x="72" y="484" width="512" height="62" rx="9" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="90" y="508" font-size="13.5" font-weight="600" fill="#111827">所有权停在 60%</text>
+  <text x="90" y="529" font-size="11.5" fill="#6b7280">换一种循环策略要改上游 agent-session.ts</text>
+
+  <line x1="628" y1="352" x2="700" y2="352" stroke="#6b7280" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="664" y="316" font-size="12" font-weight="600" fill="#002FA7" text-anchor="middle">本阶段</text>
+  <text x="664" y="334" font-size="12" font-weight="600" fill="#002FA7" text-anchor="middle">收循环</text>
+  <text x="664" y="380" font-size="10.5" fill="#9ca3af" text-anchor="middle">不改事件契约</text>
+
+  <rect x="712" y="120" width="600" height="470" rx="14" fill="#f5f8ff" stroke="#bfd0f5" stroke-width="1.5"/>
+  <text x="736" y="152" font-size="15" font-weight="700" fill="#111827">修改后架构 · 一个所有者</text>
+  <text x="736" y="172" font-size="11.5" fill="#7b8db3">新增：kernel-contracts/loop.ts · kernel-loop · kernel-orchestrator · loop-adapter</text>
+
+  <rect x="736" y="188" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="212" font-size="13.5" font-weight="600" fill="#111827">单层循环：RunController</text>
+  <text x="754" y="233" font-size="11.5" fill="#6b7280">turn 状态机 + abort + 重试，只有一个所有者</text>
+
+  <rect x="736" y="262" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="286" font-size="13.5" font-weight="600" fill="#111827">单套队列：MessageQueue</text>
+  <text x="754" y="307" font-size="11.5" fill="#6b7280">steering 与 followUp 合并，先进先出带优先级</text>
+
+  <rect x="736" y="336" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="360" font-size="13.5" font-weight="600" fill="#111827">编排：Orchestrator</text>
+  <text x="754" y="381" font-size="11.5" fill="#6b7280">spawn / send / wait，事件日志支撑可恢复</text>
+
+  <rect x="736" y="410" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="434" font-size="13.5" font-weight="600" fill="#111827">端口：AgentLoop</text>
+  <text x="754" y="455" font-size="11.5" fill="#6b7280">engine=pi 与 engine=own 是同一端口的两个实现</text>
+
+  <rect x="736" y="484" width="552" height="62" rx="9" fill="#ffffff" stroke="#bfd0f5"/>
+  <text x="754" y="508" font-size="13.5" font-weight="600" fill="#111827">pi 降为 adapters/legacy-pi</text>
+  <text x="754" y="529" font-size="11.5" fill="#6b7280">整体删除后 packages/kernel-* 仍能编译</text>
+
+  <rect x="48" y="620" width="1264" height="238" rx="14" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="72" y="652" font-size="15" font-weight="700" fill="#111827">与现状的差别</text>
+
+  <text x="72" y="684" font-size="12.5" fill="#374151">1. “一次 abort 要同时满足两处判定才停”消失：abort 由 RunController 单点判定，事件顺序可复现。</text>
+  <text x="72" y="710" font-size="12.5" fill="#374151">2. 双轨是过渡而非常态：30 天对拍后强制单轨，engine=pi 只保留只读回放，避免两套实现长期并行演进。</text>
+  <text x="72" y="736" font-size="12.5" fill="#374151">3. 编排从“装一个扩展”变成内核能力：子代理的 spawn/等待/恢复有事件日志，重启后可以接着跑。</text>
+
+  <text x="72" y="778" font-size="12.5" font-weight="600" fill="#111827">关键约束</text>
+  <text x="72" y="802" font-size="12" fill="#6b7280">· AgentSessionEvent（agent-session.ts:196-237）冻结，不新增跨层事件类型。</text>
+  <text x="72" y="824" font-size="12" fill="#6b7280">· 改上游 agent-session.ts 必须在 docs/patches/ 留 .patch、理由与上游 commit。</text>
+  <text x="72" y="846" font-size="12" fill="#6b7280">· 双轨期两套实现共用同一批 golden traces，差异必须逐条解释。</text>
+
+  <text x="760" y="778" font-size="12.5" font-weight="600" fill="#111827">本阶段完成定义</text>
+  <text x="760" y="802" font-size="12" fill="#6b7280">· trace 一致率 &gt;95%；pass@1 不降，turns per task 涨幅 ≤5%</text>
+  <text x="760" y="824" font-size="12" fill="#6b7280">· PI_KERNEL_ENGINE=pi 回退演练一次并记录</text>
+  <text x="760" y="846" font-size="12" fill="#6b7280">· 删除 adapter 后 packages/kernel-* 仍编译</text>
+</svg>

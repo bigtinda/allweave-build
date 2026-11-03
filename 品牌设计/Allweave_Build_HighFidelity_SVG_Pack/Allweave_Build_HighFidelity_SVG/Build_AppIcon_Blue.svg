@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="120" height="120" viewBox="0 0 120 120" role="img"
+     aria-labelledby="title desc">
+  <title id="title">Build App Icon — blue</title>
+  <desc id="desc">Build app icon using the exact traced symbol from the supplied poster.</desc>
+  <g>
+    <rect x="1" y="1" width="118" height="118" rx="25" fill="#002FA7" stroke="none" stroke-width="1.5"/>
+    <g transform="translate(18.00 25.45) scale(0.67742)"><path d="M 1 100 L 55 100 L 90 61 L 33 62 Z" fill="#FFFFFF"/><path d="M 96 1 L 42 1 L 10 38 L 62 38 Z" fill="#FFFFFF"/><circle cx="104.50" cy="4.50" r="3.35" fill="#FFFFFF"/><circle cx="111.50" cy="12.50" r="4.20" fill="#FFFFFF"/><circle cx="98.50" cy="16.50" r="3.80" fill="#FFFFFF"/><circle cx="118.50" cy="18.50" r="4.60" fill="#FFFFFF"/><circle cx="95.50" cy="26.50" r="3.35" fill="#FFFFFF"/><circle cx="110.50" cy="26.50" r="4.40" fill="#FFFFFF"/><circle cx="87.50" cy="35.50" r="3.35" fill="#FFFFFF"/><circle cx="101.50" cy="35.50" r="3.35" fill="#FFFFFF"/><circle cx="100.50" cy="64.50" r="4.00" fill="#FFFFFF"/><circle cx="107.50" cy="71.50" r="4.00" fill="#FFFFFF"/><circle cx="94.50" cy="77.50" r="3.80" fill="#FFFFFF"/><circle cx="114.50" cy="78.50" r="4.60" fill="#FFFFFF"/><circle cx="89.50" cy="87.50" r="3.80" fill="#FFFFFF"/><circle cx="106.50" cy="87.50" r="4.60" fill="#FFFFFF"/><circle cx="96.50" cy="96.50" r="4.60" fill="#FFFFFF"/><circle cx="81.50" cy="97.50" r="3.35" fill="#FFFFFF"/></g>
+  </g>
+</svg>

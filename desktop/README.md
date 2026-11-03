@@ -4,7 +4,7 @@
 
 ## 构建
 
-需要 Windows x64、Node.js 24.3+、NSIS 3，以及已安装的仓库依赖。从仓库根目录运行：
+需要 Windows x64、Node.js 22.19+、NSIS 3，以及已安装的仓库依赖。从仓库根目录运行：
 
 ```powershell
 .\desktop\build-installer.ps1 -NsisCompiler C:\path\to\NSIS\makensis.exe
@@ -42,6 +42,6 @@ Electron 运行时 ZIP 优先从 `desktop/dist/electron-cache` 复用；首次�
 
 ## 工作区与数据
 
-默认授权安装目录中的 `workspaces/`。在 `workspace-roots.txt` 中每行添加一个已存在的目录，相对路径以安装目录为基准；修改后重启软件。会话、Pi 模型配置、插件和 WebView 数据位于安装目录的 `data/`，安装目录必须可写。
+默认授权安装目录中的 `workspaces/`。在 `workspace-roots.txt` 中每行添加一个已存在的目录，相对路径以安装目录为基准；修改后重启软件。会话、Pi 模型配置、插件和浏览器数据（Electron `userData`，位于 `data/webview`）保存在安装目录的 `data/`，安装目录必须可写。
 
 备份时同时保存 `data/`、`workspaces/` 和 `workspace-roots.txt`。

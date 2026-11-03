@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" font-family="Microsoft YaHei, Segoe UI, Noto Sans SC, sans-serif">
+<title>02 内核架构（当前：pi kernel 的内部形状与接缝）</title>
+<style>
+  .bg{fill:#f6f7f9}
+  .box{fill:#ffffff;stroke:#94a3b8;stroke-width:1.2}
+  .kb{fill:#eff6ff;stroke:#1d4ed8;stroke-width:1.6}
+  .h{font-size:13px;font-weight:700;fill:#0f172a}
+  .t{font-size:11px;fill:#1e293b}
+  .m{font-size:10.5px;fill:#475569}
+  .k{font-size:11.5px;font-weight:600;fill:#0f172a}
+  .tag{font-size:11px;fill:#ffffff;font-weight:600}
+  .title{font-size:22px;font-weight:700;fill:#0f172a}
+  .sub{font-size:11.5px;fill:#64748b}
+  .cell{fill:#ffffff;stroke:#94a3b8;stroke-width:0.9}
+  .hot{fill:#fee2e2;stroke:#b91c1c;stroke-width:1.2}
+  .warm{fill:#fed7aa;stroke:#c2410c;stroke-width:1.2}
+  .cool{fill:#dbeafe;stroke:#1d4ed8;stroke-width:1}
+  .cm{font-size:10px;fill:#1e293b}
+</style>
+<rect class="bg" x="0" y="0" width="1440" height="1000"/>
+<text class="title" x="24" y="36">02 内核架构（当前）· pi kernel 的内部形状与接缝</text>
+<text class="sub" x="24" y="56">基线 codex/v1 工作树（v1.1.6 后重核） · 2026-11-03 · 证据：docs/audit/kernel-map.md（行号均为实测）；红=耦合热点，橙=第一拆解目标</text>
+
+<!-- ============ 左列：L1 工作台 / L2 接缝 ============ -->
+<rect class="box" x="24" y="72" width="252" height="176" rx="5"/>
+<rect x="24" y="72" width="252" height="22" fill="#15803d" rx="5"/>
+<text x="34" y="88" class="tag">L1 工作台 apps/server（12 个文件）</text>
+<text class="m" x="34" y="112">sessions/pi-runtime.adapter.ts　接缝最重</text>
+<text class="m" x="34" y="130">sessions/tool-factory.ts　工具定义/授权</text>
+<text class="m" x="34" y="148">workspaces/workspace-access.ts　文件访问</text>
+<text class="m" x="34" y="166">sessions/{coordinator,pi-events}.ts</text>
+<text class="m" x="34" y="184">providers.ts · browser.ts · packages.ts</text>
+<text class="m" x="34" y="202">kernel.ts（自装 cordis host 扩展）· 等</text>
+<text class="m" x="34" y="226">共 33 处引用，分散在 12 个文件——</text>
+<text class="m" x="34" y="242">没有任何一个文件叫"内核"</text>
+
+<rect class="box" x="24" y="258" width="252" height="236" rx="5" stroke="#0369a1"/>
+<rect x="24" y="258" width="252" height="22" fill="#0369a1" rx="5"/>
+<text x="34" y="274" class="tag">L2 SDK 接缝（编译期直连源码）</text>
+<text class="k" x="34" y="298">5 个包 × 12 文件 × 26 符号 × 33 处</text>
+<text class="m" x="34" y="318">工厂：createAgentSession</text>
+<text class="m" x="34" y="336">零件：ModelRuntime · SettingsManager</text>
+<text class="m" x="34" y="352">　　　DefaultResourceLoader · SessionManager</text>
+<text class="m" x="34" y="370">工具：create*ToolDefinition + operations</text>
+<text class="m" x="34" y="388">函数：withFileMutationQueue · mime 探测</text>
+<text class="m" x="34" y="406">扩展：codemode · tool-search · mcp 工厂</text>
+<text class="m" x="34" y="430">四个"漏点"：</text>
+<text class="cm" x="42" y="448">1. barrel（index.ts 495 行）全量导出</text>
+<text class="cm" x="42" y="464">2. 深路径 import pi-ai/utils/*</text>
+<text class="cm" x="42" y="480">3. agent-core/chord 未声明依赖</text>
+
+<rect class="box" x="24" y="504" width="252" height="72" rx="5"/>
+<text class="k" x="34" y="524">为什么先收口（S1）</text>
+<text class="m" x="34" y="542">不改它，任何内核改动要同时改 12 个文件；</text>
+<text class="m" x="34" y="558">收口后 = 单一门面，替换只改门面。</text>
+
+<!-- ============ 内核大框 ============ -->
+<rect class="kb" x="300" y="72" width="1116" height="704" rx="8"/>
+<rect x="300" y="72" width="1116" height="26" fill="#1d4ed8" rx="8"/>
+<text x="316" y="90" class="tag">L3 PI KERNEL　packages/*　当下形状：一个 4398 行的类 + 一堆配套</text>
+
+<!-- 表现层 -->
+<text class="m" x="316" y="118">表现层（与内核同仓同 barrel；工作台只用进程内 SDK，不经过 RPC）</text>
+<rect class="cell" x="316" y="124" width="330" height="40" rx="4"/>
+<text class="cm" x="326" y="140">modes/interactive　7.1k 行（TUI 交互）</text>
+<text class="cm" x="326" y="156">modes/rpc　819 行 / 35 命令（JSONL over stdio）</text>
+<rect class="cell" x="654" y="124" width="240" height="40" rx="4"/>
+<text class="cm" x="664" y="140">modes/print　169 行（--print）</text>
+<text class="cm" x="664" y="156">tui · chord（experimental 运行时）</text>
+<rect class="cell" x="902" y="124" width="498" height="40" rx="4"/>
+<text class="cm" x="912" y="140">SDK 组合：sdk.ts 487 · agent-session-runtime · agent-session-services</text>
+<text class="cm" x="912" y="156">setDefaultStreamFn(streamSimple) 在 sdk.ts:46 → pi-ai 网关</text>
+
+<!-- AgentSession -->
+<rect x="316" y="176" width="1084" height="430" fill="#ffffff" stroke="#475569" stroke-width="1.6" rx="6"/>
+<rect x="316" y="176" width="1084" height="24" fill="#334155" rx="6"/>
+<text x="328" y="193" class="tag">AgentSession · packages/coding-agent/src/core/agent-session.ts · 4398 行 · 18 个职责块 / 22 个行号区间</text>
+
+<!-- 22 cells: 11 rows x 2 cols -->
+<rect class="cool" x="328" y="208" width="524" height="30" rx="3"/><text class="cm" x="338" y="227">事件契约 AgentSessionEvent（196-237）← 硬约束 H1</text>
+<rect class="cell" x="860" y="208" width="524" height="30" rx="3"/><text class="cm" x="870" y="227">配置与类型 + estimateMessagesTokens（246-364）</text>
+
+<rect class="cell" x="328" y="242" width="524" height="30" rx="3"/><text class="cm" x="338" y="261">20+ 私有字段，按 6 组堆叠（378-483）</text>
+<rect class="cell" x="860" y="242" width="524" height="30" rx="3"/><text class="cm" x="870" y="261">构造函数：装 6 个 agent 钩子（485-526）</text>
+
+<rect class="cell" x="328" y="276" width="524" height="30" rx="3"/><text class="cm" x="338" y="295">模型鉴权 + 选择记录（528-651）</text>
+<rect class="hot" x="860" y="276" width="524" height="30" rx="3"/><text class="cm" x="870" y="295">工具拦截 + 嵌套工具（652-764）← 审批边界 H2</text>
+
+<rect class="warm" x="328" y="310" width="524" height="30" rx="3"/><text class="cm" x="338" y="329">请求投影 + 压缩阈值 + 虚拟模型（767-844）</text>
+<rect class="cell" x="860" y="310" width="524" height="30" rx="3"/><text class="cm" x="870" y="329">边界生命周期：turn_end / before settle（846-932）</text>
+
+<rect class="cell" x="328" y="344" width="524" height="30" rx="3"/><text class="cm" x="338" y="363">事件发射 + 边界草稿写 SessionManager（934-1100）</text>
+<rect class="hot" x="860" y="344" width="524" height="30" rx="3"/><text class="cm" x="870" y="363">agent 事件 → 持久化（1103-1281）← 从回调里长存储</text>
+
+<rect class="cell" x="328" y="378" width="524" height="30" rx="3"/><text class="cm" x="338" y="397">agent 事件 → 扩展钩子映射（1284-1362）</text>
+<rect class="cell" x="860" y="378" width="524" height="30" rx="3"/><text class="cm" x="870" y="397">subscribe / dispose 生命周期（1369-1414）</text>
+
+<rect class="cell" x="328" y="412" width="524" height="30" rx="3"/><text class="cm" x="338" y="431">工具装载 + 系统提示重建（1416-1813）</text>
+<rect class="hot" x="860" y="412" width="524" height="30" rx="3"/><text class="cm" x="870" y="431">Prompting：外层二次循环（1818-2451）← 两层循环</text>
+
+<rect class="cell" x="328" y="446" width="524" height="30" rx="3"/><text class="cm" x="338" y="465">模型切换 / cycleModel（2453-2600）</text>
+<rect class="cell" x="860" y="446" width="524" height="30" rx="3"/><text class="cm" x="870" y="465">thinking level + 队列模式（2602-2712）</text>
+
+<rect class="warm" x="328" y="480" width="524" height="30" rx="3"/><text class="cm" x="338" y="499">压缩三入口（2714-3256）← S5 第一拆解目标</text>
+<rect class="hot" x="860" y="480" width="524" height="30" rx="3"/><text class="cm" x="870" y="499">扩展绑定：30 个回调交给 runner（3258-3700）</text>
+
+<rect class="cell" x="328" y="514" width="524" height="30" rx="3"/><text class="cm" x="338" y="533">自动重试 / summarization 重试（3701-3827）</text>
+<rect class="cell" x="860" y="514" width="524" height="30" rx="3"/><text class="cm" x="870" y="533">bash 执行（3828-3934）← 无默认超时</text>
+
+<rect class="cell" x="328" y="548" width="524" height="30" rx="3"/><text class="cm" x="338" y="567">树导航 navigateTree / branch summary（3935-4160）</text>
+<rect class="cell" x="860" y="548" width="524" height="30" rx="3"/><text class="cm" x="870" y="567">统计 / 导出 HTML·JSONL（4161-4336）← 表现层职责</text>
+
+<text class="m" x="328" y="596">结论：它同时是状态机、持久化层、扩展宿主、提示词构建器、模型控制器、报告生成器。任何一块都改不动，因为全部共享字段与私有方法。</text>
+
+<!-- 子系统 -->
+<rect class="cell" x="316" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="324" y="630" font-weight="700">循环 agent-core</text>
+<text class="cm" x="324" y="648">agent-loop.ts 949</text>
+<text class="cm" x="324" y="664">agent.ts 613</text>
+<text class="cm" x="324" y="682">唯一守住的分层：</text>
+<text class="cm" x="324" y="698">不依赖 coding-agent</text>
+
+<rect class="cell" x="498" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="506" y="630" font-weight="700">上下文</text>
+<text class="cm" x="506" y="648">compaction/* 1119</text>
+<text class="cm" x="506" y="664">resource-loader 1287</text>
+<text class="cm" x="506" y="682">token 估算 ceil(chars/4)</text>
+<text class="cm" x="506" y="698">CJK 低估 2~8×</text>
+
+<rect class="cell" x="680" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="688" y="630" font-weight="700">工具面</text>
+<text class="cm" x="688" y="648">read 224 / bash 442</text>
+<text class="cm" x="688" y="664">edit·write·grep·ls·find</text>
+<text class="cm" x="688" y="682">operations 注入点干净</text>
+<text class="cm" x="688" y="698">截断：2000 行 / 50KB</text>
+
+<rect class="cell" x="862" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="870" y="630" font-weight="700">模型网关</text>
+<text class="cm" x="870" y="648">model-runtime 1034</text>
+<text class="cm" x="870" y="664">→ pi-ai providers</text>
+<text class="cm" x="870" y="682">凭据 / 目录 / overlay</text>
+<text class="cm" x="870" y="698">virtual model 自研</text>
+
+<rect class="cell" x="1044" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="1052" y="630" font-weight="700">扩展</text>
+<text class="cm" x="1052" y="648">types 1998 / runner 1426</text>
+<text class="cm" x="1052" y="664">loader 780</text>
+<text class="cm" x="1052" y="682">39 个钩子 · jiti 执行</text>
+<text class="cm" x="1052" y="698">宿主权限，无隔离</text>
+
+<rect class="cell" x="1226" y="612" width="174" height="104" rx="4"/>
+<text class="cm" x="1234" y="630" font-weight="700">持久化</text>
+<text class="cm" x="1234" y="648">session-manager 2013</text>
+<text class="cm" x="1234" y="664">JSONL v3 / 11 种 entry</text>
+<text class="cm" x="1234" y="682">getBranch / navigateTree</text>
+<text class="cm" x="1234" y="698">工作台的只读真相源 H3</text>
+
+<!-- 内核出口 -->
+<text class="m" x="316" y="742">内核出口（进程外）：</text>
+<text class="cm" x="420" y="742">JSONL 文件（.pi-console/sessions）　·　模型 provider HTTP/OAuth　·　MCP servers　·　SSH pi-env daemon　·　子进程（bash）</text>
+<text class="cm" x="316" y="762">工作台侧第二权威：console.sqlite（事件日志 + 投影）—— 与 JSONL 无共同事务，重载时以 JSONL 重建、meta 合并 → 见 S3</text>
+
+<!-- ============ 底部三栏 ============ -->
+<rect class="box" x="24" y="792" width="450" height="196" rx="5"/>
+<rect x="24" y="792" width="450" height="22" fill="#b91c1c" rx="5"/>
+<text x="34" y="808" class="tag">三个硬约束（先冻结，再动实现）</text>
+<text class="m" x="34" y="832">H1　AgentSessionEvent 联合类型是公开契约</text>
+<text class="cm" x="42" y="848">agent-session.ts:196-237 · index.ts 导出 · 10 个测试依赖</text>
+<text class="m" x="34" y="870">H2　工作台授权依赖 tool_call 同步返回 {block}</text>
+<text class="cm" x="42" y="886">tool-factory.ts:110-127 · agent-session.ts:658-724</text>
+<text class="m" x="34" y="908">H3　JSONL 是对话真相源，工作台只读</text>
+<text class="cm" x="42" y="924">session-manager.ts:41,1079 · transcript.ts:31-88</text>
+<text class="cm" x="34" y="950">违反任一条 → 工作台会话数据不可恢复；</text>
+<text class="cm" x="34" y="966">所以 S0 先把它们写成测试，S1 才动接缝。</text>
+
+<rect class="box" x="494" y="792" width="500" height="196" rx="5"/>
+<rect x="494" y="792" width="500" height="22" fill="#c2410c" rx="5"/>
+<text x="504" y="808" class="tag">五条耦合证据（为什么改不动）</text>
+<text class="cm" x="504" y="832">① 两层循环：agent-core runLoop + _runAgentPrompt（1822-1851）</text>
+<text class="cm" x="504" y="850">② 持久化在事件回调：_handleAgentEvent → appendMessage（1103/1144）</text>
+<text class="cm" x="504" y="868">③ 压缩触发散在 4 处：776 / 838 / 905 / 1884</text>
+<text class="cm" x="504" y="886">④ 扩展反向依赖：_bindExtensionCore 30 个回调（3360-3493）</text>
+<text class="cm" x="504" y="904">⑤ 提示词 × 工具装载耦合：_preparePromptAndToolLoadout（1738）</text>
+<text class="cm" x="504" y="928">→ 对应阶段：①→S9　②→S3　③→S4/S5　④→S7　⑤→S6</text>
+<text class="cm" x="504" y="952">附：_queueSteer（2238）同时写 Agent.MessageQueue 与</text>
+<text class="cm" x="504" y="968">_steeringMessages —— 两套队列，天然同步 bug 温床（S9 解决）</text>
+
+<rect class="box" x="1014" y="792" width="402" height="196" rx="5"/>
+<rect x="1014" y="792" width="402" height="22" fill="#475569" rx="5"/>
+<text x="1024" y="808" class="tag">能换 / 不能换（决定阶段顺序）</text>
+<text class="cm" x="1024" y="832">commodity：agent loop、pi-ai providers（可换，但语义被深度依赖）</text>
+<text class="cm" x="1024" y="852">自研且可先拆：compaction（契约已是纯函数）→ S5</text>
+<text class="cm" x="1024" y="870">自研需先抽象：extensions（API 面 = 会话面）→ S7</text>
+<text class="cm" x="1024" y="888">自研不可整体换：AgentSession（只能逐块拆）</text>
+<text class="cm" x="1024" y="906">跨层契约：SessionManager（改存储要同时改工作台）→ S3</text>
+<text class="cm" x="1024" y="924">薄且干净：tools（operations 注入点）→ S6/S8</text>
+<text class="cm" x="1024" y="946">表现层：modes/{interactive,print,rpc} + tui → 不需要拆，</text>
+<text class="cm" x="1024" y="962">目标态里由 CLI surface 与会话协议替代</text>
+
+</svg>

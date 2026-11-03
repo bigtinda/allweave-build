@@ -1,7 +1,7 @@
 import { Alert, Collapse } from "@mui/material";
+import type { SessionDetail, ToolCall } from "@pi-console/protocol";
 import { useEffect, useState } from "react";
 import { formatDuration } from "../../../../shared/src/format.ts";
-import type { SessionDetail, ToolCall } from "../../../../shared/src/protocol.ts";
 import { ToolCard } from "../../components/ToolCard.tsx";
 import { Check, ChevronDown, FileCode, Globe, Sparkles, Terminal } from "../../components/WorkbenchIcons.tsx";
 import { executionProgress, toolAction } from "./execution-progress.ts";

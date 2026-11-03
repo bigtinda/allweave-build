@@ -1,4 +1,4 @@
-import type { SessionDetail, ToolCall } from "../../../../shared/src/protocol.ts";
+import type { SessionDetail, ToolCall } from "@pi-console/protocol";
 
 export function toolAction(tool: ToolCall): string {
 	const input = typeof tool.input === "object" && tool.input !== null ? (tool.input as Record<string, unknown>) : {};

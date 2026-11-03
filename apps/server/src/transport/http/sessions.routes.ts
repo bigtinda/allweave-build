@@ -165,6 +165,12 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 	});
 	app.get("/ws/sessions/:id", { websocket: true }, (socket, request) => {
 		const { id } = idParams.parse(request.params);
-		registerSessionStream(socket, agents, id, request.log);
+		const after = z.coerce
+			.number()
+			.int()
+			.nonnegative()
+			.default(0)
+			.parse((request.query as { after?: string }).after);
+		registerSessionStream(socket, agents, id, after, request.log);
 	});
 }

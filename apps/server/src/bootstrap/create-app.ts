@@ -10,6 +10,7 @@ import { AgentService } from "../agent.ts";
 import { AppPluginManager } from "../app-plugins.ts";
 import { BrowserService } from "../browser.ts";
 import { PiPackageManager } from "../packages.ts";
+import { KernelSessionStore } from "../persistence/kernel-session-store.ts";
 import { ProviderManager } from "../providers.ts";
 import { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError, tokenMatches } from "../security.ts";
@@ -44,6 +45,7 @@ export async function createApp(options: AppOptions) {
 	const allowedOrigins = new Set([`http://127.0.0.1:${options.port}`, "http://127.0.0.1:5173"]);
 	const allowedHosts = new Set([`127.0.0.1:${options.port}`, "127.0.0.1:5173"]);
 	const store = new ConsoleStore(options.directory);
+	const sessions = new KernelSessionStore(options.directory, store.db);
 	const remoteWorkspaces = options.remoteWorkspaces ?? new RemoteWorkspaceService(options.directory);
 	const workspaces = new WorkspaceService({
 		directory: options.directory,
@@ -52,7 +54,8 @@ export async function createApp(options: AppOptions) {
 		remote: remoteWorkspaces,
 	});
 	const pluginWorkspace = await workspaces.initialize();
-	store.reassignPluginDevelopmentSessions(pluginWorkspace.id);
+	sessions.reassignPluginDevelopmentSessions(pluginWorkspace.id);
+	sessions.expireApprovals();
 	const agentDirectory = resolve(process.env.PI_CODING_AGENT_DIR ?? join(options.directory, "agent"));
 	const providers = new ProviderManager(agentDirectory);
 	const browser = new BrowserService([...allowedOrigins]);
@@ -64,10 +67,11 @@ export async function createApp(options: AppOptions) {
 		browser,
 		appPlugins,
 		workspaceAccess: workspaces.access,
+		sessionStore: sessions,
 	});
 	providers.setBeforeChange(() => agents.prepareForProviderChange());
 	const packages = new PiPackageManager(agentDirectory, agentDirectory, () => agents.prepareForProviderChange());
-	const storage = new StorageManager(options.directory, agentDirectory, store, agents);
+	const storage = new StorageManager(options.directory, agentDirectory, sessions, agents);
 	const app = Fastify({ logger: options.logger ?? true, bodyLimit: 2 * 1024 * 1024 });
 	app.addHook("onClose", async () => remoteWorkspaces.close());
 	await app.register(websocket, { options: { maxPayload: 4096 } });
@@ -156,6 +160,7 @@ export async function createApp(options: AppOptions) {
 		await agents.close();
 		await packages.close();
 		await providers.close();
+		sessions.close();
 		store.close();
 	});
 	if (!options.createSession) void packages.ensureDefaultPackages();

@@ -24,10 +24,6 @@ import {
 	Tabs,
 	TextField,
 } from "@mui/material";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
-import { packageIdentity } from "../../../shared/src/plugins.ts";
 import type {
 	DefaultPluginStatus,
 	KernelInfo,
@@ -45,7 +41,11 @@ import type {
 	StorageSummary,
 	ThinkingLevel,
 	Workspace,
-} from "../../../shared/src/protocol.ts";
+} from "@pi-console/protocol";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
+import { packageIdentity } from "../../../shared/src/plugins.ts";
 import { AppPluginManagerPanel } from "../components/AppPluginManagerPanel.tsx";
 import { LoadingState } from "../components/LoadingState.tsx";
 import { PersonalizationPanel } from "../components/PersonalizationPanel.tsx";

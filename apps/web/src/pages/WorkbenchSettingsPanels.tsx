@@ -13,10 +13,6 @@ import {
 	Select,
 	TextField,
 } from "@mui/material";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
-import { formatDuration } from "../../../shared/src/format.ts";
 import type {
 	PiConfiguredPackage,
 	PiPackageJob,
@@ -26,7 +22,11 @@ import type {
 	SessionUsageRecord,
 	UsageSummary,
 	Workspace,
-} from "../../../shared/src/protocol.ts";
+} from "@pi-console/protocol";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { Link, NavLink } from "react-router-dom";
+import { formatDuration } from "../../../shared/src/format.ts";
 import { BrowserPanel } from "../components/BrowserPanel.tsx";
 import { LoadingState } from "../components/LoadingState.tsx";
 import { ToolCard } from "../components/ToolCard.tsx";

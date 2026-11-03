@@ -10,9 +10,9 @@ import {
 	TextField,
 	Tooltip,
 } from "@mui/material";
+import type { AccessMode, ModelOption, SessionDetail, ThinkingLevel } from "@pi-console/protocol";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { AccessMode, ModelOption, SessionDetail, ThinkingLevel } from "../../../../shared/src/protocol.ts";
 import {
 	ArrowUp,
 	Check,

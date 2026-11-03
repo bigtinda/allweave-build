@@ -14,10 +14,10 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
+import type { FileContent, FileEntry, SessionDetail, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { FileContent, FileEntry, SessionDetail, Workspace } from "../../../shared/src/protocol.ts";
 import { Markdown } from "../features/chat/Markdown.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";

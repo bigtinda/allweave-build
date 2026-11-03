@@ -146,7 +146,7 @@ test("legacy sparse metadata is upgraded lazily from the retained snapshot", () 
 		projector.get("legacy").messages.map((message) => message.id),
 		["first", "second"],
 	);
-	assert.equal(store.metas[0].version, 2);
+	assert.equal(store.metas[0].version, 3);
 	assert.deepEqual(
 		store.metas[0].messages.map((message) => message.id),
 		["first", "second"],

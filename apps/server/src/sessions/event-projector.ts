@@ -40,6 +40,7 @@ export interface SessionStore {
 	saveSession(detail: SessionDetail, file?: string): void;
 	deleteSession(id: string): void;
 	append(event: Omit<SessionEvent, "eventId">): SessionEvent;
+	flushPending?(): void;
 	withTransaction<T>(operation: () => T): T;
 }
 
@@ -74,6 +75,12 @@ export class EventProjector {
 			}
 			this.records.set(meta.summary.id, { meta });
 		}
+	}
+
+	/** Persisted events after a client sequence, for WebSocket resume. */
+	replay(id: string, after: number): SessionEvent[] {
+		this.get(id);
+		return this.store.loadSessionEvents?.(id, after) ?? [];
 	}
 
 	list(): SessionSummary[] {
@@ -201,6 +208,7 @@ export class EventProjector {
 		this.records.set(detail.id, { meta, detail });
 		this.store.saveSessionMeta(meta);
 		this.store.saveSession(detail);
+		this.store.flushPending?.();
 		return detail;
 	}
 

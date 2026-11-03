@@ -151,6 +151,9 @@ function checkHardBoundary(directory, bans, label) {
 	for (const file of sourceFiles(join(ROOT, directory))) {
 		for (const { specifier, line } of importsOf(file)) {
 			const name = packageName(specifier);
+			if (specifier === "node:sqlite" && display(file) !== "packages/kernel/src/store/sqlite.ts") {
+				failures.push(`${display(file)}:${line}: node:sqlite is only allowed in kernel/src/store/sqlite.ts`);
+			}
 			if (name && bans.has(name)) {
 				failures.push(`${display(file)}:${line}: ${label} must not import ${specifier}. ${bans.get(name)}`);
 			}

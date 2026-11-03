@@ -1,6 +1,6 @@
+import { applyEvent, type SessionDetail, type SocketMessage } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { applyEvent, type SessionDetail, type SocketMessage } from "../../../../shared/src/protocol.ts";
 import { api } from "../../services/api.ts";
 
 export function useSession(id: string | undefined) {
@@ -23,11 +23,12 @@ export function useSession(id: string | undefined) {
 		let socket: WebSocket;
 		let timer: ReturnType<typeof setTimeout>;
 		let attempt = 0;
+		let after = 0;
 		const connect = () => {
 			if (!active) return;
 			setConnection(attempt ? "重新连接中" : "连接中");
 			socket = new WebSocket(
-				`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/sessions/${id}`,
+				`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/sessions/${id}?after=${after}`,
 			);
 			socket.onopen = () => {
 				attempt = 0;
@@ -36,6 +37,7 @@ export function useSession(id: string | undefined) {
 			socket.onmessage = (event) => {
 				if (!active) return;
 				const message = JSON.parse(String(event.data)) as SocketMessage;
+				after = Math.max(after, message.type === "session.snapshot" ? message.session.sequence : message.eventId);
 				client.setQueryData<SessionDetail>(["session", id], (previous) => {
 					if (message.type === "session.snapshot")
 						return !previous || message.session.sequence >= previous.sequence ? message.session : previous;

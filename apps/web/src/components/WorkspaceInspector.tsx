@@ -1,7 +1,7 @@
 import { IconButton, Tooltip } from "@mui/material";
+import type { SessionDetail } from "@pi-console/protocol";
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import type { SessionDetail } from "../../../shared/src/protocol.ts";
 import { ToolCard } from "./ToolCard.tsx";
 import { ChevronDown, Clock, FileCode, Globe, Sparkles } from "./WorkbenchIcons.tsx";
 

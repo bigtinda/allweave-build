@@ -115,6 +115,7 @@ test(
 			// Dispose: deleting the session releases the runtime and the transcript.
 			const transcript = store.sessions().find((record) => record.detail.id === id)?.file;
 			assert.ok(transcript, "the transcript file is tracked");
+			await agents.archive(id);
 			await agents.delete(id);
 			assert.throws(() => agents.get(id), /Session not found/u);
 			await assert.rejects(() => access(transcript));

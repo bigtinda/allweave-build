@@ -1,4 +1,4 @@
-import type { ResourceImportFile } from "../../../shared/src/protocol.ts";
+import type { ResourceImportFile } from "@pi-console/protocol";
 
 const maximumFileCount = 300;
 const maximumTotalBytes = 7 * 1024 * 1024;

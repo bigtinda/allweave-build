@@ -15,18 +15,12 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
+import type { ChatMessage, ModelOption, SessionDetail, SessionSummary, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch as BranchIcon, Check, Copy, Undo2 } from "lucide-react";
 import type { CSSProperties, MutableRefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import type {
-	ChatMessage,
-	ModelOption,
-	SessionDetail,
-	SessionSummary,
-	Workspace,
-} from "../../../../shared/src/protocol.ts";
 import { BuildBrandFamily } from "../../components/BuildBrandFamily.tsx";
 import { BuildMark } from "../../components/BuildMark.tsx";
 import { SpringDisclosure } from "../../components/SpringDisclosure.tsx";

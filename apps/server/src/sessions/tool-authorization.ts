@@ -12,7 +12,15 @@ export interface ApprovalRequest {
 	input: unknown;
 }
 
+export interface ApprovalStore {
+	createApproval(sessionId: string, approval: Approval, toolCallId: string): void;
+	settleApproval(id: string, status: "approved" | "denied" | "expired"): void;
+	expireApprovals(sessionId?: string): number;
+}
+
 export interface ToolAuthorizationOptions {
+	/** Durable approval records; pending rows are expired at startup. */
+	approvals?: ApprovalStore;
 	/** Persist and broadcast a session change. */
 	emit(sessionId: string, change: AdaptedEvent, mutate?: (draft: SessionDetail) => void): void;
 	/** Access mode of the session, used by the permission policy. */
@@ -60,6 +68,7 @@ export class ToolAuthorization {
 			input: request.input,
 			expiresAt: new Date(Date.now() + this.timeoutMs).toISOString(),
 		};
+		this.options.approvals?.createApproval(sessionId, approval, request.toolCallId);
 		return new Promise((resolve) => {
 			const timer = setTimeout(() => this.settle(approval.id, false, true), this.timeoutMs);
 			this.approvals.set(approval.id, {
@@ -112,6 +121,7 @@ export class ToolAuthorization {
 		const approval = this.approvals.get(approvalId);
 		if (!approval) return;
 		this.approvals.delete(approvalId);
+		this.options.approvals?.settleApproval(approvalId, expired ? "expired" : approved ? "approved" : "denied");
 		this.options.emit(approval.sessionId, { type: expired ? "approval.expired" : "agent.status" }, (draft) => {
 			draft.approvals = draft.approvals.filter((item) => item.id !== approvalId);
 			draft.status = draft.approvals.length ? "approval" : "running";

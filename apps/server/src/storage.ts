@@ -2,7 +2,11 @@ import { lstat, readdir, statfs } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { StorageCategory, StorageSummary, StoredSession } from "../../shared/src/protocol.ts";
 import type { AgentService } from "./agent.ts";
-import type { ConsoleStore } from "./store.ts";
+
+interface SessionStorage {
+	sessionFiles(): Map<string, string>;
+	compact(): void;
+}
 
 interface PathMeasure {
 	bytes: number;
@@ -43,10 +47,10 @@ async function measureFiles(paths: string[]): Promise<PathMeasure> {
 export class StorageManager {
 	private dataDirectory: string;
 	private agentDirectory: string;
-	private store: ConsoleStore;
+	private store: SessionStorage;
 	private agents: AgentService;
 
-	constructor(dataDirectory: string, agentDirectory: string, store: ConsoleStore, agents: AgentService) {
+	constructor(dataDirectory: string, agentDirectory: string, store: SessionStorage, agents: AgentService) {
 		this.dataDirectory = resolve(dataDirectory);
 		this.agentDirectory = resolve(agentDirectory);
 		this.store = store;

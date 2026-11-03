@@ -1,5 +1,5 @@
 import { Chip } from "@mui/material";
-import type { ToolCall } from "../../../shared/src/protocol.ts";
+import type { ToolCall } from "@pi-console/protocol";
 import { SpringDisclosure } from "./SpringDisclosure.tsx";
 import { Globe, Terminal } from "./WorkbenchIcons.tsx";
 

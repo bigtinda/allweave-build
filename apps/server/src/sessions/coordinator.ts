@@ -25,11 +25,12 @@ import type { RuntimeEvent } from "./pi-events.ts";
 import type { AgentRuntime, RuntimeFactory } from "./pi-runtime.adapter.ts";
 import { finishRunUsage } from "./run-usage.ts";
 import { SessionRuntimeRegistry } from "./runtime-registry.ts";
-import { ToolAuthorization } from "./tool-authorization.ts";
+import { type ApprovalStore, ToolAuthorization } from "./tool-authorization.ts";
 
 export interface SessionCoordinatorOptions {
 	directory: string;
 	projector: EventProjector;
+	approvalStore?: ApprovalStore;
 	hub: EventHub;
 	runtimeFactory: RuntimeFactory;
 	workspaceAccess: WorkspaceAccess;
@@ -84,6 +85,7 @@ export class SessionCoordinator {
 			},
 		});
 		this.authorizer = new ToolAuthorization({
+			approvals: options.approvalStore,
 			emit: (sessionId, change, mutate) => {
 				this.emit(sessionId, change, mutate);
 			},
@@ -105,6 +107,10 @@ export class SessionCoordinator {
 
 	get(id: string): SessionDetail {
 		return this.projector.get(id);
+	}
+
+	replay(id: string, after: number): ReturnType<EventProjector["replay"]> {
+		return this.projector.replay(id, after);
 	}
 
 	subscribe(id: string, listener: SessionEventListener): () => void {

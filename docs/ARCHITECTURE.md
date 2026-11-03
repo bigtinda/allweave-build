@@ -537,7 +537,7 @@ apps/
 desktop/                    # Electron；不变
 ```
 
-> 目录冲突说明：当前 `packages/protocol` 是旧 `@earendil-works/pi-protocol`（CBOR RPC）。M1 第一步把它移到 `packages/pi-protocol`，保留旧包名以少改 import；释放出的 `packages/protocol` 才用于目标 `@pi-console/protocol`。旧包在 M6 删除。
+> 目录冲突已解决：旧 `@earendil-works/pi-protocol`（CBOR RPC）在 M1 移到 `packages/pi-protocol`，保留旧包名以少改 import；`packages/protocol` 现为目标 `@pi-console/protocol`。旧包在 M6 删除。
 
 目标不包含 `apps/cli`、`remote-workspace.ts` 或 `legacy/` CLI。`apps/server/src/legacy/doompi-host.ts` 只保留 doompi 的 app 级 host，不是 CLI。
 
@@ -1011,6 +1011,25 @@ interface KernelExtension {
 **回退**：只回滚文档/package.json/rename/边界脚本，无运行时行为影响。
 
 #### M1：协议 + 存储
+
+**状态**：功能已完成（2026-11-04）。故障注入与“100 会话列表/冷启动”基准留到 M2 的运行时接入后补测，因为当前 server 仍保留部分旧的 session 元数据路径。
+
+**实现结果**
+
+- 旧协议已移到 `packages/pi-protocol`；新 `packages/protocol` 为 `@pi-console/protocol`，无运行时依赖，包含 DTO、`SessionEvent`、`applyEvent` 和 4 个 reducer 测试。
+- `apps/shared/src/protocol.ts` 转发新协议；`apps/web` 的 18 个文件已改为直接从 `@pi-console/protocol` 导入。
+- `packages/kernel` 新增 `SqliteEventStore`：每会话 `seq`、事件/快照/审批/分支表、`withTransaction`、`compact`。只有 `packages/kernel/src/store/sqlite.ts` 可以 import `node:sqlite`，边界脚本已锁定。
+- `KernelSessionStore` 接入 `apps/server`：旧库一次性迁移（旧全局 event id -> 每会话 1..N）、16 ms/64 事件批量写、`flushPending`、读前 flush、创建会话立即落盘；`ConsoleStore` 仍作为 SQLite 句柄持有者，旧表保留但不再写。
+- 审批已写 `kernel_approvals`：`ToolAuthorization` 通过 `ApprovalStore` 持久化 `pending/approved/denied/expired`；server 启动时把所有遗留 pending 标为 expired。
+- WS `/ws/sessions/:id?after=<seq>` 已支持补发；`useSession` 记录最后 `eventId`/`sequence` 并在重连时传入 `after`。
+- 额外修复：`latestSeq` 取 sessions 与 events 的最大 seq；`saveSessionMeta` 不再偷偷递增 seq；`session-projection`/`session-runtime` 两个旧测试改为当前版本与归档契约。
+
+**验收结果**
+
+- `npm run check` 全绿（含边界、web、desktop）。
+- `apps/server/test/api.test.ts` 9/9；`packages/kernel` store 5/5；旧库迁移测试通过；server 全套 58 pass、3 skipped、1 个既有 workbench-smoke 重连超时未修。
+- 100 条 200 字符 delta：12.3 ms，WAL 1,314,312 bytes（目标 <50 ms、<2 MB）；对照旧实现 311–380 ms、4.9–8.3 MB。
+- 100 会话列表/冷启动、kill -9 故障注入尚未单独跑，列入 M2 回归。
 
 **目标**：先解决“两份历史”和事件写放大；这一阶段不动 loop，风险最低、收益最直接。
 

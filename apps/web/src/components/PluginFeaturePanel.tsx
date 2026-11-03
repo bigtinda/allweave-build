@@ -13,11 +13,11 @@ import {
 	Select,
 	TextField,
 } from "@mui/material";
+import type { GitWorkspaceStatus, SessionDetail, SessionSummary, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, GitBranch, Globe, Network, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { GitWorkspaceStatus, SessionDetail, SessionSummary, Workspace } from "../../../shared/src/protocol.ts";
 import { api } from "../services/api.ts";
 import { LoadingState } from "./LoadingState.tsx";
 import { ToolCard } from "./ToolCard.tsx";

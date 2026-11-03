@@ -1,6 +1,6 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
+import type { SessionDetail } from "@pi-console/protocol";
 import { useState } from "react";
-import type { SessionDetail } from "../../../../shared/src/protocol.ts";
 
 export function UsageSummary({ tokens }: { tokens: SessionDetail["tokens"] }) {
 	const [open, setOpen] = useState(false);

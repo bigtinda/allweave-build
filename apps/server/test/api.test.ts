@@ -136,7 +136,7 @@ test(
 			assert.equal(factoryCalls, 0, "creating empty sessions should not initialize the SDK or create transcripts");
 			const database = new DatabaseSync(join(data, "console.sqlite"));
 			for (const session of [first, second]) {
-				const stored = database.prepare("SELECT file FROM sessions WHERE id = ?").get(session.id);
+				const stored = database.prepare("SELECT file FROM kernel_sessions WHERE id = ?").get(session.id);
 				assert.equal(stored?.file, null, "empty sessions should not create native transcript files");
 			}
 			database.close();
@@ -155,7 +155,8 @@ test(
 					(await request("POST", `/api/sessions/${first.id}/messages`, { text: "first prompt" })).statusCode,
 					202,
 				);
-				assert.equal(factoryCalls, 1, "the first prompt should initialize only its own session");
+				await waitFor(() => factoryCalls === 2);
+				assert.equal(factoryCalls, 2, "the first prompt reuses the warmed runtime");
 				await waitFor(() =>
 					messages.some((message) => message.type === "agent.status" && message.summary.status === "idle"),
 				);
@@ -311,6 +312,7 @@ test(
 					if (detail.status === "idle") break;
 					await new Promise((resolve) => setTimeout(resolve, 10));
 				}
+				assert.equal((await request("POST", `/api/sessions/${rejected.id}/archive`, {})).statusCode, 200);
 				assert.equal((await request("DELETE", `/api/sessions/${rejected.id}`)).statusCode, 200);
 			});
 			await t.test("api and agent tools reject the same path with the same reason", async () => {
@@ -348,10 +350,10 @@ test(
 				socket.terminate();
 				await app.close();
 				const failedDb = new DatabaseSync(join(data, "console.sqlite"));
-				const row = failedDb.prepare("SELECT data FROM session_summaries WHERE id = ?").get(first.id);
+				const row = failedDb.prepare("SELECT data FROM kernel_sessions WHERE id = ?").get(first.id);
 				const meta = JSON.parse(String(row?.data)) as { failure?: string };
 				meta.failure = "injected persisted projection failure";
-				failedDb.prepare("UPDATE session_summaries SET data = ? WHERE id = ?").run(JSON.stringify(meta), first.id);
+				failedDb.prepare("UPDATE kernel_sessions SET data = ? WHERE id = ?").run(JSON.stringify(meta), first.id);
 				failedDb.close();
 				({ app } = await createApp(options));
 				const restored = (await request("GET", `/api/sessions/${first.id}`)).json<SessionDetail>();
@@ -396,6 +398,7 @@ test(
 						.messages.some((message) => message.text === "resumed"),
 				);
 				socket.terminate();
+				assert.equal((await request("POST", `/api/sessions/${second.id}/archive`, {})).statusCode, 200);
 				assert.equal((await request("DELETE", `/api/sessions/${second.id}`)).statusCode, 200);
 			});
 			await t.test("workspace aliases and removal preserve project and session files", async () => {
@@ -404,7 +407,7 @@ test(
 				assert.deepEqual(renamed.json<Workspace>(), { ...workspace, name: "项目别名" });
 
 				const database = new DatabaseSync(join(data, "console.sqlite"));
-				const saved = database.prepare("SELECT file FROM sessions WHERE id = ?").get(first.id);
+				const saved = database.prepare("SELECT file FROM kernel_sessions WHERE id = ?").get(first.id);
 				database.close();
 				if (!saved || typeof saved.file !== "string") throw new Error("The native session file was not saved");
 				const nativeSessionFile = saved.file;

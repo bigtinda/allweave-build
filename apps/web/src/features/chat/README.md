@@ -12,7 +12,7 @@ owns `/`, `/sessions/:id` and the welcome fallback.
 | `Markdown.tsx` | Chat Markdown and code copying |
 | `UsageSummary.tsx` | Existing cumulative token/cache usage display |
 
-Use `services/api.ts` for HTTP and `apps/shared/src/protocol.ts` for DTOs and
+Use `services/api.ts` for HTTP and `@pi-console/protocol` for DTOs and
 `applyEvent`. Query keys, reconnect backoff and the preference store retain their
 existing behavior. CSS remains in the existing global stylesheets.
 

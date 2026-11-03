@@ -1,8 +1,8 @@
 import { Alert, Button, Chip, CircularProgress, Pagination } from "@mui/material";
+import type { SkillImportResult, SkillInfo } from "@pi-console/protocol";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileUp, FolderUp, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { SkillImportResult, SkillInfo } from "../../../shared/src/protocol.ts";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
 import { encodeResourceImportFiles } from "../services/resource-import.ts";

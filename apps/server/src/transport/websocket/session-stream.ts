@@ -10,6 +10,7 @@ export function registerSessionStream(
 	socket: WebSocket,
 	agents: AgentService,
 	sessionId: string,
+	after: number,
 	logger: FastifyBaseLogger,
 ): void {
 	const connectedAt = performance.now();
@@ -24,7 +25,11 @@ export function registerSessionStream(
 		}
 		socket.send(JSON.stringify(event));
 	});
-	socket.send(JSON.stringify({ type: "session.snapshot", session: agents.get(sessionId) }));
+	const snapshot = agents.get(sessionId);
+	socket.send(JSON.stringify({ type: "session.snapshot", session: snapshot }));
+	for (const event of agents.replay(sessionId, after)) {
+		if (event.eventId > snapshot.sequence) socket.send(JSON.stringify(event));
+	}
 	let alive = true;
 	socket.on("pong", () => {
 		alive = true;

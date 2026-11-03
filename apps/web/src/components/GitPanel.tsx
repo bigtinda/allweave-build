@@ -10,9 +10,9 @@ import {
 	MenuItem,
 	TextField,
 } from "@mui/material";
+import type { GitChange, GitChanges, GitDiff, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { GitChange, GitChanges, GitDiff, Workspace } from "../../../shared/src/protocol.ts";
 import { api } from "../services/api.ts";
 
 const changeLabels: Record<string, string> = {

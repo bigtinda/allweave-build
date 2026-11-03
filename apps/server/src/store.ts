@@ -229,6 +229,11 @@ export class ConsoleStore {
 	}
 	close(): void {
 		this.flush();
+		try {
+			this.db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+		} catch {
+			// A second connection may still be closing; the handle is released below.
+		}
 		this.db.close();
 	}
 }

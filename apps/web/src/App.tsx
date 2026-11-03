@@ -17,12 +17,12 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
+import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { AppPluginRegistry } from "../../shared/src/plugins.ts";
-import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "../../shared/src/protocol.ts";
 import { BuildBrandFamily } from "./components/BuildBrandFamily.tsx";
 import { BuildMark } from "./components/BuildMark.tsx";
 import { LoadingState } from "./components/LoadingState.tsx";

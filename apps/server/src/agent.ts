@@ -14,8 +14,9 @@ import { BrowserService } from "./browser.ts";
 import type { ProviderManager } from "./providers.ts";
 import { SessionCoordinator } from "./sessions/coordinator.ts";
 import { EventHub } from "./sessions/event-hub.ts";
-import { EventProjector } from "./sessions/event-projector.ts";
+import { EventProjector, type SessionStore } from "./sessions/event-projector.ts";
 import { AgentRuntimeFactory, type SessionFactory } from "./sessions/pi-runtime.adapter.ts";
+import type { ApprovalStore } from "./sessions/tool-authorization.ts";
 import type { ConsoleStore } from "./store.ts";
 import { WorkspaceAccess } from "./workspaces/workspace-access.ts";
 
@@ -28,6 +29,8 @@ export interface AgentServiceOptions {
 	appPlugins?: AppPluginManager;
 	/** Authorized workspace access; it also owns the remote host service. */
 	workspaceAccess?: WorkspaceAccess;
+	/** Session event storage; defaults to the combined console store. */
+	sessionStore?: SessionStore & ApprovalStore;
 }
 
 /**
@@ -51,7 +54,8 @@ export class AgentService {
 			});
 		this.coordinator = new SessionCoordinator({
 			directory,
-			projector: new EventProjector(store),
+			projector: new EventProjector(options.sessionStore ?? store),
+			approvalStore: options.sessionStore,
 			hub: new EventHub(),
 			runtimeFactory: new AgentRuntimeFactory({
 				createSession: options.createSession,
@@ -83,6 +87,10 @@ export class AgentService {
 	getOrCreatePluginDevelopmentSession(workspaceId: string): Promise<SessionDetail> {
 		return this.coordinator.getOrCreatePluginDevelopmentSession(workspaceId);
 	}
+	replay(id: string, after: number): SessionEvent[] {
+		return this.coordinator.replay(id, after);
+	}
+
 	subscribe(id: string, listener: (event: SessionEvent) => void): () => void {
 		return this.coordinator.subscribe(id, listener);
 	}

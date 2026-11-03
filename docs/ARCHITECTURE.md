@@ -2,7 +2,7 @@
 
 > 基线：`D:/project/pi-main/.pi/worktrees/fix-rebuild`，HEAD `00d2afaa1`（2026-11-03 工作树）。
 >
-> 当前基线运行 `npm run check` 会在 `packages/ai/src/api/openai-responses.ts` 因 `prompt_cache_options` / `"fast"` 与已安装 SDK 类型不匹配而失败；该错误与本文档改动无关，属于待单独处理的依赖升级问题。
+> 检查前置：在全新 worktree 先运行 `npm install --ignore-scripts`。若 `packages/ai/node_modules/openai` 缺失，TypeScript 会退到根目录的 devDependency `openai@6.40.0`，在 `packages/ai/src/api/openai-responses.ts` 报 `prompt_cache_options` / `"fast"` 类型错误；完整安装使用 `openai@7.19.0` 后 `npm run check` 通过。
 >
 > 方法：逐文件阅读 `apps/server`、`apps/web`、`desktop`、`packages/coding-agent`、`packages/agent`、`packages/ai`、`packages/durable`、`packages/chord`、`packages/env` 的实现与测试，再用静态检索核对导入关系。本文只记录代码里能验证的事实；旧架构文档、审计报告和阶段计划已删除，因为其中关于 `apps/server/src/kernel` facade、12 个 `kernel-*` 包、S0–S9 阶段的描述与当前代码不一致。
 >
@@ -1000,7 +1000,7 @@ interface KernelExtension {
 
 **验收**
 
-- `npm run check` 通过（不再依赖已删除的 docs 脚本；基线已有的 `pi-ai` openai-responses 类型错误需单独修复）。
+- `npm run check` 通过（不再依赖已删除的 docs 脚本；先在 worktree 执行 `npm install --ignore-scripts`，确保 `packages/ai` 使用嵌套的 `openai@7.19.0`）。
 - 全仓不再有指向已删除文档的链接；README 增加本文入口。
 - 边界脚本能列出当前 `apps/server` 的 13 条 Pi import 作为基线，不阻断（M6 才阻断）。
 

@@ -62,7 +62,7 @@ Committing:
 - Before committing, run `git status` and verify you are only staging your files.
 - `packages/ai/src/models.generated.ts` may always be included alongside your files.
 - Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
-- This worktree is authorized to commit and push after each completed change once checks pass. Still stage only files changed in this session; if checks fail for pre-existing unrelated errors, report them before committing.
+- This worktree is authorized to commit after each completed change once checks pass. Do not push to GitHub; keep commits local. Still stage only files changed in this session; if checks fail for pre-existing unrelated errors, report them before committing.
 
 Never run (destroys other agents' work or bypasses checks):
 

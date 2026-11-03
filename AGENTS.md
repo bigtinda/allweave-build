@@ -26,6 +26,8 @@
 - Do not preserve backward compatibility unless the user asks for it.
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
 - Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
+- Preserve Pi's lightweight profile. The kernel path stays single-process: no new runtime dependencies, no DI container, ORM, generic event bus, or workflow engine. Lazy-load providers/resources/tools, batch event writes, keep the stable prompt prefix cacheable, and benchmark hot paths. Do not trade startup, memory, or streaming behavior for abstraction.
+- The target architecture removes remote workspaces and the CLI. Do not add new dependencies on `pi-env`, `chord`, `pi-durable`, `pi-tui`, or new CLI surfaces.
 
 ## Commands
 
@@ -60,6 +62,7 @@ Committing:
 - Before committing, run `git status` and verify you are only staging your files.
 - `packages/ai/src/models.generated.ts` may always be included alongside your files.
 - Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
+- This worktree is authorized to commit and push after each completed change once checks pass. Still stage only files changed in this session; if checks fail for pre-existing unrelated errors, report them before committing.
 
 Never run (destroys other agents' work or bypasses checks):
 

@@ -130,6 +130,8 @@ docs/brand/     AllWeave Build README 品牌资源
 
 浏览器通过 HTTP / WebSocket 连接本地服务；本地服务在自身进程内调用 Pi coding-agent SDK（`createAgentSession`），模型调用与工具执行都在服务端完成，没有独立的内核进程或跨进程 RPC。
 
+当前架构、实际依赖关系、问题清单，以及将 Pi 内核逐步替换为自主内核的目标架构与迁移阶段，见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
 ### 常用命令
 
 | 命令 | 用途 |

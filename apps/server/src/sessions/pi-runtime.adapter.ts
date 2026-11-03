@@ -25,7 +25,7 @@ import type {
 } from "../../../shared/src/protocol.ts";
 import type { AppPluginManager } from "../app-plugins.ts";
 import type { BrowserService } from "../browser.ts";
-import { prepareDoomCordisHostExtension } from "../kernel.ts";
+import { prepareDoomCordisHostExtension } from "../legacy/doompi-host.ts";
 import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";

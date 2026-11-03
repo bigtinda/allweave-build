@@ -12,14 +12,14 @@
 
 ## 0. 结论先行
 
-1. **当前工作台不是“Pi RPC 控制内核”。** 本地 Node 服务在自身进程里直接调用 `createAgentSession()`，会话、模型请求、工具执行都在服务进程内完成；没有独立内核进程，也没有跨进程 RPC。`apps/server/src/kernel.ts` 也不是内核 facade，它是 doompi 的 Cordis host 安装器。
+1. **当前工作台不是“Pi RPC 控制内核”。** 本地 Node 服务在自身进程里直接调用 `createAgentSession()`，会话、模型请求、工具执行都在服务进程内完成；没有独立内核进程，也没有跨进程 RPC。原 `apps/server/src/kernel.ts` 不是内核 facade，它是 doompi 的 Cordis host 安装器；M0 已改名为 `apps/server/src/legacy/doompi-host.ts`。
 2. **真正的内核是 `packages/coding-agent` 的 `AgentSession`。** 它 4,398 行，承担会话生命周期、模型运行时、工具注册、上下文构建、压缩、扩展宿主、权限钩子、持久化协调等职责。`packages/agent` 只是它下面的 loop，`packages/ai` 是 provider transport。
 3. **工作台在 `AgentSession` 外面又长了一层“半内核”。** `apps/server` 的 `SessionCoordinator`、`EventProjector`、`ToolAuthorization`、`PiAgentRuntime` 负责运行队列、事件投影、审批、工具策略、SQLite 快照；这些本应属于内核，现在跨包重复。
 4. **当前有三套可运行 runtime。** ① coding-agent CLI（TUI/print/rpc）；② workbench 的进程内 SDK；③ experimental durable harness（`packages/durable` + `packages/chord`）。第三套不在工作台会话主链路，但通过 `pi-env` 被远程工作区拖进了 `apps/server` 的依赖树。目标架构移除远程工作区，`pi-env`/`chord`/`durable` 随之退出产品依赖。
 5. **目标不是“再包一层 Pi”，而是把内核换成自己的。** 新内核只做会话状态机、loop、上下文、工具、策略、事件存储和最小扩展钩子；server 只做 HTTP/WS 与组装，web 只依赖纯协议包。
 6. **最终保留的 Pi 部分很小。** 运行时只保留 `pi-ai`（模型 wire protocol/auth/stream）和它的 `pi-telemetry` 依赖；`pi-mcp`、`pi-codemode` 作为可选工具适配器保留。`coding-agent`、`agent`、`tui`、`env`、`durable`、`chord`、`protocol`、`client`、`server` 全部退出工作台运行时。目标不保留 CLI 版本：`coding-agent`/`agent`/`tui` 只作为迁移期的 `PiEngine`/bridge 依赖，M6 完成后整体删除；远程工作区不在目标范围。
 7. **轻量和效率是硬约束，不是风格偏好。** 保留 Pi 的进程内、按需加载、流式转发、稳定前缀缓存和少依赖特征；不引入 DI/ORM/消息总线/工作流引擎。内核只允许 `protocol` 一个 workspace 运行时依赖；性能预算见 7.2，任何一项不达标都不得把 `NativeEngine` 设为默认。
-7. **迁移顺序必须是“先存储/协议，再会话 actor，再 loop，再上下文/扩展，最后拆 Pi”。** 每一步都能独立发布和回退，不做 big-bang 重写；旧 `AgentSession` 通过 `PiEngine` 适配器保留到新 loop 达到功能与金轨迹对等。
+8. **迁移顺序必须是“先存储/协议，再会话 actor，再 loop，再上下文/扩展，最后拆 Pi”。** 每一步都能独立发布和回退，不做 big-bang 重写；旧 `AgentSession` 通过 `PiEngine` 适配器保留到新 loop 达到功能与金轨迹对等。
 
 ### 关键数字
 
@@ -215,7 +215,7 @@ AgentSessionEvent
 - 约 60 个 hook：`session_start`、`context`、`before_provider_request`、`tool_call`、`tool_result`、`turn_end`、`agent_end`、`ui_prompt_start`、`footer` 等。
 - `registerTool`、`registerCommand`、`registerShortcut`、`getTools/setTools`、`executeTool`、session new/switch/fork、UI 原语。
 - `packages/coding-agent/src/core/extensions/types.ts` 直接 import `pi-tui` 的 `Component`、`TUI`、`EditorComponent`、`OverlayHandle`、`KeyId`、`Theme`。这意味着 coding-agent 的“核心”类型依赖终端 UI，不能在没有 TUI 的情况下干净复用。
-- 工作台的 doompi/Cordis 支持在 `apps/server/src/kernel.ts`：读取 `settings.json` 的 packages/extensions，找到 `@agimon-ai/doompi-core` 的 `dist/cordisHost.mjs`，写一个 `pi-console-cordis-host.mjs` 安装器。它和“内核”没有关系，应该归到 app plugin/legacy host。
+- 工作台的 doompi/Cordis 支持在 `apps/server/src/legacy/doompi-host.ts`（M0 前名为 `src/kernel.ts`）：读取 `settings.json` 的 packages/extensions，找到 `@agimon-ai/doompi-core` 的 `dist/cordisHost.mjs`，写一个 `pi-console-cordis-host.mjs` 安装器。它和“内核”没有关系，应该归到 app plugin/legacy host。
 
 ### 2.7 CLI、桌面与实验路径
 
@@ -424,7 +424,7 @@ AgentSessionEvent
 
 ### P2：结构/命名
 
-- `apps/server/src/kernel.ts` 名为 kernel，实际是 doompi host；应改名 `legacy/doompi-host.ts`。
+- doompi host 曾名 `apps/server/src/kernel.ts`，实际是 doompi host；M0 已改名为 `legacy/doompi-host.ts`。
 - `apps/shared` 没有 `package.json`，web 用 `../../../../shared/src/protocol.ts` 相对导入；应变成包。
 - `apps/server` 的 `adapter.ts` 只有 13 行类型，和 `pi-runtime.adapter.ts` 命名冲突。
 - `packages/coding-agent/src/core` 同时是 SDK、CLI 核心、扩展宿主、包管理器，边界不清。
@@ -536,6 +536,8 @@ apps/
   shared/                   # 过渡期保留；最终删除，内容并入 protocol
 desktop/                    # Electron；不变
 ```
+
+> 目录冲突说明：当前 `packages/protocol` 是旧 `@earendil-works/pi-protocol`（CBOR RPC）。M1 第一步把它移到 `packages/pi-protocol`，保留旧包名以少改 import；释放出的 `packages/protocol` 才用于目标 `@pi-console/protocol`。旧包在 M6 删除。
 
 目标不包含 `apps/cli`、`remote-workspace.ts` 或 `legacy/` CLI。`apps/server/src/legacy/doompi-host.ts` 只保留 doompi 的 app 级 host，不是 CLI。
 
@@ -983,6 +985,8 @@ interface KernelExtension {
 
 #### M0：文档与边界
 
+**状态**：已完成（2026-11-03）。
+
 **目标**：把事实固定下来，防止后续又出现“文档说 kernel facade、代码里没有”的情况。
 
 **改动**
@@ -990,21 +994,21 @@ interface KernelExtension {
 - 删除 `docs/architecture/`、`docs/audit/`、`docs/patches/`、`docs/plugin-architecture.md`、`docs/workbench-ui.md`；保留 `docs/brand/`。
 - 删除 `scripts/check-architecture-docs.mjs`，从根 `package.json` 的 `check` 链移除 `check:arch-docs`。
 - 新增本文。
-- 新增 `scripts/check-kernel-boundaries.mjs`（M0 可先只检查 apps/server 的 Pi import 清单）：
-  - `packages/protocol/src` 禁止 `node:*` 和外部运行时依赖；
-  - `packages/kernel/src` 禁止 `pi-coding-agent`、`pi-agent-core`、`pi-tui`、`pi-env`、`chord`、`pi-durable`、`fastify`、`playwright-core`、`react`；
-  - `node:sqlite` 只允许 `kernel/src/store/sqlite.ts`；
-  - `apps/web` 禁止 import `kernel`；
-  - M6 后 `apps/server` 禁止 `pi-coding-agent`、`pi-agent-core`、`pi-env`、`chord`、`pi-durable`。
-- 把 `apps/server/src/kernel.ts` 改名/移动到 `apps/server/src/legacy/doompi-host.ts`（只改名，不改行为）。
+- 新增 `scripts/check-kernel-boundaries.mjs`，并加入根 `check` 链：
+  - `apps/server` 的 Pi/remote 依赖按“文件 + 包 + 条数”冻结为基线，当前 18 条；新增 import 直接失败，`--enforce` 在基线未清零时失败（M6 门禁）。
+  - `packages/kernel/src` 禁止 `pi-*`、`chord`、`fastify`、`playwright-core`、`react`、`react-dom`。
+  - `apps/web` 禁止 import `@pi-console/kernel`。
+  - `packages/protocol/src` 只有包名为 `@pi-console/protocol` 时才做纯协议检查；当前路径仍是旧的 `@earendil-works/pi-protocol`，M1 释放路径后自动启用。
+- 把 `apps/server/src/kernel.ts` 改名为 `apps/server/src/legacy/doompi-host.ts`，测试改为 `apps/server/test/doompi-host.test.ts`；只改路径/导入，不改行为。
 
 **验收**
 
 - `npm run check` 通过（不再依赖已删除的 docs 脚本；先在 worktree 执行 `npm install --ignore-scripts`，确保 `packages/ai` 使用嵌套的 `openai@7.19.0`）。
 - 全仓不再有指向已删除文档的链接；README 增加本文入口。
-- 边界脚本能列出当前 `apps/server` 的 13 条 Pi import 作为基线，不阻断（M6 才阻断）。
+- 边界脚本能列出当前 `apps/server` 的 18 条 Pi/remote import 作为基线，不阻断（M6 才阻断）；新 import 立即失败。
+- doompi-host 测试通过，导入路径不再指向不存在的 `src/kernel.ts`。
 
-**回退**：只回滚文档/package.json/rename，无运行时影响。
+**回退**：只回滚文档/package.json/rename/边界脚本，无运行时行为影响。
 
 #### M1：协议 + 存储
 
@@ -1012,7 +1016,8 @@ interface KernelExtension {
 
 **改动**
 
-- 新建 `packages/protocol`，把 `apps/shared/src/protocol.ts` 的 DTO、`SessionEvent`、`applyEvent` 迁入；新增 `KernelEvent` 信封、`seq`、`after` resume、`v:2`。
+- 先释放 `packages/protocol` 路径：当前该目录是旧 CBOR RPC 包 `@earendil-works/pi-protocol`（依赖 chord/typebox，仅被 `packages/client`、`packages/server`、`coding-agent` 的实验 RPC 代码和脚本使用）。把它移到 `packages/pi-protocol`，保留包名 `@earendil-works/pi-protocol`，只更新路径型别名/相对导入；然后在新 `packages/protocol` 建 `@pi-console/protocol`。这一步必须先做，否则边界脚本无法区分新旧协议包。
+- 新建 `packages/protocol`，把 `apps/shared/src/protocol.ts` 的 DTO、`SessionEvent`、`applyEvent` 迁入；新增 `KernelEvent` 信封、`seq`、`after` resume、`v:2`。协议包只允许相对导入，不 import Node。
 - 新建 `packages/kernel/src/store`：
   - `sessions`/`session_events`/`session_snapshots`/`approvals`/`branches`；
   - 每会话 `seq`，批量 delta，检查点策略；
@@ -1410,7 +1415,7 @@ apps/server → @pi-console/kernel + @pi-console/kernel-adapters + @pi-console/p
 | 桌面 | `desktop/src/main.ts`（83 行） |
 | 前端会话 | `apps/web/src/features/chat/useSession.ts:29`、`:40`、`:42` |
 | WS | `apps/server/src/transport/websocket/session-stream.ts` |
-| doompi host | `apps/server/src/kernel.ts`（M0 改名） |
+| doompi host | `apps/server/src/legacy/doompi-host.ts`（M0 改名，原 `src/kernel.ts`） |
 
 ### 9.2 术语
 

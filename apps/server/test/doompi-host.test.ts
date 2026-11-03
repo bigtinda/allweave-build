@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { prepareDoomCordisHostExtension } from "../src/kernel.ts";
+import { prepareDoomCordisHostExtension } from "../src/legacy/doompi-host.ts";
 
 test("Pi RPC prepares Doom Cordis host before package extensions", async (t) => {
-	const directory = await mkdtemp(join(tmpdir(), "pi-console-kernel-"));
+	const directory = await mkdtemp(join(tmpdir(), "pi-console-doompi-host-"));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	const packageDirectory = join(directory, "npm", "node_modules", "@agimon-ai", "doompi-core");
 	const distributionDirectory = join(packageDirectory, "dist");
@@ -32,7 +32,7 @@ test("Pi RPC prepares Doom Cordis host before package extensions", async (t) => 
 });
 
 test("Pi RPC skips the Doom Cordis shim when no DoomPi Core package is installed", async (t) => {
-	const directory = await mkdtemp(join(tmpdir(), "pi-console-kernel-"));
+	const directory = await mkdtemp(join(tmpdir(), "pi-console-doompi-host-"));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	await writeFile(join(directory, "settings.json"), JSON.stringify({ packages: ["npm:pi-subagents"] }));
 	assert.equal(await prepareDoomCordisHostExtension(directory), undefined);

@@ -15,12 +15,12 @@ packages/kernel-adapters
   ModelPort / McpPort / SandboxPort 的实现
         ^
         | 第三方 SDK 只出现在这里
-packages/model | packages/mcp | packages/sandbox
+packages/model | 官方 MCP SDK（kernel-adapters 内） | packages/sandbox
 ```
 
 规则：
 
-- kernel 不 import `@allweave/model`、`@allweave/mcp`、`@allweave/sandbox` 或任何 provider SDK。
+- kernel 不 import `@allweave/model`、`@allweave/sandbox`、`@modelcontextprotocol/client` 或任何 provider SDK。
 - 第三方类型不能出现在 `NativeModelRequest`、`NativeTool`、`NativeToolResult` 中。
 - 端口错误必须可分类；原始错误文本保留在 `message`/`cause` 中，不要求 kernel 解析。
 - 所有端口方法都接受 `AbortSignal`，取消必须传递到最底层并释放资源。

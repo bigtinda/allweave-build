@@ -1,6 +1,6 @@
 import type { NativeTool } from "@allweave/kernel";
-import { McpClient, StdioTransport, StreamableHttpTransport } from "@allweave/mcp";
 import type { McpServerConfig } from "./config.ts";
+import { connectOfficialServer } from "./official.ts";
 import { createMcpNativeTools, type McpToolClient } from "./tools.ts";
 
 interface Connection {
@@ -22,12 +22,7 @@ export interface McpManager {
 }
 
 async function connectServer(name: string, config: McpServerConfig): Promise<Connection> {
-	const client = new McpClient({ name: "allweave", version: "0.1.0" });
-	const transport = config.url
-		? new StreamableHttpTransport({ url: config.url, headers: config.headers })
-		: new StdioTransport({ command: config.command!, args: config.args, cwd: config.cwd, env: config.env });
-	await client.connect(transport);
-	return { name, client, close: () => client.close() };
+	return connectOfficialServer(name, config);
 }
 
 /** Connects configured MCP servers concurrently; one failure does not hide the others. */

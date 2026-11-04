@@ -35,7 +35,7 @@ const SERVER_BANS = new Map([...REMOVED_PACKAGES].map((name) => [name, "package 
 const KERNEL_BANS = new Map([
 	...[...REMOVED_PACKAGES].map((name) => [name, "removed package"]),
 	["@allweave/model", "model transports live in kernel-adapters"],
-	["@allweave/mcp", "MCP lives in kernel-adapters"],
+	["@modelcontextprotocol/client", "MCP lives in kernel-adapters"],
 	["@allweave/sandbox", "sandbox lives in kernel-adapters"],
 	["@allweave/kernel-adapters", "kernel is the inner layer"],
 	["fastify", "kernel is a library, not an HTTP server"],
@@ -49,7 +49,7 @@ const WEB_BANS = new Map([
 	["@allweave/kernel", "web must only import protocol DTOs"],
 	["@allweave/kernel-adapters", "web must only import protocol DTOs"],
 	["@allweave/model", "web must only import protocol DTOs"],
-	["@allweave/mcp", "web must only import protocol DTOs"],
+	["@modelcontextprotocol/client", "web must only import protocol DTOs"],
 	["@allweave/sandbox", "web must only import protocol DTOs"],
 	["@allweave/telemetry", "web must only import protocol DTOs"],
 ]);

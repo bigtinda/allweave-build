@@ -22,7 +22,6 @@ const WORKSPACE = {
 	"@allweave/model": "packages/model/src",
 	"@allweave/sandbox": "packages/sandbox/src",
 	"@allweave/telemetry": "packages/telemetry/src",
-	"@allweave/mcp": "packages/mcp/src",
 };
 
 /**

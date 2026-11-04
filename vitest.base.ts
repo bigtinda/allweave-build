@@ -4,9 +4,6 @@ import { defineConfig } from "vitest/config";
 export const workspaceSourcePaths = {
 	telemetryIndex: fileURLToPath(new URL("./packages/telemetry/src/index.ts", import.meta.url)),
 	telemetryTesting: fileURLToPath(new URL("./packages/telemetry/src/testing/index.ts", import.meta.url)),
-	mcpIndex: fileURLToPath(new URL("./packages/mcp/src/index.ts", import.meta.url)),
-	mcpOAuth: fileURLToPath(new URL("./packages/mcp/src/oauth/index.ts", import.meta.url)),
-	mcpTesting: fileURLToPath(new URL("./packages/mcp/src/testing/index.ts", import.meta.url)),
 	modelIndex: fileURLToPath(new URL("./packages/model/src/index.ts", import.meta.url)),
 	modelCompat: fileURLToPath(new URL("./packages/model/src/compat.ts", import.meta.url)),
 	modelOAuth: fileURLToPath(new URL("./packages/model/src/oauth.ts", import.meta.url)),
@@ -23,9 +20,6 @@ export default defineConfig({
 		alias: [
 			{ find: /^@allweave\/telemetry$/, replacement: workspaceSourcePaths.telemetryIndex },
 			{ find: /^@allweave\/telemetry\/testing$/, replacement: workspaceSourcePaths.telemetryTesting },
-			{ find: /^@allweave\/mcp$/, replacement: workspaceSourcePaths.mcpIndex },
-			{ find: /^@allweave\/mcp\/oauth$/, replacement: workspaceSourcePaths.mcpOAuth },
-			{ find: /^@allweave\/mcp\/testing$/, replacement: workspaceSourcePaths.mcpTesting },
 			{ find: /^@allweave\/model$/, replacement: workspaceSourcePaths.modelIndex },
 			{ find: /^@allweave\/model\/compat$/, replacement: workspaceSourcePaths.modelCompat },
 			{ find: /^@allweave\/model\/oauth$/, replacement: workspaceSourcePaths.modelOAuth },

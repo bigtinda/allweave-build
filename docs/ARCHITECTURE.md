@@ -44,7 +44,6 @@ flowchart LR
 
   subgraph Support["仓库内支持层"]
     Model["packages/model<br/>transport / auth / catalog"]
-    MCPClient["packages/mcp<br/>stdio / HTTP client"]
     QuickJS["packages/sandbox<br/>QuickJS-WASI worker"]
     Telemetry["packages/telemetry"]
   end
@@ -57,7 +56,7 @@ flowchart LR
   Fastify --> Agent --> Coord --> Runtime --> Loop
   Loop --> Store
   Runtime --> Gateway --> Model --> Providers
-  Runtime --> MCP --> MCPClient --> MCPServers
+  Runtime --> MCP --> MCPServers
   Runtime --> Sandbox --> QuickJS
   Runtime --> BrowserTool
   Coord --> Projector --> Store
@@ -81,7 +80,6 @@ flowchart TD
   Kernel["@allweave/kernel<br/>会话 / 循环 / 工具 / 存储"]
   Adapters["@allweave/kernel-adapters<br/>模型 / MCP / 沙箱 / 浏览器"]
   Model["@allweave/model<br/>模型 transport"]
-  MCP["@allweave/mcp<br/>MCP client"]
   Sandbox["@allweave/sandbox<br/>QuickJS"]
   Telemetry["@allweave/telemetry"]
   Server["apps/server"]
@@ -92,7 +90,6 @@ flowchart TD
   Protocol --> Kernel
   Telemetry --> Model
   Model --> Adapters
-  MCP --> Adapters
   Sandbox --> Adapters
   Kernel --> Server
   Adapters --> Server
@@ -107,8 +104,8 @@ flowchart TD
 | --- | --- | --- | --- |
 | DTO | `packages/protocol` | 仅相对导入 | 运行逻辑、Node API |
 | 内核 | `packages/kernel` | `@allweave/protocol`、`node:sqlite`（仅 store） | HTTP、React、模型、MCP、沙箱 |
-| 适配 | `packages/kernel-adapters` | kernel、model、mcp、sandbox | 路由、会话投影、UI |
-| 支持 | `packages/{model,mcp,sandbox,telemetry}` | 各自第三方 SDK | 产品编排 |
+| 适配 | `packages/kernel-adapters` | kernel、model、sandbox、官方 MCP SDK | 路由、会话投影、UI |
+| 支持 | `packages/{model,sandbox,telemetry}` | 各自第三方 SDK | 产品编排 |
 | 服务 | `apps/server` | 上述全部 | 渲染与浏览器 DOM |
 | Web | `apps/web` | `@allweave/protocol`、`apps/shared` | 内核、适配器、Node API |
 
@@ -281,19 +278,15 @@ flowchart LR
 
 ## 8. MCP
 
-`packages/mcp` 是仓库内的 MCP 客户端：
-
-- `StdioTransport`：`cross-spawn` 启动子进程，JSON-RPC 按行传输。
-- `StreamableHttpTransport`：HTTP POST + SSE 响应。
-- `McpClient`：初始化、工具列表、调用、取消、进度、roots、OAuth token 注入。
-- 超时和关闭由客户端管理；子进程随 manager 关闭。
+MCP 客户端直接使用官方 SDK `@modelcontextprotocol/client@2.4.0`，由 `packages/kernel-adapters` 封装，不再维护自定义 JSON-RPC/传输实现。
 
 `packages/kernel-adapters/src/mcp/`：
 
-- `loadMcpConfig()` 读取全局配置和可信项目的 MCP 配置。
-- `createMcpManager()` 管理连接池和重连。
-- `createMcpNativeTools()` 把 MCP 工具映射为 `mcp_<server>_<tool>`。
-- 插件开发会话默认不加载 MCP；`ALLWEAVE_MCP=off` 可全局关闭。
+- `config.ts` 读取 `<agentDir>/mcp.json`，可信项目再合并 `<cwd>/.allweave/mcp.json`。
+- `official.ts` 用官方 `Client` 连接 stdio 或 Streamable HTTP；HTTP headers 通过 `requestInit` 传入。
+- `manager.ts` 并发连接配置的 server，单个失败只记录诊断，不阻塞其他 server。
+- `tools.ts` 把 MCP 工具映射为 `mcp__<server>__<tool>`，保留 `readOnlyHint`，工具结果转成文本。
+- 连接和子进程随 manager 关闭；插件开发会话默认不加载 MCP，`ALLWEAVE_MCP=off` 可全局关闭。
 
 ## 9. 服务端
 
@@ -436,4 +429,4 @@ npm run build:web
 
 ## 17. 许可证与来源
 
-代码使用 MIT License。仓库内模型、MCP 和沙箱支持层包含基于 MIT 许可的衍生实现，原始版权声明保留在根 `LICENSE` 中。产品名称、包命名空间和运行时编排属于 AllWeave Build。
+代码使用 MIT License。仓库内模型和沙箱支持层包含基于 MIT 许可的衍生实现，原始版权声明保留在根 `LICENSE` 中；MCP 使用官方 SDK。产品名称、包命名空间和运行时编排属于 AllWeave Build。

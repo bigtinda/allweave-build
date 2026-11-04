@@ -46,7 +46,7 @@ export function loadMcpConfig(options: { agentDir: string; cwd: string; projectT
 		servers.set(name, config);
 	}
 	if (options.projectTrusted) {
-		for (const [name, config] of Object.entries(read(join(options.cwd, ".pi", "mcp.json"), diagnostics))) {
+		for (const [name, config] of Object.entries(read(join(options.cwd, ".allweave", "mcp.json"), diagnostics))) {
 			servers.set(name, { ...servers.get(name), ...config });
 		}
 	}

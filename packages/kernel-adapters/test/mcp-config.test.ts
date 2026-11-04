@@ -9,12 +9,15 @@ test("merges global and trusted project MCP config", () => {
 	const root = mkdtempSync(join(tmpdir(), "mcp-config-"));
 	try {
 		mkdirSync(join(root, "agent"), { recursive: true });
-		mkdirSync(join(root, "project", ".pi"), { recursive: true });
+		mkdirSync(join(root, "project", ".allweave"), { recursive: true });
 		writeFileSync(
 			join(root, "agent", "mcp.json"),
 			JSON.stringify({ mcpServers: { a: { command: "a" }, b: { command: "b", enabled: false } } }),
 		);
-		writeFileSync(join(root, "project", ".pi", "mcp.json"), JSON.stringify({ mcpServers: { a: { args: ["x"] } } }));
+		writeFileSync(
+			join(root, "project", ".allweave", "mcp.json"),
+			JSON.stringify({ mcpServers: { a: { args: ["x"] } } }),
+		);
 		const loaded = loadMcpConfig({ agentDir: join(root, "agent"), cwd: join(root, "project"), projectTrusted: true });
 		assert.deepEqual([...loaded.servers.keys()], ["a"]);
 		assert.deepEqual(loaded.servers.get("a")?.args, ["x"]);

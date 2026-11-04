@@ -54,7 +54,7 @@
 
 所有 workspace 均为 1.2.1：
 
-`@allweave/{server,web,kernel,kernel-adapters,mcp,model,protocol,sandbox,telemetry}`。
+`@allweave/{server,web,kernel,kernel-adapters,model,protocol,sandbox,telemetry}`。阶段 3 已删除 `packages/mcp`，MCP 由官方 SDK 在 `packages/kernel-adapters` 内封装。
 
 包职责：
 
@@ -63,7 +63,6 @@
 | `packages/kernel` | 会话、循环、上下文、工具、存储 | 否（Node 标准库除外） |
 | `packages/kernel-adapters` | 模型、MCP、沙箱适配 | 是，仅在此层 |
 | `packages/model` | 模型协议、provider、认证、目录 | 是 |
-| `packages/mcp` | MCP 客户端、传输、OAuth | 是 |
 | `packages/sandbox` | QuickJS + Worker 沙箱 | 是 |
 | `packages/protocol` | 共享协议类型 | 否 |
 | `packages/telemetry` | 模型层遥测类型 | 否 |
@@ -135,6 +134,10 @@
 预计 2–3 天。
 
 步骤：
+
+执行结果（2026-11-04）：已删除 `packages/mcp`，在 `packages/kernel-adapters/src/mcp/official.ts` 直接封装 `@modelcontextprotocol/client@2.4.0`；`manager.ts` 调用方不变，项目配置改为 `.allweave/mcp.json`，stdio 集成测试通过。OAuth 配置未接入 manager（与替换前行为一致），作为后续需求处理。
+
+原步骤：
 
 1. 在 `packages/mcp` 内新增官方 SDK 适配，不改公开导出；保留 `McpClient` 外观，内部改为官方 client/transport。
 2. 先接 stdio，再接 Streamable HTTP，最后接 OAuth；每一步用本地测试服务器验证。

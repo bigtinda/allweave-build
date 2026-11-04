@@ -28,7 +28,6 @@
 - `packages/kernel`：会话状态机、原生循环、工具执行、上下文构建、压缩、扩展和 SQLite 事件存储。
 - `packages/kernel-adapters`：模型网关、MCP、工具沙箱和浏览器工具。
 - `packages/model`：模型协议、供应商目录、认证、流式和用量统计。
-- `packages/mcp`：MCP stdio/HTTP 传输和 OAuth。
 - `packages/sandbox`：基于 QuickJS-WASI 的工具沙箱，随服务端进程内嵌运行。
 - `packages/protocol` / `packages/telemetry`：纯 DTO 与遥测支持。
 
@@ -80,7 +79,6 @@ packages/kernel/           会话、循环、工具、上下文、存储、扩�
 packages/kernel-adapters/  模型、MCP、沙箱、浏览器适配
 packages/model/            模型 transport / auth / catalog
 packages/telemetry/        遥测支持层
-packages/mcp/              MCP 协议实现
 packages/sandbox/          QuickJS-WASI 工具沙箱
 desktop/                   Electron 桌面封装
 ```
@@ -112,7 +110,7 @@ API 与 WebSocket 校验本机 Host、Origin 和同源请求；当前没有通�
 
 ## 许可证
 
-代码使用 [MIT License](LICENSE)。模型、MCP 和沙箱支持层包含基于 MIT 许可的衍生代码，原始版权声明保留在许可证文件中。
+代码使用 [MIT License](LICENSE)。模型和沙箱支持层包含基于 MIT 许可的衍生代码，原始版权声明保留在许可证文件中；MCP 使用官方 `@modelcontextprotocol/client`。
 
 ---
 

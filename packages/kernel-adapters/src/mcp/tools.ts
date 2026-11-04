@@ -21,7 +21,7 @@ export interface McpCallResult {
 	isError?: boolean;
 }
 
-/** Structural subset of @allweave/mcp's client. */
+/** Structural subset of the MCP client used by the manager. */
 export interface McpToolClient {
 	listTools(): Promise<McpToolInfo[]>;
 	callTool(name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<McpCallResult>;

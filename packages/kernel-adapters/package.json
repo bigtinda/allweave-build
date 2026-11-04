@@ -12,11 +12,11 @@
 		"test": "node --import ../../scripts/source-resolver.ts --test test/*.test.ts"
 	},
 	"dependencies": {
-		"@allweave/model": "^1.2.1",
-		"@allweave/sandbox": "^1.2.1",
-		"@allweave/mcp": "^1.2.1",
 		"@allweave/kernel": "^1.2.1",
+		"@allweave/model": "^1.2.1",
 		"@allweave/protocol": "^1.2.1",
+		"@allweave/sandbox": "^1.2.1",
+		"@modelcontextprotocol/client": "2.4.0",
 		"typebox": "1.3.27"
 	},
 	"engines": {

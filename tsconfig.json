@@ -23,15 +23,6 @@
 			"@allweave/sandbox/worker": [
 				"./packages/sandbox/src/runtime/worker.ts"
 			],
-			"@allweave/mcp": [
-				"./packages/mcp/src/index.ts"
-			],
-			"@allweave/mcp/oauth": [
-				"./packages/mcp/src/oauth/index.ts"
-			],
-			"@allweave/mcp/testing": [
-				"./packages/mcp/src/testing/index.ts"
-			],
 			"@allweave/model": [
 				"./packages/model/src/index.ts"
 			],

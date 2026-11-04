@@ -188,6 +188,8 @@ buildContext
 
 - `builder.ts` 组装系统提示、资源、技能、工作区信息和历史消息。
 - `budget.ts` 估算 token；`compaction.ts` 在接近上下文窗口时生成摘要并保留近期消息。
+- 自动压缩只在请求超过 `maxTokens - reserveTokens` 时触发；`POST /api/sessions/:id/compact` 提供手动压缩，工作台顶部“压缩上下文”按钮调用同一入口。
+- 手动压缩把摘要和保留的近期消息保存为后续请求的基座，旧消息仍保留在会话历史中；分支/回溯会清除该基座。
 - 稳定前缀保持缓存友好：系统提示、工具定义和资源顺序不随会话轮次变化。
 - 压缩是确定性截断与摘要的组合，不依赖第二次模型调用之外的外部服务。
 
@@ -285,6 +287,8 @@ MCP 客户端直接使用官方 SDK `@modelcontextprotocol/client@2.4.0`，由 `
 
 - `config.ts` 读取 `<agentDir>/mcp.json`，可信项目再合并 `<cwd>/.allweave/mcp.json`。
 - `official.ts` 用官方 `Client` 连接 stdio 或 Streamable HTTP；HTTP headers 通过 `requestInit` 传入。
+- HTTP server 支持 `auth`：`{"type":"bearer","token":"..."}` 直接注入 `Authorization`；或 `{"type":"oauth","grant":"client_credentials","clientId":"...","clientSecret":"...","issuer":"https://auth.example.com","scope":"..."}`，由官方 `ClientCredentialsProvider` 完成令牌获取和刷新。
+- OAuth 令牌只保存在进程内；当前不提供交互式授权码回调，需要用户交互的 server 应使用预配置 bearer token 或等待后续版本。
 - `manager.ts` 并发连接配置的 server，单个失败只记录诊断，不阻塞其他 server。
 - `tools.ts` 把 MCP 工具映射为 `mcp__<server>__<tool>`，保留 `readOnlyHint`，工具结果转成文本。
 - 连接和子进程随 manager 关闭；插件开发会话默认不加载 MCP，`ALLWEAVE_MCP=off` 可全局关闭。

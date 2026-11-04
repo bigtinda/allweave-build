@@ -53,6 +53,11 @@ export interface AgentRuntime {
 	readonly handlesPlanMode?: boolean;
 	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[], images?: NativeImage[]): Promise<void>;
 	abort(): Promise<void>;
+	compact(options?: { keepRecentTokens?: number }): Promise<{
+		compacted: boolean;
+		dropped: number;
+		estimatedTokens: number;
+	}>;
 	usage(): RuntimeUsage;
 	compactions?(): number;
 	subscribe(listener: (event: RuntimeEvent) => void): () => void;

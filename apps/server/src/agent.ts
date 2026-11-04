@@ -108,6 +108,13 @@ export class AgentService {
 	async warm(id: string): Promise<void> {
 		await this.coordinator.warm(id);
 	}
+	async compact(
+		id: string,
+		options: { keepRecentTokens?: number } = {},
+	): Promise<{ compacted: boolean; dropped: number; estimatedTokens: number }> {
+		return this.coordinator.compact(id, options);
+	}
+
 	async abort(id: string): Promise<void> {
 		await this.coordinator.abort(id);
 	}

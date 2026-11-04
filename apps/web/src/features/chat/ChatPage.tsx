@@ -378,6 +378,7 @@ export function ChatPage({
 	const [conversationNotice, setConversationNotice] = useState("");
 	const [references, setReferences] = useState<string[]>([]);
 	const [approving, setApproving] = useState(false);
+	const [compacting, setCompacting] = useState(false);
 	const [recovering, setRecovering] = useState(false);
 	const [navigatingConversation, setNavigatingConversation] = useState(false);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -491,6 +492,22 @@ export function ChatPage({
 			setError(error instanceof Error ? error.message : String(error));
 		} finally {
 			setApproving(false);
+		}
+	};
+	const compactContext = async () => {
+		if (!session) return;
+		setCompacting(true);
+		setError("");
+		try {
+			const result = await api<{ compacted: boolean; dropped: number }>(`/sessions/${session.id}/compact`, {});
+			setConversationNotice(
+				result.compacted ? `已压缩 ${result.dropped} 条旧消息，后续请求使用摘要。` : "当前上下文无需压缩。",
+			);
+			void client.invalidateQueries({ queryKey: ["sessions"] });
+		} catch (error) {
+			setError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setCompacting(false);
 		}
 	};
 	const recall = async (messageId: string) => {
@@ -708,6 +725,18 @@ export function ChatPage({
 						<span className="grow" />
 						{
 							<>
+								<Tooltip title="立即总结较早的消息，后续请求使用摘要">
+									<span>
+										<Button
+											size="small"
+											variant="text"
+											disabled={compacting || session.status === "running" || session.status === "approval"}
+											onClick={() => void compactContext()}
+										>
+											{compacting ? "压缩中…" : "压缩上下文"}
+										</Button>
+									</span>
+								</Tooltip>
 								{session.status === "interrupted" && (
 									<Button size="small" variant="outlined" onClick={() => void resumeInterruptedSession()}>
 										继续

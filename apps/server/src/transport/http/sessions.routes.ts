@@ -157,6 +157,12 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 			.parse(request.body);
 		return agents.branch(idParams.parse(request.params).id, messageId);
 	});
+	app.post("/api/sessions/:id/compact", async (request) => {
+		const { keepRecentTokens } = z
+			.object({ keepRecentTokens: z.number().int().min(100).max(200_000).optional() })
+			.parse(request.body ?? {});
+		return agents.compact(idParams.parse(request.params).id, { keepRecentTokens });
+	});
 	app.post("/api/sessions/:id/abort", async (request) => {
 		await agents.abort(idParams.parse(request.params).id);
 		return { stopped: true };

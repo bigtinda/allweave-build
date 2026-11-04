@@ -1,4 +1,4 @@
-export type { LoadedMcpConfig, McpServerConfig } from "./mcp/config.ts";
+export type { LoadedMcpConfig, McpAuthConfig, McpServerConfig } from "./mcp/config.ts";
 export { loadMcpConfig } from "./mcp/config.ts";
 export type { McpManager, McpManagerOptions } from "./mcp/manager.ts";
 export { createMcpManager } from "./mcp/manager.ts";

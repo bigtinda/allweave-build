@@ -36,6 +36,9 @@ Electron 运行时 ZIP 优先从 `desktop/dist/electron-cache` 复用；首次�
 # 明确指定更高版本
 .\desktop\build-installer.ps1 -Version 0.2.0
 
+# 当前 1.2.1 直接打包，不再递增版本
+.\desktop\build-installer.ps1 -Rebuild
+
 # 重试失败的构建，不再次增加版本号
 .\desktop\build-installer.ps1 -Rebuild
 ```

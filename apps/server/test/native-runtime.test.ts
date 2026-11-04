@@ -281,3 +281,48 @@ test("native runtime abort stops a streaming run", async () => {
 		await rm(directory, { recursive: true, force: true });
 	}
 });
+
+test("20 turns stay usable and manual compaction shrinks later prompts", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "native-runtime-"));
+	try {
+		const contexts: Context[] = [];
+		const gateway = fakeRuntime("ok");
+		const original = gateway.streamSimple;
+		gateway.streamSimple = ((modelArg: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
+			contexts.push(context);
+			return original(modelArg, context, options);
+		}) as NativeModelRuntime["streamSimple"];
+		const runtime = new NativeAgentRuntime(
+			{
+				sessionId: "session",
+				workspace: { id: "workspace", name: "w", path: directory },
+				pluginDevelopment: false,
+				cwd: directory,
+				tools: {} as AgentRuntimeInput["tools"],
+				state: () => detail(),
+				browser: {} as AgentRuntimeInput["browser"],
+				pluginWorkspaceId: "workspace",
+				accessMode: () => "ask",
+				requestApproval: async () => true,
+				refreshAfterPluginChange: async () => {},
+			},
+			gateway,
+			join(directory, ".pi"),
+		);
+		for (let turn = 0; turn < 20; turn++) {
+			await runtime.prompt(`turn ${turn}\n${"context ".repeat(120)}`);
+		}
+		assert.equal(contexts.length, 20);
+		const before = contexts.at(-1)?.messages.length ?? 0;
+		const result = await runtime.compact({ keepRecentTokens: 100 });
+		assert.equal(result.compacted, true);
+		assert.ok(result.dropped > 0);
+		await runtime.prompt("after compaction");
+		const last = contexts.at(-1);
+		assert.ok(last, "post-compaction context missing");
+		assert.match(JSON.stringify(last.messages), /Context summary/u);
+		assert.ok(last.messages.length < before);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});

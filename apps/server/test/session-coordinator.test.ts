@@ -79,6 +79,9 @@ class FakeRuntime implements AgentRuntime {
 		this.aborted = true;
 		this.release?.();
 	}
+	async compact() {
+		return { compacted: false, dropped: 0, estimatedTokens: 0 };
+	}
 	usage() {
 		return { ...this.totals };
 	}

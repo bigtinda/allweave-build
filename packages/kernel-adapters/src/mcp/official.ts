@@ -1,4 +1,4 @@
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { Client, ClientCredentialsProvider, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import type { McpServerConfig } from "./config.ts";
 import type { McpCallResult, McpToolClient, McpToolInfo } from "./tools.ts";
@@ -41,8 +41,22 @@ class OfficialMcpClient implements McpToolClient {
 
 function transportFor(config: McpServerConfig): StdioClientTransport | StreamableHTTPClientTransport {
 	if (config.url) {
+		const headers = { ...config.headers };
+		if (config.auth?.type === "bearer" && !headers.Authorization) {
+			headers.Authorization = `Bearer ${config.auth.token}`;
+		}
+		const authProvider =
+			config.auth?.type === "oauth"
+				? new ClientCredentialsProvider({
+						clientId: config.auth.clientId,
+						clientSecret: config.auth.clientSecret,
+						scope: config.auth.scope,
+						expectedIssuer: config.auth.issuer,
+					})
+				: undefined;
 		return new StreamableHTTPClientTransport(new URL(config.url), {
-			requestInit: config.headers ? { headers: config.headers } : undefined,
+			requestInit: Object.keys(headers).length ? { headers } : undefined,
+			authProvider,
 		});
 	}
 	if (!config.command) throw new Error("MCP server command or url is required");

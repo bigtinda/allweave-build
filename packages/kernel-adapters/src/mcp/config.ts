@@ -1,6 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+export type McpAuthConfig =
+	| { type: "bearer"; token: string }
+	| {
+			type: "oauth";
+			grant: "client_credentials";
+			clientId: string;
+			clientSecret: string;
+			issuer: string;
+			scope?: string;
+	  };
+
 export interface McpServerConfig {
 	command?: string;
 	args?: string[];
@@ -8,6 +19,7 @@ export interface McpServerConfig {
 	cwd?: string;
 	url?: string;
 	headers?: Record<string, string>;
+	auth?: McpAuthConfig;
 	enabled?: boolean;
 }
 
@@ -54,6 +66,15 @@ export function loadMcpConfig(options: { agentDir: string; cwd: string; projectT
 		if (config.enabled === false) servers.delete(name);
 		else if (!config.command && !config.url) {
 			diagnostics.push(`mcp server "${name}": command or url is required`);
+			servers.delete(name);
+		} else if (config.auth?.type === "bearer" && !config.auth.token) {
+			diagnostics.push(`mcp server "${name}": auth.token is required`);
+			servers.delete(name);
+		} else if (
+			config.auth?.type === "oauth" &&
+			(!config.auth.clientId || !config.auth.clientSecret || !config.auth.issuer)
+		) {
+			diagnostics.push(`mcp server "${name}": auth.clientId, clientSecret and issuer are required`);
 			servers.delete(name);
 		}
 	}

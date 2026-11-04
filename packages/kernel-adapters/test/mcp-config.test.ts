@@ -26,3 +26,34 @@ test("merges global and trusted project MCP config", () => {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+test("validates MCP auth configuration", () => {
+	const root = mkdtempSync(join(tmpdir(), "mcp-auth-"));
+	try {
+		mkdirSync(join(root, "agent"), { recursive: true });
+		writeFileSync(
+			join(root, "agent", "mcp.json"),
+			JSON.stringify({
+				mcpServers: {
+					bearer: { url: "https://example.test/mcp", auth: { type: "bearer", token: "token" } },
+					oauth: {
+						url: "https://example.test/mcp",
+						auth: {
+							type: "oauth",
+							grant: "client_credentials",
+							clientId: "id",
+							clientSecret: "secret",
+							issuer: "https://auth.example.test",
+						},
+					},
+					missing: { url: "https://example.test/mcp", auth: { type: "oauth", clientId: "id" } },
+				},
+			}),
+		);
+		const loaded = loadMcpConfig({ agentDir: join(root, "agent"), cwd: root, projectTrusted: false });
+		assert.deepEqual([...loaded.servers.keys()], ["bearer", "oauth"]);
+		assert.match(loaded.diagnostics.join("\n"), /mcp server "missing".*clientId, clientSecret and issuer/);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

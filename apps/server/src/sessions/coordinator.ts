@@ -504,6 +504,15 @@ export class SessionCoordinator {
 		await this.agent(id);
 	}
 
+	async compact(
+		id: string,
+		options: { keepRecentTokens?: number } = {},
+	): Promise<{ compacted: boolean; dropped: number; estimatedTokens: number }> {
+		this.get(id);
+		if (this.busy.has(id)) throw new HttpError(409, "请先停止运行中的会话，再压缩上下文");
+		return this.agent(id).then((runtime) => runtime.compact(options));
+	}
+
 	async abort(id: string): Promise<void> {
 		this.get(id);
 		const run = this.runs.get(id);

@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
 	buildContext,
+	compactMessages,
 	createBuiltinTools,
 	decideToolAccess,
 	discoverAgentResources,
 	discoverResources,
+	estimateMessages,
 	LocalWorkspace,
 	type NativeImage,
 	type NativeMessage,
@@ -104,6 +106,8 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private thinking: ThinkingLevel;
 	private tokens: RuntimeUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 };
 	private compactionCount = 0;
+	private compactedBase: NativeMessage[] | undefined;
+	private compactedThrough = 0;
 	private estimateScale = 1;
 	private resourcesLoaded: NativeResourceInfo[] = [];
 
@@ -170,7 +174,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const userMessage = chatMessage(user);
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new ModelGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
-		const history = nativeHistory(this.messages);
+		const history = this.promptHistory();
 		this.messages.push(userMessage);
 		const mcp = await this.mcpTools();
 		const discovered = [
@@ -376,6 +380,44 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 		}
 	}
 
+	private promptHistory(): NativeMessage[] {
+		const recent = nativeHistory(this.messages);
+		if (!this.compactedBase) return recent;
+		return [...this.compactedBase, ...nativeHistory(this.messages.slice(this.compactedThrough))];
+	}
+
+	/** Summarize the current history now and use the result for later prompts. */
+	async compact(options: { keepRecentTokens?: number } = {}): Promise<{
+		compacted: boolean;
+		dropped: number;
+		estimatedTokens: number;
+	}> {
+		const model = this.currentModel();
+		if (!model) throw new HttpError(400, "未配置模型。请先配置供应商凭据并选择模型。");
+		if (this.controller) throw new HttpError(409, "会话正在运行，无法压缩上下文");
+		const history = this.promptHistory();
+		const result = await compactMessages(history, {
+			keepRecentTokens: options.keepRecentTokens ?? 20_000,
+			summarize: async (dropped) => {
+				const summarizer = new ModelGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
+				const summary = await summarizer.summarize(dropped, new AbortController().signal);
+				return summary || `Earlier conversation was compacted (${dropped.length} messages).`;
+			},
+		});
+		if (!result.compacted) {
+			return { compacted: false, dropped: 0, estimatedTokens: estimateMessages(history) };
+		}
+		this.compactedBase = result.messages;
+		this.compactedThrough = this.messages.length;
+		this.compactionCount += 1;
+		const estimatedTokens = estimateMessages(result.messages);
+		this.emit("update", {
+			type: "context.compacted",
+			compaction: { dropped: result.dropped, estimatedTokens },
+		});
+		return { compacted: true, dropped: result.dropped, estimatedTokens };
+	}
+
 	private async approve(call: NativeToolCall): Promise<boolean | string> {
 		const tool = this.tools.find((candidate) => candidate.name === call.name);
 		const decision = decideToolAccess(tool, this.input.accessMode());
@@ -440,6 +482,8 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 			.slice(cut)
 			.flatMap((entry) => entry.toolResults?.map((result) => result.toolCallId) ?? []);
 		this.messages = this.messages.slice(0, cut);
+		this.compactedBase = undefined;
+		this.compactedThrough = 0;
 		return { editorText: message.text, toolIds, usage: this.usage() };
 	}
 	async dispose(): Promise<void> {

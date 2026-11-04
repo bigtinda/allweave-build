@@ -8,6 +8,9 @@ import type {
 	CredentialInfo,
 	CredentialStore,
 	Model,
+	ModelsStore,
+	ModelsStoreEntry,
+	ModelsStoreOperationOptions,
 	MutableModels,
 	Provider,
 } from "@earendil-works/pi-ai";
@@ -16,6 +19,7 @@ import { getApiProvider, registerBuiltInApiProviders } from "@earendil-works/pi-
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
 type AuthFile = Record<string, Credential>;
+type ModelsFile = Record<string, ModelsStoreEntry>;
 
 /** auth.json compatible credential store with serialized, atomic writes. */
 class FileCredentialStore implements CredentialStore {
@@ -86,7 +90,71 @@ class FileCredentialStore implements CredentialStore {
 	}
 }
 
+/** JSON-backed cache for dynamically refreshed provider catalogs. */
+class FileModelsStore implements ModelsStore {
+	private file: string;
+	private queue = Promise.resolve();
+
+	constructor(file: string) {
+		this.file = file;
+	}
+
+	private async load(): Promise<ModelsFile> {
+		const text = await readFile(this.file, "utf8").catch(() => "{}");
+		const value: unknown = JSON.parse(text || "{}");
+		if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+		return value as ModelsFile;
+	}
+
+	private serial<T>(operation: () => Promise<T>): Promise<T> {
+		const run = this.queue.then(operation, operation);
+		this.queue = run.then(
+			() => undefined,
+			() => undefined,
+		);
+		return run;
+	}
+
+	private async save(value: ModelsFile): Promise<void> {
+		await mkdir(dirname(this.file), { recursive: true });
+		const temporary = `${this.file}.${randomUUID()}.tmp`;
+		await writeFile(
+			temporary,
+			`${JSON.stringify(value, null, 2)}
+`,
+			{ encoding: "utf8", mode: 0o600 },
+		);
+		await rename(temporary, this.file);
+	}
+
+	async read(providerId: string, options?: ModelsStoreOperationOptions): Promise<ModelsStoreEntry | undefined> {
+		options?.signal?.throwIfAborted();
+		const entry = (await this.load())[providerId];
+		return entry ? structuredClone(entry) : undefined;
+	}
+
+	async write(providerId: string, entry: ModelsStoreEntry, options?: ModelsStoreOperationOptions): Promise<void> {
+		options?.signal?.throwIfAborted();
+		await this.serial(async () => {
+			const value = await this.load();
+			value[providerId] = structuredClone(entry);
+			await this.save(value);
+		});
+	}
+
+	async delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+		options?.signal?.throwIfAborted();
+		await this.serial(async () => {
+			const value = await this.load();
+			delete value[providerId];
+			await this.save(value);
+		});
+	}
+}
+
 interface CustomProviderConfig {
+	/** Inline key kept for compatibility with existing models.json files. */
+	apiKey?: string;
 	name?: string;
 	baseUrl: string;
 	api: Api;
@@ -129,9 +197,13 @@ function customProvider(id: string, config: CustomProviderConfig): Provider {
 					return { type: "api_key", key };
 				},
 				async resolve({ ctx, credential }) {
-					const key = credential?.type === "api_key" ? credential.key : await ctx.env("PI_CONSOLE_MODEL_KEY");
+					const credentialKey = credential?.type === "api_key" ? credential.key : undefined;
+					const key = credentialKey ?? config.apiKey ?? (await ctx.env("PI_CONSOLE_MODEL_KEY"));
 					if (!key) return undefined;
-					return { auth: { apiKey: key }, source: "PI_CONSOLE_MODEL_KEY" };
+					return {
+						auth: { apiKey: key },
+						source: credentialKey ? "auth.json" : config.apiKey ? "models.json" : "PI_CONSOLE_MODEL_KEY",
+					};
 				},
 			},
 		},
@@ -163,6 +235,7 @@ export async function createModelRuntime(
 	await mkdir(agentDir, { recursive: true });
 	const runtime = createModels({
 		credentials: new FileCredentialStore(join(agentDir, "auth.json")),
+		modelsStore: new FileModelsStore(join(agentDir, "models-store.json")),
 	});
 	for (const provider of builtinProviders()) runtime.setProvider(provider);
 	const modelsPath = join(agentDir, "models.json");

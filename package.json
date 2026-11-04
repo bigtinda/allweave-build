@@ -45,7 +45,8 @@
 		"release:minor": "node scripts/release.mjs minor",
 		"release:major": "node scripts/release.mjs major",
 		"release:fix-links": "node scripts/release-notes.mjs fix-github-releases",
-		"prepare": "husky"
+		"prepare": "husky",
+		"benchmark:kernel": "node --import ./scripts/source-resolver.ts scripts/benchmark-kernel.mjs"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",

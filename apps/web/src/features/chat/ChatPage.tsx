@@ -973,6 +973,20 @@ export function ChatPage({
 							/>
 						)}
 					</div>
+					{connection !== "已连接" && (
+						<output
+							style={{
+								alignSelf: "center",
+								padding: "4px 10px",
+								fontSize: 12,
+								color: "var(--muted)",
+								background: "var(--surface-2)",
+								borderRadius: 999,
+							}}
+						>
+							{connection}
+						</output>
+					)}
 					<Composer
 						key={session.id}
 						session={session}

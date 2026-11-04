@@ -3,7 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
+
+const CURRENT_SESSION_VERSION = 3;
+
 import type { SessionDetail, SessionEvent } from "../../shared/src/protocol.ts";
 import { mergeTranscript, projectSessionMeta, type SessionMeta } from "../src/persistence/session-projection.ts";
 import { EventProjector, type SessionStore } from "../src/sessions/event-projector.ts";

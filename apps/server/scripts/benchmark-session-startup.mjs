@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
+const CURRENT_SESSION_VERSION = 3;
 import { projectSessionMeta } from "../src/persistence/session-projection.ts";
 import { EventProjector } from "../src/sessions/event-projector.ts";
 import { ConsoleStore } from "../src/store.ts";

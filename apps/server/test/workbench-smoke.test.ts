@@ -10,10 +10,9 @@ import { fileURLToPath } from "node:url";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
 import { type Browser, chromium } from "playwright-core";
 import { createServer } from "vite";
-import { createHarness } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type { FileContent, SessionDetail, SocketMessage, Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
-import { nativeGateway } from "./native-harness.ts";
+import { createHarness, nativeGateway } from "./faux-native.ts";
 
 test(
 	"the chat feature preserves streaming, reconnect, workspace navigation and adjacent pages",

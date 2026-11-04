@@ -4,10 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
 import { applyEvent, type SessionDetail, type SocketMessage } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
-import { nativeGateway } from "./native-harness.ts";
+import { createHarness, getMessageText, nativeGateway } from "./faux-native.ts";
 
 test(
 	"interrupt and recall change the native context, broadcast rewind and survive restart",
@@ -153,12 +152,12 @@ test(
 				started = resolve;
 			});
 			harness.setResponses([
-				async (context, options) => {
+				async (context: { messages: Array<{ content: unknown }>; signal?: AbortSignal }) => {
 					assert.ok(!context.messages.some((message) => getMessageText(message) === "keep this task"));
-					assert.ok(options?.signal);
+					assert.ok(context.signal);
 					started();
 					await new Promise<void>((resolve) =>
-						options.signal!.addEventListener("abort", () => resolve(), { once: true }),
+						context.signal!.addEventListener("abort", () => resolve(), { once: true }),
 					);
 					return fauxAssistantMessage("cancelled stream");
 				},

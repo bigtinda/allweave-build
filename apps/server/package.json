@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=../../.env --import ../../packages/coding-agent/src/experimental/source-resolver.ts src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env --import ../../scripts/source-resolver.ts src/main.ts",
     "check": "tsc --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "node --import ../../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.ts"
+    "test:unit": "node --import ../../scripts/source-resolver.ts --test test/*.test.ts"
   },
   "dependencies": {
     "@pi-console/protocol": "0.1.0",

@@ -158,6 +158,7 @@ export class PiAiGateway implements NativeModelGateway {
 			}
 		}
 		if (!final) throw new Error("模型请求没有返回结果");
+		if (final.stopReason === "error" && final.errorMessage) throw new Error(final.errorMessage);
 		this.usage = {
 			input: final.usage.input,
 			output: final.usage.output,

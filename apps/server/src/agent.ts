@@ -12,18 +12,17 @@ import type {
 } from "../../shared/src/protocol.ts";
 import type { AppPluginManager } from "./app-plugins.ts";
 import { BrowserService } from "./browser.ts";
+import { KernelSessionStore } from "./persistence/kernel-session-store.ts";
 import type { ProviderManager } from "./providers.ts";
 import { SessionCoordinator } from "./sessions/coordinator.ts";
 import { EventHub } from "./sessions/event-hub.ts";
 import { EventProjector, type SessionStore } from "./sessions/event-projector.ts";
-import { AgentRuntimeFactory, type SessionFactory } from "./sessions/pi-runtime.adapter.ts";
+import { AgentRuntimeFactory } from "./sessions/pi-runtime.adapter.ts";
 import type { ApprovalStore } from "./sessions/tool-authorization.ts";
 import type { ConsoleStore } from "./store.ts";
 import { WorkspaceAccess } from "./workspaces/workspace-access.ts";
 
 export interface AgentServiceOptions {
-	/** Seam for tests: the Pi session factory used by the runtime boundary. */
-	createSession?: SessionFactory;
 	gateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 	providers?: ProviderManager;
 	agentDirectory?: string;
@@ -41,8 +40,11 @@ export interface AgentServiceOptions {
  */
 export class AgentService {
 	private coordinator: SessionCoordinator;
+	private readonly ownedSessionStore?: KernelSessionStore;
 
 	constructor(store: ConsoleStore, directory: string, options: AgentServiceOptions = {}) {
+		const sessionStore = options.sessionStore ?? new KernelSessionStore(directory, store.db);
+		this.ownedSessionStore = options.sessionStore ? undefined : (sessionStore as KernelSessionStore);
 		const workspaceAccess =
 			options.workspaceAccess ??
 			// Standalone use (tests, scripts) has no root registry: every stored workspace is authorized.
@@ -56,11 +58,10 @@ export class AgentService {
 			});
 		this.coordinator = new SessionCoordinator({
 			directory,
-			projector: new EventProjector(options.sessionStore ?? store),
-			approvalStore: options.sessionStore,
+			projector: new EventProjector(sessionStore),
+			approvalStore: sessionStore,
 			hub: new EventHub(),
 			runtimeFactory: new AgentRuntimeFactory({
-				createSession: options.createSession,
 				gateway: options.gateway,
 				directory,
 				agentDirectory: options.agentDirectory,
@@ -160,5 +161,6 @@ export class AgentService {
 	}
 	async close(): Promise<void> {
 		await this.coordinator.close();
+		this.ownedSessionStore?.close();
 	}
 }

@@ -46,7 +46,7 @@ async function start(): Promise<void> {
 		catch { await copyFile(process.execPath, node); }
 	}
 	const log = createWriteStream(join(data, "desktop-server.log"));
-	backend = spawn(node, ["--import", "./packages/coding-agent/src/experimental/source-resolver.ts", "./apps/server/src/main.ts"], { cwd: runtime, windowsHide: true, detached: process.platform !== "win32", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", PI_CONSOLE_DESKTOP: "1", PI_CONSOLE_PORT: String(port), PI_CONSOLE_SHUTDOWN_TOKEN: token, PI_CONSOLE_DATA_DIR: data, PI_CODING_AGENT_DIR: join(data, "agent"), PI_CONSOLE_ROOTS: roots.join(delimiter), PATH: `${dirname(node)}${delimiter}${runtime}${delimiter}${process.env.PATH ?? ""}` }, stdio: ["ignore", "pipe", "pipe"] });
+	backend = spawn(node, ["--import", "./scripts/source-resolver.ts", "./apps/server/src/main.ts"], { cwd: runtime, windowsHide: true, detached: process.platform !== "win32", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", PI_CONSOLE_DESKTOP: "1", PI_CONSOLE_PORT: String(port), PI_CONSOLE_SHUTDOWN_TOKEN: token, PI_CONSOLE_DATA_DIR: data, PI_CODING_AGENT_DIR: join(data, "agent"), PI_CONSOLE_ROOTS: roots.join(delimiter), PATH: `${dirname(node)}${delimiter}${runtime}${delimiter}${process.env.PATH ?? ""}` }, stdio: ["ignore", "pipe", "pipe"] });
 	backend.stdout?.pipe(log); backend.stderr?.pipe(log, { end: false });
 	let startupError: Error | undefined;
 	backend.once("error", (error) => { startupError = error; });

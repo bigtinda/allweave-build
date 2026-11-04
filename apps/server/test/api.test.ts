@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type {
 	FileContent,
 	LocalFolderListing,
@@ -16,7 +15,7 @@ import type {
 } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
 import { contained } from "../src/security.ts";
-import { nativeGateway } from "./native-harness.ts";
+import { createHarness, getMessageText, nativeGateway } from "./faux-native.ts";
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 10_000;

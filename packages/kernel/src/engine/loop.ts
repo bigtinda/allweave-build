@@ -76,12 +76,16 @@ async function streamTurn(
 			for await (const event of stream) {
 				if (event.type === "text") {
 					text += event.delta;
-					emitted = true;
-					options.onEvent({ type: "message.delta", messageId, text: event.delta });
+					if (event.delta) {
+						emitted = true;
+						options.onEvent({ type: "message.delta", messageId, text: event.delta });
+					}
 				} else if (event.type === "thinking") {
 					thinking += event.delta;
-					emitted = true;
-					options.onEvent({ type: "message.delta", messageId, thinking: event.delta });
+					if (event.delta) {
+						emitted = true;
+						options.onEvent({ type: "message.delta", messageId, thinking: event.delta });
+					}
 				} else if (event.type === "done") {
 					result = event.result;
 				} else {

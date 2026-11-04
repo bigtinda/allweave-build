@@ -4,7 +4,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
+
+const CURRENT_SESSION_VERSION = 3;
+
 import type { ModelOption, Resources, SessionDetail, SessionEvent, Workspace } from "../../shared/src/protocol.ts";
 import type { AdaptedEvent } from "../src/adapter.ts";
 import type { BrowserService } from "../src/browser.ts";

@@ -13,7 +13,6 @@ import { PiPackageManager } from "../packages.ts";
 import { KernelSessionStore } from "../persistence/kernel-session-store.ts";
 import { ProviderManager } from "../providers.ts";
 import { HttpError, tokenMatches } from "../security.ts";
-import type { SessionFactory } from "../sessions/pi-runtime.adapter.ts";
 import { StorageManager } from "../storage.ts";
 import { ConsoleStore } from "../store.ts";
 import { registerAppPluginRoutes } from "../transport/http/app-plugins.routes.ts";
@@ -30,8 +29,6 @@ export interface AppOptions {
 	roots: string[];
 	port: number;
 	logger?: boolean;
-	/** Seam for tests: the Pi session factory used by the runtime boundary. */
-	createSession?: SessionFactory;
 	createGateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 }
 
@@ -59,7 +56,6 @@ export async function createApp(options: AppOptions) {
 	const browser = new BrowserService([...allowedOrigins]);
 	const appPlugins = new AppPluginManager(options.directory);
 	const agents = new AgentService(store, options.directory, {
-		createSession: options.createSession,
 		gateway: options.createGateway,
 		providers,
 		agentDirectory,
@@ -161,7 +157,7 @@ export async function createApp(options: AppOptions) {
 		sessions.close();
 		store.close();
 	});
-	if (!options.createSession) void packages.ensureDefaultPackages();
+	void packages.ensureDefaultPackages();
 	return { app };
 }
 

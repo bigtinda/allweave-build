@@ -5,11 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createHarness } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type { BrowserSnapshot, BrowserStreamEvent } from "../../shared/src/browser.ts";
 import type { SessionDetail, Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
-import { nativeGateway } from "./native-harness.ts";
+import { createHarness, nativeGateway } from "./faux-native.ts";
 
 test("user input, live browser frames and agent tools share the same isolated page", { timeout: 60_000 }, async () => {
 	const fixture = createServer((_request, response) => {

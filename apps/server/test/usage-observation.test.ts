@@ -58,3 +58,47 @@ test("native retries retryable provider errors and records the completed run", {
 		await rm(directory, { recursive: true, force: true });
 	}
 });
+
+test("native records prompt cache usage from the provider", { timeout: 30000 }, async () => {
+	const directory = await mkdtemp(join(tmpdir(), "pi-cache-observation-"));
+	const root = join(directory, "project");
+	await mkdir(root);
+	const harness = await createHarness();
+	const store = new ConsoleStore(join(directory, "data"));
+	store.saveWorkspace({ id: "workspace", name: "Fixture", path: root });
+	const sessions = new KernelSessionStore(join(directory, "data"), store.db);
+	const agents = new AgentService(store, directory, {
+		agentDirectory: join(directory, "agent"),
+		gateway: () => nativeGateway(harness),
+		sessionStore: sessions,
+	});
+	try {
+		const session = await agents.create("workspace", "cache");
+		const response = fauxAssistantMessage("cache measured");
+		response.usage = {
+			input: 100,
+			output: 10,
+			cacheRead: 80,
+			cacheWrite: 20,
+			totalTokens: 210,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		};
+		harness.setResponses([response]);
+		await agents.prompt(session.id, "measure the cache", []);
+		const deadline = Date.now() + 15000;
+		while (Date.now() < deadline) {
+			const detail = agents.get(session.id);
+			if (detail.status === "idle" && detail.lastRunUsage) break;
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+		const detail = agents.get(session.id);
+		assert.equal(detail.lastRunUsage?.tokens?.cacheRead, 80);
+		assert.equal(detail.lastRunUsage?.tokens?.cacheWrite, 20);
+		assert.ok((detail.lastRunUsage?.tokens?.total ?? 0) >= 210);
+	} finally {
+		await agents.close();
+		store.close();
+		harness.cleanup();
+		await rm(directory, { recursive: true, force: true });
+	}
+});

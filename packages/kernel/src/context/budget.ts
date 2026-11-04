@@ -1,4 +1,10 @@
-/** Conservative, dependency-free token estimates. Calibrated by provider usage later. */
+/**
+ * Conservative, dependency-free token estimates. CJK text is roughly one token
+ * per character for Latin tokenizers, with markup/punctuation overhead; Latin
+ * text is roughly one token per four characters. The weights are calibrated
+ * against cl100k_base on the checked-in corpus and stay conservative so a
+ * budget check fails before the provider context window.
+ */
 
 const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/u;
 
@@ -9,7 +15,7 @@ export function estimateText(text: string): number {
 		if (CJK.test(char)) cjk++;
 		else other++;
 	}
-	return Math.ceil(cjk + other / 4);
+	return Math.ceil(cjk * 1.38 + other * 0.24);
 }
 
 export function estimateMessage(message: { text: string; thinking?: string; toolCalls?: unknown[] }): number {

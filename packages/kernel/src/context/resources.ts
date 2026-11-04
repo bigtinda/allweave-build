@@ -19,9 +19,16 @@ function frontmatter(content: string): Record<string, string> {
 	return values;
 }
 
-/** Discovers workspace skills without loading their bodies into the prompt. */
-export async function discoverResources(cwd: string): Promise<NativeResourceInfo[]> {
-	const root = join(cwd, ".pi", "skills");
+function firstLine(content: string): string {
+	return (
+		content
+			.replace(/^---[\s\S]*?---/u, "")
+			.trim()
+			.split(/\r?\n/u)[0] ?? ""
+	);
+}
+
+async function skills(root: string): Promise<NativeResourceInfo[]> {
 	let entries: string[];
 	try {
 		entries = await readdir(root);
@@ -36,13 +43,7 @@ export async function discoverResources(cwd: string): Promise<NativeResourceInfo
 			const meta = frontmatter(content);
 			resources.push({
 				name: meta.name || entry,
-				description:
-					meta.description ||
-					content
-						.replace(/^---[\s\S]*?---/u, "")
-						.trim()
-						.split(/\r?\n/u)[0] ||
-					"",
+				description: meta.description || firstLine(content),
 				filePath,
 				kind: "skill",
 			});
@@ -51,4 +52,38 @@ export async function discoverResources(cwd: string): Promise<NativeResourceInfo
 		}
 	}
 	return resources;
+}
+
+async function prompts(root: string): Promise<NativeResourceInfo[]> {
+	let entries: string[];
+	try {
+		entries = await readdir(root);
+	} catch {
+		return [];
+	}
+	const resources: NativeResourceInfo[] = [];
+	for (const entry of entries.sort()) {
+		if (!entry.endsWith(".md")) continue;
+		const filePath = join(root, entry);
+		const content = await readFile(filePath, "utf8").catch(() => undefined);
+		if (content === undefined) continue;
+		const meta = frontmatter(content);
+		resources.push({
+			name: meta.name || entry.slice(0, -3),
+			description: meta.description || firstLine(content),
+			filePath,
+			kind: "prompt",
+		});
+	}
+	return resources;
+}
+
+/** Discovers workspace skills and prompt templates without loading their bodies. */
+export async function discoverResources(cwd: string): Promise<NativeResourceInfo[]> {
+	return [...(await skills(join(cwd, ".pi", "skills"))), ...(await prompts(join(cwd, ".pi", "prompts")))];
+}
+
+/** Discovers user-level skills and prompts under the agent directory. */
+export async function discoverAgentResources(agentDir: string): Promise<NativeResourceInfo[]> {
+	return [...(await skills(join(agentDir, "skills"))), ...(await prompts(join(agentDir, "prompts")))];
 }

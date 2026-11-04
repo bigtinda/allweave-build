@@ -1,7 +1,7 @@
 export * from "./context/budget.ts";
 export * from "./context/builder.ts";
 export * from "./context/compaction.ts";
-export { discoverResources, type NativeResourceInfo } from "./context/resources.ts";
+export { discoverAgentResources, discoverResources, type NativeResourceInfo } from "./context/resources.ts";
 export * from "./engine/loop.ts";
 export * from "./engine/policy.ts";
 export * from "./engine/retry.ts";

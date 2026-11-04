@@ -4,6 +4,7 @@ import {
 	buildContext,
 	createBuiltinTools,
 	decideToolAccess,
+	discoverAgentResources,
 	discoverResources,
 	LocalWorkspace,
 	type NativeMessage,
@@ -163,7 +164,10 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const history = nativeHistory(this.messages);
 		this.messages.push(userMessage);
 		const mcp = await this.mcpTools();
-		const discovered = await discoverResources(this.input.cwd);
+		const discovered = [
+			...(await discoverResources(this.input.cwd)),
+			...(await discoverAgentResources(this.agentDir)),
+		].filter((resource, index, all) => all.findIndex((item) => item.filePath === resource.filePath) === index);
 		this.resourcesLoaded = discovered;
 		const workbenchTools = await createNativeWorkbenchTools({
 			sessionId: this.input.sessionId,
@@ -380,12 +384,14 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 	}
 	resources(): Resources {
 		return {
-			skills: this.resourcesLoaded.map((resource) => ({
-				name: resource.name,
-				description: resource.description,
-				filePath: resource.filePath,
-				status: "loaded" as const,
-			})),
+			skills: this.resourcesLoaded
+				.filter((resource) => resource.kind === "skill")
+				.map((resource) => ({
+					name: resource.name,
+					description: resource.description,
+					filePath: resource.filePath,
+					status: "loaded" as const,
+				})),
 			extensions: [],
 			diagnostics: [],
 		};

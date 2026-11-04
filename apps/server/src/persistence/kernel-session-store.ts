@@ -4,8 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { gunzipSync } from "node:zlib";
 import { SqliteEventStore, type StoredEvent } from "@pi-console/kernel";
 import type { Approval, SessionDetail, SessionEvent } from "../../../shared/src/protocol.ts";
-import type { SessionStore } from "../sessions/event-projector.ts";
-import type { SavedSession } from "../store.ts";
+import type { SavedSession, SessionStore } from "../sessions/event-projector.ts";
 import { parseSessionMeta, projectSessionMeta, type SessionMeta } from "./session-projection.ts";
 
 function decode(data: unknown): string {
@@ -61,6 +60,8 @@ function legacyMeta(directory: string, id: string, detail: SessionDetail): Sessi
  * metadata next to them. Legacy `sessions`/`events` rows are imported once.
  */
 export class KernelSessionStore implements SessionStore {
+	readonly db: DatabaseSync;
+	private readonly ownsConnection: boolean;
 	private readonly events: SqliteEventStore;
 	private readonly pending = new Map<string, SavedSession>();
 	private pendingEvents: StoredEvent[] = [];
@@ -70,14 +71,22 @@ export class KernelSessionStore implements SessionStore {
 	private flushError?: Error;
 
 	constructor(directory: string, database?: DatabaseSync) {
-		this.events = new SqliteEventStore(database ?? join(directory, "console.sqlite"));
+		this.ownsConnection = !database;
+		this.db = database ?? new DatabaseSync(join(directory, "console.sqlite"));
+		this.events = new SqliteEventStore(this.db);
 		this.migrate(directory);
 	}
 
 	private migrate(directory: string): void {
-		if (this.events.listSessions().length > 0) return;
+		if (this.events.listSessions().length > 0) {
+			this.dropLegacyTables();
+			return;
+		}
 		const legacy = legacyRows(directory);
-		if (legacy.snapshots.length === 0) return;
+		if (legacy.snapshots.length === 0) {
+			this.dropLegacyTables();
+			return;
+		}
 		this.events.withTransaction(() => {
 			for (const snapshot of legacy.snapshots) {
 				const detail = snapshot.detail;
@@ -124,6 +133,15 @@ export class KernelSessionStore implements SessionStore {
 				});
 			}
 		});
+		const backup = join(directory, `console.sqlite.pre-kernel-${Date.now()}.bak`);
+		this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
+		this.dropLegacyTables();
+	}
+
+	private dropLegacyTables(): void {
+		this.db.exec(`DROP TABLE IF EXISTS events;
+			DROP TABLE IF EXISTS session_summaries;
+			DROP TABLE IF EXISTS sessions;`);
 	}
 
 	sessionMetas(): SessionMeta[] {
@@ -317,5 +335,6 @@ export class KernelSessionStore implements SessionStore {
 	close(): void {
 		this.flush();
 		this.events.close();
+		if (this.ownsConnection) this.db.close();
 	}
 }

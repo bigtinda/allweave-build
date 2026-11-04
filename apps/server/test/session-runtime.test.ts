@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
 import { AgentService } from "../src/agent.ts";
+import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";
 import { ConsoleStore } from "../src/store.ts";
 import { createHarness, getMessageText, nativeGateway } from "./faux-native.ts";
 
@@ -41,7 +42,8 @@ test(
 				return nativeGateway(harness);
 			},
 		};
-		let agents = new AgentService(store, dataDirectory, options);
+		const sessions = new KernelSessionStore(dataDirectory, store.db);
+		let agents = new AgentService(store, dataDirectory, { ...options, sessionStore: sessions });
 		const settled = (id: string) => {
 			const status = agents.get(id).status;
 			return status === "idle" || status === "error";
@@ -57,7 +59,10 @@ test(
 			assert.equal(opened, 1, "the gateway is opened once and reused");
 
 			await agents.close();
-			agents = new AgentService(store, dataDirectory, options);
+			agents = new AgentService(store, dataDirectory, {
+				...options,
+				sessionStore: new KernelSessionStore(dataDirectory, store.db),
+			});
 			const restored = agents.get(id);
 			assert.ok(restored.messages.some((message) => message.text === "first answer"));
 			harness.setResponses([

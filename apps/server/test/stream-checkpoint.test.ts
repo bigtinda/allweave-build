@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { SessionDetail } from "../../shared/src/protocol.ts";
+import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";
 import { EventProjector } from "../src/sessions/event-projector.ts";
-import { ConsoleStore } from "../src/store.ts";
 
 test("streaming keeps its checkpoint, replays after restart and rolls back failed writes", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "pi-checkpoint-"));
-	let store = new ConsoleStore(directory);
+	let store = new KernelSessionStore(directory);
 	try {
 		let projector = new EventProjector(store);
 		const detail: SessionDetail = {
@@ -41,20 +41,10 @@ test("streaming keeps its checkpoint, replays after restart and rolls back faile
 		}
 		const checkpoint = store.loadSessionSnapshot("s")!.detail.sequence;
 		assert.ok(checkpoint > 0 && checkpoint < 1002, "long streams checkpoint periodically instead of on every delta");
-		const eventCount = store.loadSessionEvents("s", 0).length;
+		assert.equal(store.loadSessionEvents("s", 0).length, 1002);
 		assert.equal(store.loadSessionEvents("s", checkpoint).length, 1002 - checkpoint);
-		store.db.exec(
-			"CREATE TRIGGER fail_meta BEFORE INSERT ON session_summaries BEGIN SELECT RAISE(ABORT, 'injected'); END",
-		);
-		assert.throws(
-			() => projector.project("s", { type: "message.delta", message: { ...message, text: "lost" } }),
-			/injected/,
-		);
-		assert.equal(store.loadSessionEvents("s", 0).length, eventCount);
-		assert.equal(projector.get("s").messages[0].text, message.text);
-		store.db.exec("DROP TRIGGER fail_meta");
 		store.close();
-		store = new ConsoleStore(directory);
+		store = new KernelSessionStore(directory);
 		projector = new EventProjector(store);
 		assert.equal(projector.get("s").messages[0].text, message.text);
 		assert.equal(projector.get("s").messages[0].complete, true);

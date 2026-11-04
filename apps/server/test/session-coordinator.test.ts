@@ -14,7 +14,7 @@ import { projectSessionMeta, type SessionMeta } from "../src/persistence/session
 import { HttpError } from "../src/security.ts";
 import { SessionCoordinator } from "../src/sessions/coordinator.ts";
 import { EventHub } from "../src/sessions/event-hub.ts";
-import { EventProjector, type SessionStore } from "../src/sessions/event-projector.ts";
+import { EventProjector, type SavedSession, type SessionStore } from "../src/sessions/event-projector.ts";
 import type { RuntimeEvent } from "../src/sessions/pi-events.ts";
 import type {
 	AgentRuntime,
@@ -23,7 +23,6 @@ import type {
 	RuntimeFactory,
 } from "../src/sessions/pi-runtime.adapter.ts";
 import { ToolAuthorization } from "../src/sessions/tool-authorization.ts";
-import type { SavedSession } from "../src/store.ts";
 import { WorkspaceAccess } from "../src/workspaces/workspace-access.ts";
 
 class FakeStore implements SessionStore {

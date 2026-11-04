@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
 import type { SessionDetail } from "../../shared/src/protocol.ts";
 import { AgentService } from "../src/agent.ts";
+import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";
 import { ConsoleStore } from "../src/store.ts";
 import { createHarness, getMessageText, nativeGateway } from "./faux-native.ts";
 
@@ -18,7 +19,10 @@ test("native conversation survives restart and branching from kernel snapshots",
 	const harness = await createHarness();
 	let store = new ConsoleStore(directory);
 	const options = { agentDirectory, gateway: () => nativeGateway(harness) };
-	let agents = new AgentService(store, directory, options);
+	let agents = new AgentService(store, directory, {
+		...options,
+		sessionStore: new KernelSessionStore(directory, store.db),
+	});
 	try {
 		store.saveWorkspace({ id: "workspace", name: "Project", path: root });
 		const { id } = await agents.create("workspace", "Storage regression");
@@ -49,7 +53,10 @@ test("native conversation survives restart and branching from kernel snapshots",
 		await agents.close();
 		store.close();
 		store = new ConsoleStore(directory);
-		agents = new AgentService(store, directory, options);
+		agents = new AgentService(store, directory, {
+			...options,
+			sessionStore: new KernelSessionStore(directory, store.db),
+		});
 		const restored = agents.get(id);
 		assert.deepEqual(
 			restored.messages.map((message) => message.id),

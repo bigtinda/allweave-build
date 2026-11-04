@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
 import { AgentService } from "../src/agent.ts";
+import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";
 import { ConsoleStore } from "../src/store.ts";
 import { createHarness, nativeGateway } from "./faux-native.ts";
 
@@ -16,9 +17,11 @@ test("native retries retryable provider errors and records the completed run", {
 	const harness = await createHarness();
 	const store = new ConsoleStore(join(directory, "data"));
 	store.saveWorkspace({ id: "workspace", name: "Fixture", path: root });
+	const sessions = new KernelSessionStore(join(directory, "data"), store.db);
 	const agents = new AgentService(store, directory, {
 		agentDirectory: join(directory, "agent"),
 		gateway: () => nativeGateway(harness),
+		sessionStore: sessions,
 	});
 	try {
 		const session = await agents.create("workspace", "usage");

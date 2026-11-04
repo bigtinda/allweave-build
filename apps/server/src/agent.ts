@@ -40,10 +40,12 @@ export interface AgentServiceOptions {
  */
 export class AgentService {
 	private coordinator: SessionCoordinator;
+	private readonly sessionStore: SessionStore & ApprovalStore;
 	private readonly ownedSessionStore?: KernelSessionStore;
 
 	constructor(store: ConsoleStore, directory: string, options: AgentServiceOptions = {}) {
 		const sessionStore = options.sessionStore ?? new KernelSessionStore(directory, store.db);
+		this.sessionStore = sessionStore;
 		this.ownedSessionStore = options.sessionStore ? undefined : (sessionStore as KernelSessionStore);
 		const workspaceAccess =
 			options.workspaceAccess ??
@@ -167,6 +169,7 @@ export class AgentService {
 	}
 	async close(): Promise<void> {
 		await this.coordinator.close();
+		this.sessionStore.flushPending?.();
 		this.ownedSessionStore?.close();
 	}
 }

@@ -19,11 +19,15 @@ import {
 } from "../persistence/session-projection.ts";
 import { readTranscriptView } from "../persistence/transcript.ts";
 import { HttpError } from "../security.ts";
-import type { SavedSession } from "../store.ts";
 
 export interface ProjectedEvent {
 	event: SessionEvent;
 	detail: SessionDetail;
+}
+
+export interface SavedSession {
+	detail: SessionDetail;
+	file?: string;
 }
 
 /** Change applied to the session draft before it is persisted. */

@@ -8,8 +8,7 @@ const CURRENT_SESSION_VERSION = 3;
 
 import type { SessionDetail, SessionEvent } from "../../shared/src/protocol.ts";
 import { mergeTranscript, projectSessionMeta, type SessionMeta } from "../src/persistence/session-projection.ts";
-import { EventProjector, type SessionStore } from "../src/sessions/event-projector.ts";
-import type { SavedSession } from "../src/store.ts";
+import { EventProjector, type SavedSession, type SessionStore } from "../src/sessions/event-projector.ts";
 
 function detail(id: string, overrides: Partial<SessionDetail> = {}): SessionDetail {
 	return {

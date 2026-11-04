@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ChatMessage, SessionDetail, ToolCall } from "../../../shared/src/protocol.ts";
 import type { AdaptedEvent } from "../adapter.ts";
 
@@ -16,7 +14,31 @@ export interface RuntimeEvent {
 	adapted: AdaptedEvent;
 }
 
-function chatMessage(message: AgentMessage, complete: boolean): ChatMessage | undefined {
+type PiContent = Array<{ type: string; text?: string; thinking?: string }>;
+
+interface PiMessage {
+	role: string;
+	timestamp: number;
+	content: PiContent;
+	errorMessage?: string;
+}
+
+export type PiEvent =
+	| { type: "agent_start" }
+	| { type: "agent_end" }
+	| { type: "message_start" | "message_update" | "message_end"; message: PiMessage }
+	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
+	| { type: "tool_execution_update"; toolCallId: string; toolName: string; partialResult: unknown }
+	| {
+			type: "tool_execution_end";
+			toolCallId: string;
+			toolName: string;
+			result: unknown;
+			isError: boolean;
+			durationMs?: number;
+	  };
+
+function chatMessage(message: PiMessage, complete: boolean): ChatMessage | undefined {
 	if (message.role !== "user" && message.role !== "assistant") return undefined;
 	const timestamp = new Date(message.timestamp).toISOString();
 	const content = message.content;
@@ -24,13 +46,10 @@ function chatMessage(message: AgentMessage, complete: boolean): ChatMessage | un
 		id: `${message.role}:${randomUUID()}`,
 		role: message.role,
 		timestamp,
-		text:
-			typeof content === "string"
-				? content
-				: content
-						.filter((block) => block.type === "text")
-						.map((block) => block.text)
-						.join(""),
+		text: content
+			.filter((block) => block.type === "text")
+			.map((block) => block.text)
+			.join(""),
 		thinking:
 			message.role === "assistant"
 				? message.content
@@ -43,7 +62,7 @@ function chatMessage(message: AgentMessage, complete: boolean): ChatMessage | un
 	};
 }
 
-export function adaptSdkEvent(event: AgentSessionEvent, state: SessionDetail): AdaptedEvent | undefined {
+export function adaptSdkEvent(event: PiEvent, state: SessionDetail): AdaptedEvent | undefined {
 	switch (event.type) {
 		case "agent_start":
 			return { type: "session.started" };
@@ -99,7 +118,7 @@ export function adaptSdkEvent(event: AgentSessionEvent, state: SessionDetail): A
 }
 
 /** Translate a Pi event into a workbench event plus its lifecycle phase. */
-export function adaptRuntimeEvent(event: AgentSessionEvent, state: SessionDetail): RuntimeEvent | undefined {
+export function adaptRuntimeEvent(event: PiEvent, state: SessionDetail): RuntimeEvent | undefined {
 	const adapted = adaptSdkEvent(event, state);
 	if (!adapted) return undefined;
 	const phase: RuntimePhase =

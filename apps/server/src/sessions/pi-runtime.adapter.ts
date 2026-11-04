@@ -28,7 +28,7 @@ import { prepareDoomCordisHostExtension } from "../legacy/doompi-host.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
 import { NativeAgentRuntime } from "./native-runtime.ts";
-import { adaptRuntimeEvent, type RuntimeEvent } from "./pi-events.ts";
+import { adaptRuntimeEvent, type PiEvent, type RuntimeEvent } from "./pi-events.ts";
 import { createWorkbenchTools } from "./tool-factory.ts";
 
 /** Token usage of a runtime, shaped like the persisted session projection. */
@@ -135,7 +135,7 @@ class PiAgentRuntime implements AgentRuntime {
 		this.session = session;
 		this.modelFallback = modelFallback;
 		session.subscribe((event) => {
-			const runtimeEvent = adaptRuntimeEvent(event, state());
+			const runtimeEvent = adaptRuntimeEvent(event as PiEvent, state());
 			if (!runtimeEvent) return;
 			for (const listener of this.listeners) listener(runtimeEvent);
 		});

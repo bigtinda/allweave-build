@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
@@ -58,7 +57,7 @@ export async function createApp(options: AppOptions) {
 	const browser = new BrowserService([...allowedOrigins]);
 	const appPlugins = new AppPluginManager(options.directory);
 	const agents = new AgentService(store, options.directory, {
-		createSession: options.createSession ?? createAgentSession,
+		createSession: options.createSession,
 		providers,
 		agentDirectory,
 		browser,

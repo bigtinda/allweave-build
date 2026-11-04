@@ -38,7 +38,6 @@
 		"prepublishOnly": "npm run clean && npm run build && npm run check",
 		"publish": "npm run prepublishOnly && node scripts/publish.mjs",
 		"publish:dry": "npm run prepublishOnly && node scripts/publish.mjs --dry-run",
-		"release:local": "node scripts/local-release.mjs",
 		"pack:packages": "node scripts/pack-packages.mjs",
 		"release:patch": "node scripts/release.mjs patch",
 		"release:minor": "node scripts/release.mjs minor",

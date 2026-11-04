@@ -9,7 +9,7 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"test": "node --test test/*.test.ts"
+		"test": "node --import ../../scripts/source-resolver.ts --test test/*.test.ts"
 	},
 	"dependencies": {
 		"@earendil-works/pi-ai": "1.1.0",

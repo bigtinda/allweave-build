@@ -18,7 +18,7 @@ import type { FileContent, FileEntry, SessionDetail, Workspace } from "@pi-conso
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Markdown } from "../features/chat/Markdown.tsx";
+import { Markdown } from "./Markdown.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
 import { usePreferences } from "../stores/preferences.ts";

@@ -7,6 +7,7 @@ import {
 	discoverAgentResources,
 	discoverResources,
 	LocalWorkspace,
+	type NativeImage,
 	type NativeMessage,
 	type NativeResourceInfo,
 	type NativeTool,
@@ -46,7 +47,13 @@ function nativeHistory(messages: readonly ChatMessage[]): NativeMessage[] {
 	const history: NativeMessage[] = [];
 	for (const message of messages) {
 		const timestamp = Date.parse(message.timestamp) || Date.now();
-		history.push({ role: message.role, text: message.text, thinking: message.thinking || undefined, timestamp });
+		history.push({
+			role: message.role,
+			text: message.text,
+			images: message.images?.map((image) => ({ name: image.name, mimeType: image.mimeType, data: image.data })),
+			thinking: message.thinking || undefined,
+			timestamp,
+		});
 		if (message.role !== "assistant") continue;
 		const assistant = history[history.length - 1];
 		if (message.toolCalls?.length) {
@@ -75,6 +82,7 @@ function chatMessage(message: NativeMessage): ChatMessage {
 		id: message.role === "assistant" ? `assistant:${randomUUID()}` : `user:${randomUUID()}`,
 		role: message.role === "assistant" ? "assistant" : "user",
 		text: message.text,
+		images: message.images,
 		thinking: message.thinking ?? "",
 		complete: false,
 		timestamp: new Date(message.timestamp).toISOString(),
@@ -148,18 +156,23 @@ export class NativeAgentRuntime implements AgentRuntime {
 		return this.mcp;
 	}
 
-	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void> {
-		return this.run(text, signal, takeSteering);
+	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[], images?: NativeImage[]): Promise<void> {
+		return this.run(text, signal, takeSteering, images);
 	}
 
-	private async run(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void> {
+	private async run(
+		text: string,
+		signal?: AbortSignal,
+		takeSteering?: () => string[],
+		images?: NativeImage[],
+	): Promise<void> {
 		const model = this.currentModel();
 		if (!model) throw new HttpError(400, "未配置模型。请先配置供应商凭据并选择模型。");
 		this.controller = new AbortController();
 		this.takeSteering = takeSteering;
 		const onAbort = (): void => this.controller?.abort();
 		signal?.addEventListener("abort", onAbort, { once: true });
-		const user: NativeMessage = { role: "user", text, timestamp: Date.now() };
+		const user: NativeMessage = { role: "user", text, images, timestamp: Date.now() };
 		const userMessage = chatMessage(user);
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
@@ -241,6 +254,7 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 					workspace: this.workspace,
 					extensions: this.input.extensions,
 					takeSteering: this.takeSteering,
+					initialImages: images,
 					signal: this.controller.signal,
 					approve: async (call) => this.approve(call),
 					onEvent: (event) => {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { KernelSession } from "@pi-console/kernel";
 import type {
 	AccessMode,
+	ChatImage,
 	ChatMessage,
 	ModelOption,
 	Resources,
@@ -355,7 +356,7 @@ export class SessionCoordinator {
 		return { id: model.id, provider: model.provider, name: model.name, reasoning: model.reasoning, available: true };
 	}
 
-	async prompt(id: string, text: string, references: string[]): Promise<void> {
+	async prompt(id: string, text: string, references: string[], images?: ChatImage[]): Promise<void> {
 		if (this.closing) throw new HttpError(503, "Server is shutting down");
 		if (this.get(id).archivedAt) throw new HttpError(409, "此会话已归档，请先恢复后继续");
 		if (this.failed.has(id)) throw new HttpError(409, "会话状态未能保存，请从 transcript 恢复该会话后重试");
@@ -413,6 +414,7 @@ export class SessionCoordinator {
 			});
 			void this.actor(id).start(async (context) => {
 				try {
+					if (images?.length) context.images = images;
 					await this.engine(id).run(prompt, context);
 				} catch (error) {
 					if (!context.signal.aborted) {
@@ -545,7 +547,7 @@ export class SessionCoordinator {
 		await this.prompt(id, "继续上一次未完成的任务。基于当前对话继续，不要重复已经完成的写操作。", []);
 	}
 
-	async interrupt(id: string, text: string, references: string[]): Promise<void> {
+	async interrupt(id: string, text: string, references: string[], images?: ChatImage[]): Promise<void> {
 		this.get(id);
 		if (this.updating.has(id)) throw new HttpError(409, "会话正在更新，请稍后重试");
 		this.updating.add(id);
@@ -558,7 +560,7 @@ export class SessionCoordinator {
 			this.updating.delete(id);
 			await this.refreshAgentAfterPluginChange(id);
 		}
-		await this.prompt(id, text, references);
+		await this.prompt(id, text, references, images);
 	}
 
 	private async navigateToMessage(

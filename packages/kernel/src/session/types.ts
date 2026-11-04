@@ -1,3 +1,5 @@
+import type { NativeImage } from "../engine/types.ts";
+
 /** Lifecycle states owned by the kernel session actor. */
 export type KernelSessionStatus = "idle" | "running" | "approval" | "error" | "interrupted";
 
@@ -13,6 +15,7 @@ export interface KernelRunContext {
 	sessionId: string;
 	runId: string;
 	signal: AbortSignal;
+	images?: NativeImage[];
 	/** Take queued steering messages at a safe turn boundary. */
 	takeSteering(): string[];
 }

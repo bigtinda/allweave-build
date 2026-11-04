@@ -153,7 +153,10 @@ export async function runNativeLoop(
 	const tools = new Map(options.tools.map((tool) => [tool.name, tool]));
 	const workspace = options.workspace ?? new LocalWorkspace(options.cwd);
 	const extensions = options.extensions;
-	const messages: NativeMessage[] = [...history, { role: "user", text: prompt, timestamp: Date.now() }];
+	const messages: NativeMessage[] = [
+		...history,
+		{ role: "user", text: prompt, images: options.initialImages, timestamp: Date.now() },
+	];
 	const maxTurns = options.maxTurns ?? MAX_TURNS;
 
 	for (let turn = 0; turn < maxTurns; turn++) {

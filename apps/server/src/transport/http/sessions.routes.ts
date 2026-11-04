@@ -97,7 +97,7 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 		return reply.code(202).send({ accepted: true });
 	});
 	app.post("/api/sessions/:id/messages", async (request, reply) => {
-		const { text, attachments, references, interrupt } = z
+		const { text, attachments, references, images, interrupt } = z
 			.object({
 				text: z.string().trim().min(1).max(100_000),
 				attachments: z
@@ -105,6 +105,16 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 					.max(6)
 					.default([]),
 				references: z.array(z.string().max(4096)).max(20).default([]),
+				images: z
+					.array(
+						z.object({
+							name: z.string().trim().min(1).max(200),
+							mimeType: z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]),
+							data: z.string().min(1).max(8_000_000),
+						}),
+					)
+					.max(4)
+					.default([]),
 				interrupt: z.boolean().default(false),
 			})
 			.parse(request.body);
@@ -124,8 +134,8 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 						`\n\nAttached text file ${JSON.stringify(file.name)}:\n<attachment>\n${file.content}\n</attachment>`,
 				)
 				.join("");
-		if (interrupt) await agents.interrupt(id, prompt, references);
-		else await agents.prompt(id, prompt, references);
+		if (interrupt) await agents.interrupt(id, prompt, references, images);
+		else await agents.prompt(id, prompt, references, images);
 		if (firstUserMessage)
 			request.log.info(
 				{ sessionId: id, setupDurationMs: Math.round(performance.now() - startedAt) },

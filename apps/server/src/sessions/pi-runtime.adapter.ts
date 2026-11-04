@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionRegistry } from "@pi-console/kernel";
+import type { ExtensionRegistry, NativeImage } from "@pi-console/kernel";
 import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type {
 	AccessMode,
@@ -51,7 +51,7 @@ export interface AgentRuntime {
 	readonly sessionFile: string | undefined;
 	/** The runtime applies access-mode instructions to its own system prompt. */
 	readonly handlesPlanMode?: boolean;
-	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void>;
+	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[], images?: NativeImage[]): Promise<void>;
 	abort(): Promise<void>;
 	usage(): RuntimeUsage;
 	compactions?(): number;

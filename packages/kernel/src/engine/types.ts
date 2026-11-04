@@ -8,9 +8,16 @@ export interface NativeToolCall {
 	input: Record<string, unknown>;
 }
 
+export interface NativeImage {
+	name: string;
+	mimeType: string;
+	data: string;
+}
+
 export interface NativeMessage {
 	role: "user" | "assistant" | "tool";
 	text: string;
+	images?: NativeImage[];
 	thinking?: string;
 	toolCalls?: NativeToolCall[];
 	toolCallId?: string;
@@ -96,6 +103,7 @@ export interface NativeLoopEvent {
 }
 
 export interface NativeLoopOptions {
+	initialImages?: NativeImage[];
 	signal: AbortSignal;
 	sessionId: string;
 	cwd: string;

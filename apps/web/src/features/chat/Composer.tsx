@@ -35,6 +35,12 @@ interface Attachment {
 	content: string;
 }
 
+interface ImageAttachment {
+	name: string;
+	mimeType: string;
+	data: string;
+}
+
 const accessModes: Array<{ id: AccessMode; label: string; description: string; icon: typeof Shield }> = [
 	{ id: "plan", label: "计划模式", description: "编辑前先出计划。", icon: Lightbulb },
 	{ id: "ask", label: "变更前确认", description: "改文件或运行工具前先问我。", icon: Hand },
@@ -81,6 +87,7 @@ export function Composer({
 	locked: boolean;
 }) {
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
+	const [images, setImages] = useState<ImageAttachment[]>([]);
 	const [working, setPending] = useState(false);
 	const [readingAttachments, setReadingAttachments] = useState(false);
 	const pending = working || locked;
@@ -139,12 +146,14 @@ export function Composer({
 			const result = await api<{ accepted: boolean; title: string }>(`/sessions/${session.id}/messages`, {
 				text: messageText,
 				attachments: textAttachments,
+				images,
 				references,
 				interrupt: busy,
 			});
 			if (result.title !== session.title) onTitleChange(result.title);
 			setText("");
 			setAttachments([]);
+			setImages([]);
 			references.forEach(removeReference);
 		} catch (error) {
 			onError(error instanceof Error ? error.message : String(error));
@@ -221,7 +230,7 @@ export function Composer({
 	return (
 		<div className="composer-wrap">
 			<div className="composer">
-				{!!(references.length + attachments.length) && (
+				{!!(references.length + attachments.length + images.length) && (
 					<div className="attachments">
 						{references.map((path) => (
 							<Chip key={path} size="small" label={`@ ${path}`} onDelete={() => removeReference(path)} />
@@ -232,6 +241,14 @@ export function Composer({
 								size="small"
 								label={file.name}
 								onDelete={() => setAttachments((files) => files.filter((_, i) => i !== index))}
+							/>
+						))}
+						{images.map((image, index) => (
+							<Chip
+								key={`${image.name}:${index}`}
+								size="small"
+								label={`图片 · ${image.name}`}
+								onDelete={() => setImages((files) => files.filter((_, i) => i !== index))}
 							/>
 						))}
 					</div>
@@ -256,11 +273,11 @@ export function Composer({
 					rows={1}
 				/>
 				<div className="composer-actions">
-					<Tooltip title="添加文本附件（每个不超过 32 KB）">
+					<Tooltip title="添加文本或图片（文本 32 KB，图片 8 MB）">
 						<span className="attachment-control">
 							<IconButton
 								className="attachment-action"
-								aria-label="添加文本附件"
+								aria-label="添加文本或图片附件"
 								disabled={busy || pending || readingAttachments}
 								onClick={() => fileInput.current?.click()}
 							>
@@ -273,7 +290,7 @@ export function Composer({
 						ref={fileInput}
 						type="file"
 						multiple
-						accept=".txt,.md,.ts,.tsx,.js,.jsx,.json,.csv,.py,.css,.html,.yaml,.yml,.log"
+						accept=".txt,.md,.ts,.tsx,.js,.jsx,.json,.csv,.py,.css,.html,.yaml,.yml,.log,image/png,image/jpeg,image/gif,image/webp"
 						onChange={(event) => {
 							const files = Array.from(event.target.files ?? []);
 							event.target.value = "";

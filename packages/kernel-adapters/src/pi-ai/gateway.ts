@@ -3,6 +3,7 @@ import type {
 	AssistantMessage,
 	AssistantMessageEventStream,
 	Context,
+	ImageContent,
 	JsonObject,
 	Model,
 	Tool as PiTool,
@@ -50,7 +51,11 @@ function toPiMessage(message: NativeMessage): UserMessage | ToolResultMessage {
 			timestamp: message.timestamp,
 		};
 	}
-	return { role: "user", content: message.text, timestamp: message.timestamp };
+	if (!message.images?.length) return { role: "user", content: message.text, timestamp: message.timestamp };
+	const content: Array<{ type: "text"; text: string } | ImageContent> = [];
+	if (message.text) content.push({ type: "text", text: message.text });
+	for (const image of message.images) content.push({ type: "image", data: image.data, mimeType: image.mimeType });
+	return { role: "user", content, timestamp: message.timestamp };
 }
 
 function toPiTool(tool: NativeTool): PiTool {

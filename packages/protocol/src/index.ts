@@ -148,6 +148,12 @@ export interface ChatToolResult {
 	isError?: boolean;
 	timestamp?: string;
 }
+export interface ChatImage {
+	name: string;
+	mimeType: string;
+	data: string;
+}
+
 export interface ChatMessage {
 	id: string;
 	role: "user" | "assistant";
@@ -158,6 +164,7 @@ export interface ChatMessage {
 	error?: string;
 	changedFiles?: string[];
 	input?: { text: string; references: string[] };
+	images?: ChatImage[];
 	/** Native-engine tool context, persisted so the next turn can replay it. */
 	toolCalls?: ChatToolCall[];
 	toolResults?: ChatToolResult[];

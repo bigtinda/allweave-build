@@ -1,6 +1,7 @@
 import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type {
 	AccessMode,
+	ChatImage,
 	ModelOption,
 	Resources,
 	SessionDetail,
@@ -101,8 +102,8 @@ export class AgentService {
 	subscribe(id: string, listener: (event: SessionEvent) => void): () => void {
 		return this.coordinator.subscribe(id, listener);
 	}
-	async prompt(id: string, text: string, references: string[]): Promise<void> {
-		await this.coordinator.prompt(id, text, references);
+	async prompt(id: string, text: string, references: string[], images?: ChatImage[]): Promise<void> {
+		await this.coordinator.prompt(id, text, references, images);
 	}
 	async warm(id: string): Promise<void> {
 		await this.coordinator.warm(id);
@@ -113,8 +114,8 @@ export class AgentService {
 	async recover(id: string): Promise<SessionDetail> {
 		return this.coordinator.recover(id);
 	}
-	async interrupt(id: string, text: string, references: string[]): Promise<void> {
-		await this.coordinator.interrupt(id, text, references);
+	async interrupt(id: string, text: string, references: string[], images?: ChatImage[]): Promise<void> {
+		await this.coordinator.interrupt(id, text, references, images);
 	}
 	async resume(id: string): Promise<void> {
 		await this.coordinator.resume(id);

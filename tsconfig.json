@@ -30,34 +30,13 @@
 				"./packages/durable/src/*/index.ts",
 				"./packages/durable/src/*"
 			],
-			"@earendil-works/pi-env": ["./packages/env/src/index.ts"],
-			"@earendil-works/pi-agent-core": ["./packages/agent/src/index.ts"],
-			"@earendil-works/pi-coding-agent": ["./packages/coding-agent/src/index.ts"],
-			"@earendil-works/pi-coding-agent/experimental/plugin": [
-				"./packages/coding-agent/src/experimental/plugin.ts"
-			],
-			"@earendil-works/pi-coding-agent/hooks": ["./packages/coding-agent/src/core/hooks/index.ts"],
-			"@earendil-works/pi-coding-agent/*": ["./packages/coding-agent/src/*"],
 			"@pi-console/protocol": ["./packages/protocol/src/index.ts"],
 			"@pi-console/kernel": ["./packages/kernel/src/index.ts"],
 			"@pi-console/kernel-adapters": ["./packages/kernel-adapters/src/index.ts"],
 			"@pi-console/kernel/*": ["./packages/kernel/src/*"],
 			"@pi-console/protocol/*": ["./packages/protocol/src/*"],
-			"@earendil-works/pi-protocol": ["./packages/pi-protocol/src/index.ts"],
-			"@earendil-works/pi-protocol/*": ["./packages/pi-protocol/src/*"],
-			"@earendil-works/pi-client": ["./packages/client/src/index.ts"],
-			"@earendil-works/pi-client/unix": ["./packages/client/src/unix.ts"],
-			"@earendil-works/pi-client/*": ["./packages/client/src/*"],
-			"@earendil-works/pi-server": ["./packages/server/src/index.ts"],
-			"@earendil-works/pi-server/unix": ["./packages/server/src/transports/unix/index.ts"],
-			"@earendil-works/pi-server/*": ["./packages/server/src/*"],
-			"typebox": ["./node_modules/typebox"],
-			"@earendil-works/pi-tui": ["./packages/tui/src/index.ts"],
-			"@earendil-works/pi-tui/*": ["./packages/tui/src/*"],
-			"@earendil-works/pi-agent-old": ["./packages/agent-old/src/index.ts"],
-			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"]
+			"typebox": ["./node_modules/typebox"]
 		}
 	},
-	"include": ["scripts/model-catalog-protocol.ts", "scripts/model-catalog-protocol.test.ts", "packages/*/src/**/*", "packages/*/test/**/*", "packages/coding-agent/examples/**/*", "packages/agent/examples/**/*"],
-	"exclude": ["**/dist/**", "packages/coding-agent/examples/extensions/gondolin/**"]
+	"include": ["scripts/model-catalog-protocol.ts", "scripts/model-catalog-protocol.test.ts", "packages/*/src/**/*", "packages/*/test/**/*"]
 }

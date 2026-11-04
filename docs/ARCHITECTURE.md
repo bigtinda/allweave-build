@@ -1,5 +1,8 @@
 # AllWeave Build 架构与内核重构方案
 
+> **状态（M6 完成）**：工作台已切换到原生内核，Pi CLI/SDK 包已删除。当前产品包为 `apps/{web,server,shared,desktop}` 与 `packages/{protocol,kernel,kernel-adapters}`；保留的 Pi 支持层仅为 `packages/ai`、`telemetry`、`mcp`、`codemode`。`chord`/`durable` 为实验包，不在产品依赖中。本文第 1–4 章保留 M0 前的基线分析，用于理解迁移动因；现状与验收以第 5–9 章和 `docs/note/M6.md` 为准。
+
+
 > 基线：`D:/project/pi-main/.pi/worktrees/fix-rebuild`，HEAD `00d2afaa1`（2026-11-03 工作树）。
 >
 > 检查前置：在全新 worktree 先运行 `npm install --ignore-scripts`。若 `packages/ai/node_modules/openai` 缺失，TypeScript 会退到根目录的 devDependency `openai@6.40.0`，在 `packages/ai/src/api/openai-responses.ts` 报 `prompt_cache_options` / `"fast"` 类型错误；完整安装使用 `openai@7.19.0` 后 `npm run check` 通过。
@@ -17,7 +20,7 @@
 3. **工作台在 `AgentSession` 外面又长了一层“半内核”。** `apps/server` 的 `SessionCoordinator`、`EventProjector`、`ToolAuthorization`、`PiAgentRuntime` 负责运行队列、事件投影、审批、工具策略、SQLite 快照；这些本应属于内核，现在跨包重复。
 4. **当前有三套可运行 runtime。** ① coding-agent CLI（TUI/print/rpc）；② workbench 的进程内 SDK；③ experimental durable harness（`packages/durable` + `packages/chord`）。第三套不在工作台会话主链路，但通过 `pi-env` 被远程工作区拖进了 `apps/server` 的依赖树。目标架构移除远程工作区，`pi-env`/`chord`/`durable` 随之退出产品依赖。
 5. **目标不是“再包一层 Pi”，而是把内核换成自己的。** 新内核只做会话状态机、loop、上下文、工具、策略、事件存储和最小扩展钩子；server 只做 HTTP/WS 与组装，web 只依赖纯协议包。
-6. **最终保留的 Pi 部分很小。** 运行时只保留 `pi-ai`（模型 wire protocol/auth/stream）和它的 `pi-telemetry` 依赖；`pi-mcp`、`pi-codemode` 作为可选工具适配器保留。`coding-agent`、`agent`、`tui`、`env`、`durable`、`chord`、`protocol`、`client`、`server` 全部退出工作台运行时。目标不保留 CLI 版本：`coding-agent`/`agent`/`tui` 只作为迁移期的 `PiEngine`/bridge 依赖，M6 完成后整体删除；远程工作区不在目标范围。
+6. **最终保留的 Pi 部分很小，且已在 M6 落地。** 运行时只保留 `pi-ai`（模型 wire protocol/auth/stream）和它的 `pi-telemetry` 依赖；`pi-mcp`、`pi-codemode` 作为可选工具适配器保留。`coding-agent`、`agent`、`tui`、`env`、`client`、`server`、`pi-protocol`、`evals` 已删除；不保留 CLI，远程工作区已删除。`chord`/`durable` 作为实验包保留，不在产品依赖中。
 7. **轻量和效率是硬约束，不是风格偏好。** 保留 Pi 的进程内、按需加载、流式转发、稳定前缀缓存和少依赖特征；不引入 DI/ORM/消息总线/工作流引擎。内核只允许 `protocol` 一个 workspace 运行时依赖；性能预算见 7.2，任何一项不达标都不得把 `NativeEngine` 设为默认。
 8. **迁移顺序必须是“先存储/协议，再会话 actor，再 loop，再上下文/扩展，最后拆 Pi”。** 每一步都能独立发布和回退，不做 big-bang 重写；旧 `AgentSession` 通过 `PiEngine` 适配器保留到新 loop 达到功能与金轨迹对等。
 

@@ -27,8 +27,6 @@ if (-not (Test-Path -LiteralPath $frontend)) {
 
 Push-Location $PSScriptRoot
 try {
-	& $NodeExecutable (Join-Path $repoRoot "scripts/hydrate-env-daemons.mjs")
-	if ($LASTEXITCODE -ne 0) { throw "TypeScript daemon bundling failed." }
 	& $NodeExecutable (Join-Path $PSScriptRoot "package-shell.mjs")
 	if ($LASTEXITCODE -ne 0) { throw "TypeScript desktop packaging failed." }
 } finally {
@@ -85,7 +83,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.json") -Destination $runti
 Copy-Item -LiteralPath (Join-Path $repoRoot "tsconfig.base.json") -Destination $runtime -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $staging "LICENSE") -Force
 
-foreach ($path in @("apps/server/src", "apps/shared", "apps/web/dist", "packages")) {
+foreach ($path in @("apps/server/src", "apps/shared", "apps/web/dist", "packages", "scripts")) {
 	$source = Join-Path $repoRoot $path
 	$destination = Join-Path $runtime $path
 	Copy-RuntimeTree -Source $source -Destination $destination -SourceWorkspace:($path -eq "packages")
@@ -106,10 +104,7 @@ try {
 }
 if ($npmExitCode -ne 0) {
 	$metadataProblems = @($npmOutput | Where-Object { "$_" -match '^npm error (extraneous|invalid):' }).Count -gt 0
-	$treeResolved = @($npmOutput | Where-Object {
-		"$_" -match 'node_modules\\@earendil-works\\pi-coding-agent\s*$'
-	}).Count -gt 0
-	if ($npmExitCode -eq 1 -and $metadataProblems -and $treeResolved) {
+	if ($npmExitCode -eq 1 -and $metadataProblems) {
 		Write-Warning "npm ls reported extraneous or invalid packages; continuing with the resolved production tree."
 	} else {
 		$detail = ($npmOutput | Select-Object -Last 8) -join [Environment]::NewLine
@@ -148,11 +143,7 @@ foreach ($entry in $npmOutput) {
 	Copy-RuntimeTree -Source $source -Destination (Join-Path $runtime $relativePath) -Dependency
 	$copiedExternalDependencies[$source] = $true
 }
-if (-not $copiedWorkspaces.ContainsKey("@earendil-works/pi-coding-agent")) {
-	throw "The production dependency tree did not include @earendil-works/pi-coding-agent."
-}
-
-# Keep npm available for installing Pi extensions without requiring Node.js on the target PC.
+# Keep npm available for package installation without requiring Node.js on the target PC.
 $npmLauncher = @'
 @echo off
 setlocal
@@ -162,7 +153,7 @@ exit /b %ERRORLEVEL%
 '@
 [IO.File]::WriteAllText((Join-Path $runtime "npm.cmd"), $npmLauncher, (New-Object Text.UTF8Encoding($false)))
 Copy-Item -LiteralPath $npmPackage -Destination $runtimeNodeModules -Recurse -Force
-Write-Output "Included $($copiedWorkspaces.Count) Pi SDK workspace packages and $($copiedExternalDependencies.Count) production dependency packages."
+Write-Output "Included $($copiedWorkspaces.Count) workspace packages and $($copiedExternalDependencies.Count) production dependency packages."
 
 New-Item -ItemType Directory -Path (Join-Path $staging "workspaces") -Force | Out-Null
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -173,13 +164,11 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines((Join-Path $staging "README.txt"), [string[]]@(
 	"AllWeave Build - Windows desktop"
 	""
-	"Double-click shell/AllWeaveBuild.exe to open the desktop application. The program stores its sessions, Pi settings, and WebView data in the installation's data folder."
+	"Double-click shell/AllWeaveBuild.exe to open the desktop application. The program stores its sessions, model settings, and WebView data in the installation's data folder."
 	""
 	"By default, the workspaces folder is authorized. Add one existing folder path per line to workspace-roots.txt to allow other projects. Relative paths are resolved from this folder. Restart the application after editing the file."
 	""
 	"The application includes its Chromium desktop runtime."
-	""
-	"The Pi coding-agent SDK is bundled from the project source and runs inside the application service."
 ), $utf8NoBom)
 
 $temporaryArtifactPattern = '(^|[._-])(test|tests|testing|spec|specs|fixtures?|tmp|temp)([._-]|$)|^(coverage|\.nyc_output|\.cache|\.vite|\.model-generation-)'

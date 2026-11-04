@@ -33,7 +33,6 @@
 			"scripts/model-catalog-protocol.test.ts",
 			"packages/*/src/**/*.ts",
 			"packages/*/test/**/*.ts",
-			"packages/coding-agent/examples/**/*.ts",
 			"packages/agent/examples/**/*.ts",
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",

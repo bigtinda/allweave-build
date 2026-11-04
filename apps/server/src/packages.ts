@@ -1,8 +1,7 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { ProgressEvent } from "@earendil-works/pi-coding-agent";
-import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { packageIdentity } from "../../shared/src/plugins.ts";
 import type { DefaultPluginStatus, PiConfiguredPackage, PiPackageJob } from "../../shared/src/protocol.ts";
 import { HttpError } from "./security.ts";
@@ -264,18 +263,8 @@ export class PiPackageManager {
 			if (action === "install" && this.defaultStatuses.has(source)) {
 				this.defaultStatuses.set(source, { source, status: "running", output: "" });
 			}
-			const settingsManager = SettingsManager.create(this.cwd, this.agentDirectory);
-			settingsManager.setProjectTrusted(true);
-			const packageManager = new DefaultPackageManager({
-				cwd: this.cwd,
-				agentDir: this.agentDirectory,
-				settingsManager,
-			});
-			packageManager.setProgressCallback((event: ProgressEvent) => {
-				appendOutput(job, `${event.message ?? `${event.action} ${event.source}`}\n`);
-			});
 			this.operationStarting = false;
-			const operation = this.runPackageOperation(packageManager, job);
+			const operation = this.runPackageOperation(job);
 			this.activeOperation = operation;
 			void operation.finally(() => {
 				if (this.activeOperation === operation) this.activeOperation = undefined;
@@ -287,10 +276,53 @@ export class PiPackageManager {
 		}
 	}
 
-	private async runPackageOperation(packageManager: DefaultPackageManager, job: PackageJob): Promise<void> {
+	private async runPackageOperation(job: PackageJob): Promise<void> {
 		try {
-			if (job.action === "install") await packageManager.installAndPersist(job.source);
-			else await packageManager.removeAndPersist(job.source);
+			const npmDir = join(this.agentDirectory, "npm");
+			await mkdir(npmDir, { recursive: true });
+			const source = job.source.startsWith("npm:") ? job.source.slice(4) : job.source;
+			const args =
+				job.action === "install"
+					? ["install", "--prefix", npmDir, "--no-audit", "--no-fund", "--loglevel", "error", source]
+					: [
+							"uninstall",
+							"--prefix",
+							npmDir,
+							"--no-audit",
+							"--no-fund",
+							"--loglevel",
+							"error",
+							packageIdentity(job.source).slice(4),
+						];
+			await new Promise<void>((resolvePromise, reject) => {
+				const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", args, {
+					cwd: this.cwd,
+					shell: false,
+					windowsHide: true,
+				});
+				child.stdout.on("data", (chunk: Buffer) => appendOutput(job, chunk));
+				child.stderr.on("data", (chunk: Buffer) => appendOutput(job, chunk));
+				child.on("error", reject);
+				child.on("close", (code) => {
+					if (code === 0) resolvePromise();
+					else reject(new Error(`npm exited with code ${code ?? "unknown"}`));
+				});
+			});
+			const settings = await this.readSettings();
+			const declarations = Array.isArray(settings.packages) ? settings.packages : [];
+			const identity = packageIdentity(job.source);
+			if (job.action === "install") {
+				if (!declarations.some((entry) => packageIdentity(sourceFromDeclaration(entry) ?? "") === identity)) {
+					declarations.push(job.source);
+				}
+			} else {
+				const index = declarations.findIndex(
+					(entry) => packageIdentity(sourceFromDeclaration(entry) ?? "") === identity,
+				);
+				if (index !== -1) declarations.splice(index, 1);
+			}
+			settings.packages = declarations;
+			await this.writeJson(join(this.agentDirectory, "settings.json"), settings);
 			this.finishJob(job, "succeeded");
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);

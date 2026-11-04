@@ -38,9 +38,9 @@ export async function createNativeWorkbenchTools(input: NativeWorkbenchToolInput
 			parameters: browser.parameters as unknown as Record<string, unknown>,
 			readOnly: false,
 			execute: async (params, context) => {
-				const value = await browser.execute("native-browser", params, context.signal, () => {}, {} as never);
+				const value = await browser.execute(params, context.signal);
 				const content = value.content
-					.map((item) => (item.type === "text" ? item.text : `[${item.type}]`))
+					.map((item) => (item.type === "text" ? (item.text ?? "") : `[${item.type}]`))
 					.join("\n");
 				return { content, isError: false };
 			},

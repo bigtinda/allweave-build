@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAgentSession, VERSION } from "@earendil-works/pi-coding-agent";
+import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
@@ -23,6 +23,7 @@ import { registerProviderRoutes } from "../transport/http/providers.routes.ts";
 import { registerResourceRoutes } from "../transport/http/resources.routes.ts";
 import { authorizeSessionWorkspace, registerSessionRoutes } from "../transport/http/sessions.routes.ts";
 import { registerWorkspaceRoutes } from "../transport/http/workspaces.routes.ts";
+import { KERNEL_VERSION } from "../version.ts";
 import { WorkspaceService } from "../workspaces/service.ts";
 
 export interface AppOptions {
@@ -118,7 +119,7 @@ export async function createApp(options: AppOptions) {
 	});
 	app.get("/api/health", async () => ({
 		status: "ok",
-		kernel: VERSION,
+		kernel: KERNEL_VERSION,
 	}));
 	if (desktop) {
 		app.post("/api/desktop/shutdown", async () => {
@@ -131,7 +132,7 @@ export async function createApp(options: AppOptions) {
 	app.get("/api/settings", async () => ({
 		mode: "local-single-user",
 		roots: workspaces.rootsSnapshot(),
-		kernel: { version: VERSION, integration: "in-process" },
+		kernel: { version: KERNEL_VERSION, integration: "in-process" },
 		agentDirectory,
 		credentialStorage: "auth.json and models.json in the workbench configuration directory",
 		approvals: "Every command, file mutation and custom tool requires confirmation",

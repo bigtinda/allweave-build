@@ -4,6 +4,7 @@ import {
 	createEditToolDefinition,
 	createReadToolDefinition,
 	createWriteToolDefinition,
+	defineTool,
 	type InlineExtension,
 	type ToolDefinition,
 	withFileMutationQueue,
@@ -17,6 +18,26 @@ import { HttpError } from "../security.ts";
 import { toolPermission } from "../tool-policy.ts";
 import { workspaceCommandOperations } from "../workspaces/command-operations.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
+
+function createPiBrowserTool(service: BrowserService, sessionId: string) {
+	const browser = createBrowserTool(service, sessionId);
+	return defineTool({
+		name: browser.name,
+		label: "内置浏览器",
+		description: browser.description,
+		parameters: Type.Unsafe<Record<string, unknown>>(browser.parameters),
+		async execute(_toolCallId, params, signal) {
+			const value = await browser.execute(params as Record<string, unknown>, signal);
+			const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+			for (const item of value.content) {
+				if (item.type === "text") content.push({ type: "text", text: item.text ?? "" });
+				else if (item.data && item.mimeType)
+					content.push({ type: "image", data: item.data, mimeType: item.mimeType });
+			}
+			return { content, details: value.details };
+		},
+	});
+}
 
 export interface ToolFactoryInput {
 	sessionId: string;
@@ -196,7 +217,7 @@ export async function createWorkbenchTools(input: ToolFactoryInput): Promise<Too
 					},
 				});
 			}
-			if (!pluginDevelopment) pi.registerTool(createBrowserTool(input.browser, input.sessionId));
+			if (!pluginDevelopment) pi.registerTool(createPiBrowserTool(input.browser, input.sessionId));
 			const appPlugins = input.appPlugins;
 			if (!appPlugins) return;
 			for (const manifest of await appPlugins.enabledManifests()) {

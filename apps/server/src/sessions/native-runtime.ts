@@ -104,6 +104,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private resourcesLoaded: NativeResourceInfo[] = [];
 
 	private mcp: Promise<McpManager> | undefined;
+	private mcpKey = "";
 
 	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime, agentDir: string) {
 		this.input = input;
@@ -128,10 +129,19 @@ export class NativeAgentRuntime implements AgentRuntime {
 	}
 
 	private mcpTools(): Promise<McpManager | undefined> {
-		if (this.mcp) return this.mcp;
 		if (this.input.pluginDevelopment || process.env.KERNEL_MCP === "off") return Promise.resolve(undefined);
 		const config = loadMcpConfig({ agentDir: this.agentDir, cwd: this.input.cwd, projectTrusted: true });
+		const key = JSON.stringify([...config.servers]);
+		if (this.mcp && key === this.mcpKey) return this.mcp;
+		const previous = this.mcp;
+		this.mcpKey = key;
+		if (config.servers.size === 0) {
+			this.mcp = undefined;
+			void previous?.then((manager) => manager.close());
+			return Promise.resolve(undefined);
+		}
 		this.mcp = createMcpManager({ servers: config.servers });
+		void previous?.then((manager) => manager.close());
 		return this.mcp;
 	}
 

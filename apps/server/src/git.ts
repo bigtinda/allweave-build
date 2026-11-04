@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { join, type PlatformPath, posix, win32 } from "node:path";
-import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { withPathMutation } from "@pi-console/kernel";
 import type { GitChange, GitChanges, GitDiff } from "../../shared/src/protocol.ts";
 import { HttpError, workspacePath } from "./security.ts";
 
@@ -168,7 +168,7 @@ export async function changeGitBranch(
 	operations = localGitOperations,
 ): Promise<GitChanges> {
 	const { run: git } = operations;
-	return withFileMutationQueue(operations.lockPath(root), async () => {
+	return withPathMutation(operations.lockPath(root), async () => {
 		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "仓库状态已变化，请刷新后重试。");
 		await git(root, ["check-ref-format", "--branch", name]);
@@ -239,7 +239,7 @@ export async function changeGitIndex(
 	operations = localGitOperations,
 ): Promise<GitChanges> {
 	const { run: git, checkedPath: workspacePath } = operations;
-	return withFileMutationQueue(operations.lockPath(root), async () => {
+	return withPathMutation(operations.lockPath(root), async () => {
 		await workspacePath(root, path, true);
 		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "暂存区已被其他操作修改，请刷新后重试。");
@@ -264,7 +264,7 @@ export async function commitGit(
 	operations = localGitOperations,
 ): Promise<{ output: string }> {
 	const { run: git, checkedPath: workspacePath, stat } = operations;
-	return withFileMutationQueue(operations.lockPath(root), async () => {
+	return withPathMutation(operations.lockPath(root), async () => {
 		const state = await gitChanges(root, operations);
 		if (state.indexRevision !== revision) throw new HttpError(409, "暂存区或分支已变化，请重新检查提交文件。");
 		if (state.files.some((file) => file.conflict)) throw new HttpError(409, "请先解决合并冲突。");

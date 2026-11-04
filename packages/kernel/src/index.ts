@@ -21,3 +21,4 @@ export type {
 	StoredSnapshot,
 } from "./store/types.ts";
 export * from "./workspace/local.ts";
+export * from "./workspace/mutex.ts";

@@ -3,9 +3,9 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuthEvent, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import { isModelType } from "@earendil-works/pi-ai";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { z } from "zod";
 import type { ModelOption } from "../../shared/src/protocol.ts";
+import { createModelRuntime, type WorkbenchModels } from "./model-runtime.ts";
 import { HttpError } from "./security.ts";
 
 const apiTypes = [
@@ -138,7 +138,7 @@ function toModelOption(model: { id: string; provider: string; name: string; reas
 
 export class ProviderManager {
 	private agentDir: string;
-	private runtimePromise: Promise<ModelRuntime>;
+	private runtimePromise: Promise<WorkbenchModels>;
 	private modelCache?: { values: ModelOption[]; refreshedAt: number };
 	private modelCachePromise?: Promise<ModelOption[]>;
 	private modelRevision = 0;
@@ -149,13 +149,7 @@ export class ProviderManager {
 		this.agentDir = agentDir;
 		this.runtimePromise = (async () => {
 			await mkdir(agentDir, { recursive: true });
-			return ModelRuntime.create({
-				authPath: join(agentDir, "auth.json"),
-				modelsPath: join(agentDir, "models.json"),
-				modelsStorePath: join(agentDir, "models-store.json"),
-				allowModelNetwork: false,
-				refreshOnCreate: false,
-			});
+			return createModelRuntime(agentDir);
 		})();
 	}
 
@@ -163,7 +157,7 @@ export class ProviderManager {
 		this.beforeChange = handler;
 	}
 
-	async runtime(): Promise<ModelRuntime> {
+	async runtime(): Promise<WorkbenchModels> {
 		return this.runtimePromise;
 	}
 
@@ -196,29 +190,32 @@ export class ProviderManager {
 		await runtime.refresh({ allowNetwork: false });
 		this.invalidateModels();
 		await runtime.getAvailable();
-		return runtime.getProviders().map((provider) => {
-			const status = runtime.getProviderAuthStatus(provider.id);
-			return {
-				id: provider.id,
-				name: provider.name,
-				category: providerCategory(provider.id),
-				modelCount: runtime.getModels(provider.id).length,
-				configured: status.configured,
-				...("source" in status && status.source ? { authSource: status.source } : {}),
-				...(provider.auth.apiKey
-					? { apiKey: { name: provider.auth.apiKey.name, interactive: !!provider.auth.apiKey.login } }
-					: {}),
-				...(provider.auth.oauth
-					? {
-							oauth: {
-								name: provider.auth.oauth.name,
-								label: provider.auth.oauth.loginLabel ?? provider.auth.oauth.name,
-								subscription: provider.auth.oauth.isSubscription === true,
-							},
-						}
-					: {}),
-			};
-		});
+		const providers = await Promise.all(
+			runtime.getProviders().map(async (provider) => {
+				const status = await runtime.checkAuth(provider.id);
+				return {
+					id: provider.id,
+					name: provider.name,
+					category: providerCategory(provider.id),
+					modelCount: runtime.getModels(provider.id).length,
+					configured: status !== undefined,
+					...(status?.source ? { authSource: status.source } : {}),
+					...(provider.auth.apiKey
+						? { apiKey: { name: provider.auth.apiKey.name, interactive: !!provider.auth.apiKey.login } }
+						: {}),
+					...(provider.auth.oauth
+						? {
+								oauth: {
+									name: provider.auth.oauth.name,
+									label: provider.auth.oauth.loginLabel ?? provider.auth.oauth.name,
+									subscription: provider.auth.oauth.isSubscription === true,
+								},
+							}
+						: {}),
+				};
+			}),
+		);
+		return providers;
 	}
 
 	async startLogin(providerId: string, type: AuthType): Promise<ProviderLoginView> {
@@ -332,25 +329,25 @@ export class ProviderManager {
 		const temporary = `${file}.${randomUUID()}.tmp`;
 		await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 		await rename(temporary, file);
-		await runtime.refresh({ allowNetwork: false });
-		this.invalidateModels();
-		const error = runtime.getError();
-		if (error?.includes("models.json")) {
+		try {
+			await runtime.reloadCustomProviders();
+		} catch (error) {
 			if (previous === undefined) await rm(file, { force: true });
 			else await writeFile(file, previous, { encoding: "utf8", mode: 0o600 });
-			await runtime.refresh({ allowNetwork: false });
+			await runtime.reloadCustomProviders().catch(() => {});
 			this.invalidateModels();
-			throw new HttpError(400, error);
+			throw new HttpError(400, error instanceof Error ? error.message : String(error));
 		}
+		this.invalidateModels();
 		const created = runtime.getProvider(provider.id);
 		if (!created) throw new HttpError(400, "自定义供应商注册失败");
-		const status = runtime.getProviderAuthStatus(provider.id);
+		const status = await runtime.checkAuth(provider.id);
 		return {
 			id: created.id,
 			name: created.name,
 			category: providerCategory(created.id),
 			modelCount: runtime.getModels(created.id).length,
-			configured: status.configured,
+			configured: status !== undefined,
 			apiKey: created.auth.apiKey
 				? { name: created.auth.apiKey.name, interactive: !!created.auth.apiKey.login }
 				: undefined,

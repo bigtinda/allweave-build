@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { access, lstat, mkdir, open as openFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, type PlatformPath, posix, win32 } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { detectSupportedImageMimeTypeFromFile, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { withPathMutation } from "@pi-console/kernel";
 import type { FileContent, FileEntry, Workspace } from "../../../shared/src/protocol.ts";
 import { type GitOperations, gitRoot, localGitOperations } from "../git.ts";
 import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
@@ -100,6 +100,26 @@ async function readLocalContent(root: string, path: string, allowLargePreview = 
 	};
 }
 
+async function detectImageMimeType(file: string): Promise<string | undefined> {
+	const content = await readFile(file).catch(() => undefined);
+	if (!content) return undefined;
+	if (
+		content.length >= 8 &&
+		content.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+	)
+		return "image/png";
+	if (content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff) return "image/jpeg";
+	if (content.length >= 6 && content.subarray(0, 3).toString("ascii") === "GIF") return "image/gif";
+	if (
+		content.length >= 12 &&
+		content.subarray(0, 4).toString("ascii") === "RIFF" &&
+		content.subarray(8, 12).toString("ascii") === "WEBP"
+	)
+		return "image/webp";
+	if (content.length >= 2 && content.subarray(0, 2).toString("ascii") === "BM") return "image/bmp";
+	return undefined;
+}
+
 function localFiles(workspace: Workspace): WorkspaceFiles {
 	const root = workspace.path;
 	return {
@@ -134,13 +154,13 @@ function localFiles(workspace: Workspace): WorkspaceFiles {
 			const target = await workspacePath(root, path);
 			const info = await stat(target);
 			if (!info.isFile() || info.size > 10 * 1024 * 1024) throw new HttpError(413, "图片必须小于 10 MB");
-			const mime = await detectSupportedImageMimeTypeFromFile(target);
+			const mime = await detectImageMimeType(target);
 			if (!mime) throw new HttpError(415, "不支持此图片格式");
 			return { base64: (await readFile(target)).toString("base64"), mime };
 		},
 		async write(path, content, revision) {
 			const target = await workspacePath(root, path);
-			return withFileMutationQueue(target, async () => {
+			return withPathMutation(target, async () => {
 				const current = await readLocalContent(root, path);
 				if (current.revision !== revision)
 					throw new HttpError(409, "The file changed on disk. Reload before saving.");
@@ -167,7 +187,7 @@ function remoteFiles(workspace: Workspace, remote: RemoteWorkspaceService): Work
 		async write(path, content, revision) {
 			const checked = await remote.checkedPath(workspace, path);
 			const queueKey = remote.mutationKey(workspace, checked.path, checked.paths);
-			return withFileMutationQueue(queueKey, async () => {
+			return withPathMutation(queueKey, async () => {
 				const current = await remote.readFile(workspace, path);
 				if (current.revision !== revision) {
 					throw new HttpError(409, "文件已在远程主机上发生变化，请重新加载后保存。");
@@ -201,8 +221,7 @@ function localTools(workspace: Workspace, cwd: string): WorkspaceTools {
 		mkdir: async (path) => {
 			await mkdir(await workspacePath(cwd, path, true), { recursive: true });
 		},
-		imageMimeType: async (path) =>
-			(await detectSupportedImageMimeTypeFromFile(await workspacePath(cwd, path))) ?? undefined,
+		imageMimeType: async (path) => (await detectImageMimeType(await workspacePath(cwd, path))) ?? undefined,
 	};
 }
 

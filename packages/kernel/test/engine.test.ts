@@ -6,6 +6,7 @@ import test from "node:test";
 import { runNativeLoop } from "../src/engine/loop.ts";
 import { createBuiltinTools } from "../src/engine/tools.ts";
 import type { NativeModelEvent, NativeModelGateway, NativeModelRequest } from "../src/engine/types.ts";
+import { ExtensionRegistry } from "../src/extensions/registry.ts";
 
 function gateway(responses: NativeModelEvent[][]): NativeModelGateway & { requests: NativeModelRequest[] } {
 	const requests: NativeModelRequest[] = [];
@@ -332,4 +333,55 @@ test("injects steering at the next turn boundary", async () => {
 		"go",
 	);
 	assert.ok(requests[1]?.messages.some((message) => message.text === "focus on tests"));
+});
+
+test("refreshes extension tools at each turn", async () => {
+	const registry = new ExtensionRegistry();
+	registry.register({
+		name: "late-tools",
+		hooks: {
+			turn_start: () => {
+				registry.registerTool("late-tools", {
+					name: "late",
+					description: "registered during the turn",
+					parameters: { type: "object" },
+					readOnly: true,
+					async execute() {
+						return { content: "late-result" };
+					},
+				});
+			},
+		},
+	});
+	const model = gateway([
+		[
+			{
+				type: "done",
+				result: {
+					text: "",
+					thinking: "",
+					stopReason: "toolUse",
+					toolCalls: [{ id: "call-late", name: "late", input: {} }],
+				},
+			},
+		],
+		[{ type: "done", result: { text: "done", thinking: "", toolCalls: [], stopReason: "stop" } }],
+	]);
+	const result = await runNativeLoop(
+		{
+			sessionId: "s",
+			cwd: process.cwd(),
+			system: "test",
+			gateway: model,
+			tools: createBuiltinTools(),
+			extensions: registry,
+			signal: new AbortController().signal,
+			onEvent: () => {},
+		},
+		[],
+		"use the late tool",
+	);
+	assert.ok(model.requests[0]?.tools.some((tool) => tool.name === "late"));
+	assert.equal(result.at(-2)?.role, "tool");
+	assert.equal(result.at(-2)?.text, "late-result");
 });

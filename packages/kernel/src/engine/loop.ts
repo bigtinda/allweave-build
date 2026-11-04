@@ -167,6 +167,7 @@ export async function runNativeLoop(
 			options.onEvent({ type: "user.message", text });
 		}
 		await extensions?.run("turn_start", { sessionId: options.sessionId, turn, messages: [...messages] });
+		for (const tool of extensions?.tools() ?? []) tools.set(tool.name, tool);
 		const patch = await extensions?.context({
 			sessionId: options.sessionId,
 			system: options.system,
@@ -175,7 +176,7 @@ export async function runNativeLoop(
 		const request = {
 			system: patch?.system ?? options.system,
 			messages: patch?.messages ?? messages,
-			tools: options.tools,
+			tools: [...tools.values()],
 		};
 		const messageId = `assistant:${randomUUID()}`;
 		const streamed = await streamTurn(options, request, messageId);

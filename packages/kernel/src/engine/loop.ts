@@ -149,6 +149,7 @@ export async function runNativeLoop(
 	prompt: string,
 ): Promise<NativeMessage[]> {
 	if (options.tools.length === 0) fail("native loop requires at least one tool");
+	if (options.signal.aborted) throw new Error("aborted");
 	const tools = new Map(options.tools.map((tool) => [tool.name, tool]));
 	const workspace = options.workspace ?? new LocalWorkspace(options.cwd);
 	const extensions = options.extensions;
@@ -157,6 +158,11 @@ export async function runNativeLoop(
 
 	for (let turn = 0; turn < maxTurns; turn++) {
 		if (options.signal.aborted) break;
+		for (const text of options.takeSteering?.() ?? []) {
+			const message: NativeMessage = { role: "user", text, timestamp: Date.now() };
+			messages.push(message);
+			options.onEvent({ type: "user.message", text });
+		}
 		await extensions?.run("turn_start", { sessionId: options.sessionId, turn, messages: [...messages] });
 		const patch = await extensions?.context({
 			sessionId: options.sessionId,

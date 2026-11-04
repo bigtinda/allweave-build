@@ -29,6 +29,7 @@ export class KernelSession {
 	private runPromise?: Promise<void>;
 	private active = false;
 	private approvals = 0;
+	private steering: string[] = [];
 	private closing = false;
 
 	constructor(options: KernelSessionOptions) {
@@ -64,11 +65,17 @@ export class KernelSession {
 		this.startedAt = this.now();
 		this.finishedAt = undefined;
 		this.approvals = 0;
+		this.steering = [];
 		this.active = true;
 		this.setStatus("running");
 		let result: Promise<void>;
 		try {
-			result = operation({ sessionId: this.id, runId, signal: controller.signal });
+			result = operation({
+				sessionId: this.id,
+				runId,
+				signal: controller.signal,
+				takeSteering: () => this.steering.splice(0),
+			});
 		} catch (error) {
 			result = Promise.reject(error);
 		}
@@ -92,6 +99,12 @@ export class KernelSession {
 				if (this.status !== "error") this.setStatus("idle");
 			});
 		return this.runPromise;
+	}
+
+	/** Queue a message for the next model turn; it never starts a new run. */
+	steer(text: string): void {
+		if (!this.active) throw new KernelSessionConflict("Session is not running");
+		this.steering.push(text);
 	}
 
 	async abort(): Promise<void> {

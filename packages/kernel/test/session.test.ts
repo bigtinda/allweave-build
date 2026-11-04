@@ -75,3 +75,18 @@ test("marks an idle session interrupted without overriding an active run", async
 	gate.resolve();
 	await run;
 });
+
+test("queues steering messages for the next turn", async () => {
+	const session = new KernelSession({ id: "s" });
+	const gate = deferred();
+	let take: (() => string[]) | undefined;
+	const run = session.start(async (context) => {
+		take = context.takeSteering;
+		await gate.promise;
+	});
+	session.steer("focus on tests");
+	assert.deepEqual(take?.(), ["focus on tests"]);
+	assert.deepEqual(take?.(), []);
+	gate.resolve();
+	await run;
+});

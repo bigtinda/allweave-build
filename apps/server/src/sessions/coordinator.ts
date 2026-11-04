@@ -530,6 +530,14 @@ export class SessionCoordinator {
 		return detail;
 	}
 
+	/** Queue a steering message into the active run. */
+	async steer(id: string, text: string): Promise<void> {
+		const session = this.get(id);
+		if (session.status !== "running" && session.status !== "approval")
+			throw new HttpError(409, "会话未在运行，无法插入消息");
+		this.actor(id).steer(text);
+	}
+
 	/** Continue an interrupted session from its last completed turn. */
 	async resume(id: string): Promise<void> {
 		const session = this.get(id);

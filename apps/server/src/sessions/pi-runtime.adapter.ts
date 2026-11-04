@@ -51,7 +51,7 @@ export interface AgentRuntime {
 	readonly sessionFile: string | undefined;
 	/** The runtime applies access-mode instructions to its own system prompt. */
 	readonly handlesPlanMode?: boolean;
-	prompt(text: string, signal?: AbortSignal): Promise<void>;
+	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void>;
 	abort(): Promise<void>;
 	usage(): RuntimeUsage;
 	compactions?(): number;

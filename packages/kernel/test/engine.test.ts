@@ -287,3 +287,49 @@ test("spills oversized tool output and keeps a readable path", async () => {
 	assert.ok(path && existsSync(path));
 	rmSync(path, { force: true });
 });
+
+test("injects steering at the next turn boundary", async () => {
+	const requests: NativeModelRequest[] = [];
+	const model = gateway([
+		[
+			{
+				type: "done",
+				result: {
+					text: "",
+					thinking: "",
+					toolCalls: [{ id: "ping", name: "ping", input: {} }],
+					stopReason: "toolUse",
+				},
+			},
+		],
+		[{ type: "done", result: { text: "done", thinking: "", toolCalls: [], stopReason: "stop" } }],
+	]);
+	const original = model.stream.bind(model);
+	model.stream = (request) => {
+		requests.push(request);
+		return original(request);
+	};
+	await runNativeLoop(
+		{
+			sessionId: "s",
+			cwd: process.cwd(),
+			system: "test",
+			signal: new AbortController().signal,
+			onEvent: () => undefined,
+			takeSteering: () => ["focus on tests"],
+			gateway: model,
+			tools: [
+				{
+					name: "ping",
+					description: "ping",
+					parameters: {},
+					readOnly: true,
+					execute: async () => ({ content: "pong" }),
+				},
+			],
+		},
+		[],
+		"go",
+	);
+	assert.ok(requests[1]?.messages.some((message) => message.text === "focus on tests"));
+});

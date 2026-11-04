@@ -85,13 +85,13 @@ export interface NativeTool {
 }
 
 export interface NativeLoopEvent {
-	type: "message.delta" | "message.completed" | "tool.started" | "tool.completed";
+	type: "message.delta" | "message.completed" | "tool.started" | "tool.completed" | "user.message";
 	messageId?: string;
 	message?: NativeMessage;
+	text?: string;
 	toolCall?: NativeToolCall;
 	result?: NativeToolResult;
 	durationMs?: number;
-	text?: string;
 	thinking?: string;
 }
 
@@ -110,5 +110,7 @@ export interface NativeLoopOptions {
 	maxRetries?: number;
 	retryBaseMs?: number;
 	extensions?: ExtensionRegistry;
+	/** Injected at turn boundaries; never starts a new model request by itself. */
+	takeSteering?: () => string[];
 	onEvent: (event: NativeLoopEvent) => void;
 }

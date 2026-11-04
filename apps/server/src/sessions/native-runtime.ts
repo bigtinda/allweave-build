@@ -97,6 +97,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private readonly listeners = new Set<(event: RuntimeEvent) => void>();
 	private messages: ChatMessage[];
 	private controller: AbortController | undefined;
+	private takeSteering: (() => string[]) | undefined;
 	private model: Model<Api> | undefined;
 	private thinking: ThinkingLevel;
 	private tokens: RuntimeUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 };
@@ -147,14 +148,15 @@ export class NativeAgentRuntime implements AgentRuntime {
 		return this.mcp;
 	}
 
-	prompt(text: string, signal?: AbortSignal): Promise<void> {
-		return this.run(text, signal);
+	prompt(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void> {
+		return this.run(text, signal, takeSteering);
 	}
 
-	private async run(text: string, signal?: AbortSignal): Promise<void> {
+	private async run(text: string, signal?: AbortSignal, takeSteering?: () => string[]): Promise<void> {
 		const model = this.currentModel();
 		if (!model) throw new HttpError(400, "未配置模型。请先配置供应商凭据并选择模型。");
 		this.controller = new AbortController();
+		this.takeSteering = takeSteering;
 		const onAbort = (): void => this.controller?.abort();
 		signal?.addEventListener("abort", onAbort, { once: true });
 		const user: NativeMessage = { role: "user", text, timestamp: Date.now() };
@@ -238,10 +240,22 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 					tools: this.tools,
 					workspace: this.workspace,
 					extensions: this.input.extensions,
+					takeSteering: this.takeSteering,
 					signal: this.controller.signal,
 					approve: async (call) => this.approve(call),
 					onEvent: (event) => {
-						if (event.type === "message.delta") {
+						if (event.type === "user.message") {
+							const message: ChatMessage = {
+								id: `user:${randomUUID()}`,
+								role: "user",
+								text: event.text ?? "",
+								thinking: "",
+								complete: true,
+								timestamp: new Date().toISOString(),
+							};
+							this.messages.push({ ...message });
+							this.emit("update", { type: "message.completed", message });
+						} else if (event.type === "message.delta") {
 							assistantId ??= event.messageId;
 							assistantText += event.text ?? "";
 							assistantThinking += event.thinking ?? "";

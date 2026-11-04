@@ -87,6 +87,11 @@ export function registerSessionRoutes(options: SessionRoutesOptions): void {
 		await agents.delete(idParams.parse(request.params).id);
 		return { deleted: true };
 	});
+	app.post("/api/sessions/:id/steer", async (request, reply) => {
+		const { text } = z.object({ text: z.string().trim().min(1).max(100_000) }).parse(request.body);
+		await agents.steer(idParams.parse(request.params).id, text);
+		return reply.code(202).send({ accepted: true });
+	});
 	app.post("/api/sessions/:id/resume", async (request, reply) => {
 		await agents.resume(idParams.parse(request.params).id);
 		return reply.code(202).send({ accepted: true });

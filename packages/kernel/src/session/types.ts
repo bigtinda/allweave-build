@@ -13,6 +13,8 @@ export interface KernelRunContext {
 	sessionId: string;
 	runId: string;
 	signal: AbortSignal;
+	/** Take queued steering messages at a safe turn boundary. */
+	takeSteering(): string[];
 }
 
 /** Thrown when a command conflicts with the current session state. */

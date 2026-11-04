@@ -15,7 +15,7 @@ export class PiEngine implements AgentEngine {
 
 	async run(text: string, context: KernelRunContext): Promise<void> {
 		const runtime = await this.resolve();
-		await runtime.prompt(text, context.signal);
+		await runtime.prompt(text, context.signal, context.takeSteering);
 	}
 
 	async abort(): Promise<void> {

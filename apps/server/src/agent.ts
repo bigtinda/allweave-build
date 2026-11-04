@@ -117,6 +117,9 @@ export class AgentService {
 	async resume(id: string): Promise<void> {
 		await this.coordinator.resume(id);
 	}
+	async steer(id: string, text: string): Promise<void> {
+		await this.coordinator.steer(id, text);
+	}
 	async recall(
 		id: string,
 		messageId: string,

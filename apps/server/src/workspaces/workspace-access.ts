@@ -1,11 +1,9 @@
 import { createHash } from "node:crypto";
 import { access, lstat, mkdir, open as openFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { extname, join, type PlatformPath, posix, win32 } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { join, type PlatformPath, posix, win32 } from "node:path";
 import { withPathMutation } from "@pi-console/kernel";
 import type { FileContent, FileEntry, Workspace } from "../../../shared/src/protocol.ts";
 import { type GitOperations, gitRoot, localGitOperations } from "../git.ts";
-import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { contained, HttpError, workspacePath } from "../security.ts";
 import { officePreview } from "./office-preview.ts";
 
@@ -24,11 +22,11 @@ export interface WorkspaceFiles {
 
 /** An authorized host path resolved from a workspace-relative or tool-relative input. */
 export interface WorkspaceToolPath {
-	/** Host-absolute path, locally or on the remote host. */
+	/** Host-absolute path. */
 	path: string;
 	/** Path relative to the workspace root, using the host separator. */
 	relative: string;
-	/** Key for `withFileMutationQueue`. */
+	/** Key for path mutation serialization. */
 	mutationKey: string;
 	paths: PlatformPath;
 }
@@ -45,7 +43,6 @@ export interface WorkspaceTools {
 
 export interface WorkspaceAccessOptions {
 	store: WorkspaceStore;
-	remote?: RemoteWorkspaceService;
 	roots?: () => string[];
 	pluginWorkspace?: () => Workspace | undefined;
 }
@@ -53,24 +50,6 @@ export interface WorkspaceAccessOptions {
 /** The storage operations the workspace lookup needs. */
 export interface WorkspaceStore {
 	workspaces(): Workspace[];
-}
-
-function remoteImageMimeType(path: string): string | undefined {
-	switch (extname(path).toLowerCase()) {
-		case ".jpg":
-		case ".jpeg":
-			return "image/jpeg";
-		case ".png":
-			return "image/png";
-		case ".gif":
-			return "image/gif";
-		case ".webp":
-			return "image/webp";
-		case ".bmp":
-			return "image/bmp";
-		default:
-			return undefined;
-	}
 }
 
 async function readLocalContent(root: string, path: string, allowLargePreview = false): Promise<FileContent> {
@@ -171,34 +150,6 @@ function localFiles(workspace: Workspace): WorkspaceFiles {
 	};
 }
 
-function remoteFiles(workspace: Workspace, remote: RemoteWorkspaceService): WorkspaceFiles {
-	return {
-		list: (path) => remote.listFiles(workspace, path),
-		read: (path, allowLargePreview) => remote.readFile(workspace, path, allowLargePreview),
-		readImage: (path) => remote.readImage(workspace, path),
-		async readDocument(path) {
-			const checked = await remote.checkedPath(workspace, path);
-			const result = await checked.env.fileInfo(checked.path, BACKGROUND_CONTEXT);
-			if (!result.ok) throw result.error;
-			if (result.value.kind !== "file" || result.value.size > 20 * 1024 * 1024)
-				throw new HttpError(413, "文档必须小于 20 MB");
-			return officePreview(await remote.readBuffer(workspace, path), path);
-		},
-		async write(path, content, revision) {
-			const checked = await remote.checkedPath(workspace, path);
-			const queueKey = remote.mutationKey(workspace, checked.path, checked.paths);
-			return withPathMutation(queueKey, async () => {
-				const current = await remote.readFile(workspace, path);
-				if (current.revision !== revision) {
-					throw new HttpError(409, "文件已在远程主机上发生变化，请重新加载后保存。");
-				}
-				await remote.writeFile(workspace, path, content);
-				return remote.readFile(workspace, path);
-			});
-		},
-	};
-}
-
 function localTools(workspace: Workspace, cwd: string): WorkspaceTools {
 	const paths = process.platform === "win32" ? win32 : posix;
 	return {
@@ -225,48 +176,15 @@ function localTools(workspace: Workspace, cwd: string): WorkspaceTools {
 	};
 }
 
-function remoteTools(workspace: Workspace, cwd: string, remote: RemoteWorkspaceService): WorkspaceTools {
-	const toolPath = (path: string) => remote.toolPath(workspace, cwd, path);
-	return {
-		async check(path, allowMissing = false, signal) {
-			const checked = await remote.checkedPath(workspace, path, allowMissing, signal);
-			return {
-				path: checked.path,
-				relative: checked.paths.relative(workspace.path, checked.path),
-				mutationKey: remote.mutationKey(workspace, checked.path, checked.paths),
-				paths: checked.paths,
-			};
-		},
-		readBuffer: async (path, signal) => remote.readBuffer(workspace, await toolPath(path), signal),
-		access: async (path, signal) => {
-			await remote.checkedPath(workspace, await toolPath(path), false, signal);
-		},
-		write: async (path, content, signal) => {
-			await remote.writeFile(workspace, await toolPath(path), content, signal);
-		},
-		mkdir: async (path, signal) => {
-			await remote.createDirectory(workspace, await toolPath(path), signal);
-		},
-		imageMimeType: async (path) => remoteImageMimeType(await toolPath(path)),
-	};
-}
-
 export class WorkspaceAccess {
 	private store: WorkspaceStore;
-	private remote?: RemoteWorkspaceService;
 	private roots: () => string[];
 	private pluginWorkspace: () => Workspace | undefined;
 
 	constructor(options: WorkspaceAccessOptions) {
 		this.store = options.store;
-		this.remote = options.remote;
 		this.roots = options.roots ?? (() => []);
 		this.pluginWorkspace = options.pluginWorkspace ?? (() => undefined);
-	}
-
-	/** The remote host service, when the workbench talks to SSH hosts. */
-	remoteService(): RemoteWorkspaceService | undefined {
-		return this.remote;
 	}
 
 	list(): Workspace[] {
@@ -280,8 +198,7 @@ export class WorkspaceAccess {
 		const roots = this.roots();
 		if (
 			!workspace ||
-			(!workspace.remote &&
-				!roots.some((root) => contained(root, workspace.path)) &&
+			(!roots.some((root) => contained(root, workspace.path)) &&
 				!(
 					workspace.kind === "plugin-development" &&
 					workspace.id === plugin?.id &&
@@ -293,26 +210,17 @@ export class WorkspaceAccess {
 	}
 
 	files(workspace: Workspace): WorkspaceFiles {
-		if (!workspace.remote) return localFiles(workspace);
-		if (!this.remote) throw new HttpError(501, "远程主机服务不可用");
-		return remoteFiles(workspace, this.remote);
+		return localFiles(workspace);
 	}
 
 	tools(workspace: Workspace, cwd: string): WorkspaceTools {
-		if (!workspace.remote) return localTools(workspace, cwd);
-		if (!this.remote) throw new HttpError(501, "远程主机服务不可用");
-		return remoteTools(workspace, cwd, this.remote);
+		return localTools(workspace, cwd);
 	}
 
 	async git(workspace: Workspace): Promise<{ root: string; operations: GitOperations }> {
-		const operations =
-			workspace.remote && this.remote ? await this.remote.gitOperations(workspace) : localGitOperations;
+		const operations = localGitOperations;
 		return { root: await gitRoot(workspace.path, operations), operations };
 	}
 
-	async prepareMcpConfigs(workspace: Workspace, directory: string): Promise<void> {
-		if (!workspace.remote) return;
-		if (!this.remote) throw new HttpError(501, "远程主机服务不可用");
-		await this.remote.prepareMcpConfigs(workspace, directory);
-	}
+	async prepareMcpConfigs(_workspace: Workspace, _directory: string): Promise<void> {}
 }

@@ -4,7 +4,6 @@ import { lstat, mkdir, readdir, readFile, realpath, rename, stat, writeFile } fr
 import { basename, dirname, join, resolve } from "node:path";
 import type { LocalFolder, LocalFolderListing, Workspace } from "../../../shared/src/protocol.ts";
 import { changeGitBranch, changeGitIndex, commitGit, gitChanges, gitDiff, localGitOperations } from "../git.ts";
-import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { contained, HttpError } from "../security.ts";
 import type { ConsoleStore } from "../store.ts";
 import type { WorkspaceFiles } from "./workspace-access.ts";
@@ -88,13 +87,11 @@ export interface WorkspaceServiceOptions {
 	directory: string;
 	roots: string[];
 	store: ConsoleStore;
-	remote: RemoteWorkspaceService;
 }
 
 export interface AddWorkspaceInput {
 	path: string;
 	name?: string;
-	remoteHost?: string;
 	authorize: boolean;
 }
 
@@ -117,7 +114,6 @@ export class WorkspaceService {
 	readonly access: WorkspaceAccess;
 	private directory: string;
 	private store: ConsoleStore;
-	private remote: RemoteWorkspaceService;
 	private configuredRoots: string[];
 	private roots: string[] = [];
 	private pluginWorkspace: Workspace = { id: "", name: "插件开发", path: "", kind: "plugin-development" };
@@ -125,11 +121,9 @@ export class WorkspaceService {
 	constructor(options: WorkspaceServiceOptions) {
 		this.directory = options.directory;
 		this.store = options.store;
-		this.remote = options.remote;
 		this.configuredRoots = options.roots;
 		this.access = new WorkspaceAccess({
 			store: options.store,
-			remote: options.remote,
 			roots: () => this.roots,
 			pluginWorkspace: () => this.pluginWorkspace,
 		});
@@ -222,26 +216,6 @@ export class WorkspaceService {
 	}
 
 	async add(input: AddWorkspaceInput): Promise<Workspace> {
-		if (input.remoteHost) {
-			const path = await this.remote.addWorkspace(input.remoteHost, input.path);
-			const existing = this.store
-				.workspaces()
-				.find(
-					(workspace) =>
-						workspace.remote?.host.toLowerCase() === input.remoteHost!.toLowerCase() && workspace.path === path,
-				);
-			if (existing) return existing;
-			const name =
-				input.name ??
-				path
-					.split(/[\\/]+/u)
-					.filter(Boolean)
-					.at(-1) ??
-				input.remoteHost;
-			const workspace: Workspace = { id: randomUUID(), path, name, remote: { host: input.remoteHost } };
-			this.store.saveWorkspace(workspace);
-			return workspace;
-		}
 		const path = await realpath(resolve(input.path));
 		if (!(await stat(path)).isDirectory()) throw new HttpError(400, "Workspace must be a directory");
 		if (!this.roots.some((root) => contained(root, path))) {
@@ -249,7 +223,7 @@ export class WorkspaceService {
 			await this.authorizeRoot(path);
 		}
 		if (path === this.pluginWorkspace.path) throw new HttpError(409, "插件开发工作区由系统管理");
-		const existing = this.store.workspaces().find((workspace) => !workspace.remote && workspace.path === path);
+		const existing = this.store.workspaces().find((workspace) => workspace.path === path);
 		if (existing) return existing;
 		const workspace: Workspace = { id: randomUUID(), path, name: input.name ?? basename(path) };
 		this.store.saveWorkspace(workspace);
@@ -271,7 +245,7 @@ export class WorkspaceService {
 		const workspace = this.get(id);
 		if (workspace.kind === "plugin-development") throw new HttpError(409, "插件开发工作区不能删除");
 		const sessionsDeleted = await deleteSessions(id);
-		this.store.deleteWorkspace(id, workspace.path, !workspace.remote);
+		this.store.deleteWorkspace(id, workspace.path, true);
 		return { deleted: true, sessionsDeleted };
 	}
 
@@ -321,22 +295,6 @@ export class WorkspaceService {
 		return (await pickWindowsFolder()) ?? null;
 	}
 
-	async remoteHostTrusted(host: string): Promise<{ trusted: boolean }> {
-		return { trusted: await this.remote.isTrusted(host) };
-	}
-
-	async remoteHostScan(host: string): Promise<{ fingerprints: string[] }> {
-		return this.remote.scan(host);
-	}
-
-	async remoteHostTrust(host: string, fingerprint: string, replace?: boolean): Promise<{ trusted: true }> {
-		return this.remote.trust(host, fingerprint, replace);
-	}
-
-	async remoteHostFolders(host: string, path?: string): Promise<LocalFolderListing> {
-		return this.remote.browse(host, path);
-	}
-
 	private async mcpConfigFile(root: string, kind: "adapter" | "extension", createParent = false): Promise<string> {
 		const canonicalRoot = await realpath(root);
 		const target = resolve(canonicalRoot, kind === "adapter" ? ".mcp.json" : join(".pi", "mcp.json"));
@@ -357,7 +315,6 @@ export class WorkspaceService {
 
 	async readMcpConfig(id: string, kind: "adapter" | "extension"): Promise<{ path: string; content: string }> {
 		const workspace = this.get(id);
-		if (workspace.remote) return this.remote.readMcpConfig(workspace, kind);
 		const path = await this.mcpConfigFile(workspace.path, kind);
 		const content = await readFile(path, "utf8").catch((error: unknown) => {
 			if (error instanceof Error && "code" in error && error.code === "ENOENT") return '{\n  "mcpServers": {}\n}\n';
@@ -368,10 +325,6 @@ export class WorkspaceService {
 
 	async writeMcpConfig(id: string, kind: "adapter" | "extension", content: string): Promise<void> {
 		const workspace = this.get(id);
-		if (workspace.remote) {
-			await this.remote.writeMcpConfig(workspace, kind, content);
-			return;
-		}
 		const path = await this.mcpConfigFile(workspace.path, kind, true);
 		const temporary = `${path}.${randomUUID()}.tmp`;
 		await writeFile(temporary, content, { encoding: "utf8", mode: 0o600 });
@@ -380,8 +333,7 @@ export class WorkspaceService {
 
 	async repositoryStatus(id: string): Promise<RepositoryStatus> {
 		const workspace = this.get(id);
-		const operations =
-			workspace.remote && this.remote ? await this.remote.gitOperations(workspace) : localGitOperations;
+		const operations = localGitOperations;
 		const run = operations.run;
 		const repositoryPath = (await run(workspace.path, ["rev-parse", "--show-toplevel"])).trim();
 		const [branch, branchOutput, worktreeOutput, statusOutput] = await Promise.all([
@@ -432,8 +384,7 @@ export class WorkspaceService {
 
 	async addWorktree(input: WorktreeInput): Promise<Workspace> {
 		const workspace = this.get(input.workspaceId);
-		const operations =
-			workspace.remote && this.remote ? await this.remote.gitOperations(workspace) : localGitOperations;
+		const operations = localGitOperations;
 		const run = operations.run;
 		const repositoryPath = (await run(workspace.path, ["rev-parse", "--show-toplevel"])).trim();
 		await run(repositoryPath, ["check-ref-format", "--branch", input.branch]);
@@ -442,14 +393,9 @@ export class WorkspaceService {
 			throw new HttpError(409, "This branch is already checked out in a worktree");
 		}
 		const targetName = input.branch.replace(/[\\/]+/gu, "-");
-		const target = workspace.remote
-			? await this.remote.worktreeTarget(workspace, targetName)
-			: join(this.directory, "worktrees", input.workspaceId, targetName);
-		if (!workspace.remote) {
-			await mkdir(dirname(target), { recursive: true });
-			if (await lstat(target).catch(() => undefined))
-				throw new HttpError(409, "Worktree destination already exists");
-		}
+		const target = join(this.directory, "worktrees", input.workspaceId, targetName);
+		await mkdir(dirname(target), { recursive: true });
+		if (await lstat(target).catch(() => undefined)) throw new HttpError(409, "Worktree destination already exists");
 		if (input.mode === "existing") {
 			await run(repositoryPath, ["worktree", "add", target, input.branch]);
 		} else {
@@ -457,16 +403,9 @@ export class WorkspaceService {
 			await run(repositoryPath, ["check-ref-format", "--branch", input.baseBranch]);
 			await run(repositoryPath, ["worktree", "add", "-b", input.branch, target, input.baseBranch]);
 		}
-		const path = workspace.remote
-			? await this.remote.addWorkspace(workspace.remote.host, target)
-			: await realpath(target);
-		if (!workspace.remote) await this.authorizeRoot(path);
-		const nextWorkspace: Workspace = {
-			id: randomUUID(),
-			name: input.branch,
-			path,
-			...(workspace.remote ? { remote: workspace.remote } : {}),
-		};
+		const path = await realpath(target);
+		await this.authorizeRoot(path);
+		const nextWorkspace: Workspace = { id: randomUUID(), name: input.branch, path };
 		this.store.saveWorkspace(nextWorkspace);
 		return nextWorkspace;
 	}

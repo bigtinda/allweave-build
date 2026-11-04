@@ -13,8 +13,7 @@ export interface WorkspaceRoutesOptions {
 }
 
 /**
- * Workbench HTTP routes for workspaces, files, Git, MCP config and SSH hosts.
- * Authorization and local/remote selection live in WorkspaceService/WorkspaceAccess.
+ * Workbench HTTP routes for local workspaces, files, Git and MCP config.
  */
 export function registerWorkspaceRoutes(options: WorkspaceRoutesOptions): void {
 	const { app, workspaces, agents } = options;
@@ -24,41 +23,12 @@ export function registerWorkspaceRoutes(options: WorkspaceRoutesOptions): void {
 		return workspaces.browseLocal(path);
 	});
 	app.post("/api/local-folders/pick", async () => ({ path: await workspaces.pickFolder() }));
-	app.get("/api/remote-hosts/trusted", async (request) => {
-		const { host } = z.object({ host: z.string().min(1).max(255) }).parse(request.query);
-		return workspaces.remoteHostTrusted(host);
-	});
-	app.post("/api/remote-hosts/scan", async (request) => {
-		const { host } = z
-			.object({ host: z.string().trim().min(1).max(255) })
-			.strict()
-			.parse(request.body);
-		return workspaces.remoteHostScan(host);
-	});
-	app.post("/api/remote-hosts/trust", async (request) => {
-		const { host, fingerprint, replace } = z
-			.object({
-				host: z.string().trim().min(1).max(255),
-				fingerprint: z.string().trim().min(1).max(512),
-				replace: z.boolean().optional(),
-			})
-			.strict()
-			.parse(request.body);
-		return workspaces.remoteHostTrust(host, fingerprint, replace);
-	});
-	app.get("/api/remote-hosts/folders", async (request) => {
-		const input = z
-			.object({ host: z.string().min(1).max(255), path: z.string().max(4096).optional() })
-			.parse(request.query);
-		return workspaces.remoteHostFolders(input.host, input.path);
-	});
 	app.get("/api/workspaces", async () => workspaces.list());
 	app.post("/api/workspaces", async (request) => {
 		const input = z
 			.object({
 				path: z.string().min(1).max(4096),
 				name: z.string().min(1).max(100).optional(),
-				remoteHost: z.string().trim().min(1).max(255).optional(),
 				authorize: z.boolean().default(false),
 			})
 			.parse(request.body);

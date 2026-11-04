@@ -1,22 +1,16 @@
-import { join } from "node:path";
 import {
-	createBashToolDefinition,
 	createEditToolDefinition,
 	createReadToolDefinition,
 	createWriteToolDefinition,
 	defineTool,
 	type InlineExtension,
 	type ToolDefinition,
-	withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { AccessMode, Workspace } from "../../../shared/src/protocol.ts";
+import type { AccessMode } from "../../../shared/src/protocol.ts";
 import { type AppPluginManager, parseAppPluginManifest } from "../app-plugins.ts";
 import { type BrowserService, createBrowserTool } from "../browser.ts";
-import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
-import { HttpError } from "../security.ts";
 import { toolPermission } from "../tool-policy.ts";
-import { workspaceCommandOperations } from "../workspaces/command-operations.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
 
 function createPiBrowserTool(service: BrowserService, sessionId: string) {
@@ -41,12 +35,10 @@ function createPiBrowserTool(service: BrowserService, sessionId: string) {
 
 export interface ToolFactoryInput {
 	sessionId: string;
-	workspace: Workspace;
 	cwd: string;
 	/** File access boundary shared with the HTTP API. */
 	tools: WorkspaceTools;
 	pluginDevelopment: boolean;
-	remote?: RemoteWorkspaceService;
 	browser: BrowserService;
 	appPlugins?: AppPluginManager;
 	pluginWorkspaceId: string;
@@ -69,7 +61,7 @@ export interface ToolFactoryResult {
  * access boundary, the remote command tool and the workbench plugin tools.
  */
 export async function createWorkbenchTools(input: ToolFactoryInput): Promise<ToolFactoryResult> {
-	const { cwd, tools, workspace, pluginDevelopment } = input;
+	const { cwd, tools, pluginDevelopment } = input;
 	const checkedRead = async (path: string) => tools.readBuffer(path);
 	const checkedAccess = async (path: string) => {
 		await tools.access(path);
@@ -97,30 +89,6 @@ export async function createWorkbenchTools(input: ToolFactoryInput): Promise<Too
 			},
 		}) as unknown as ToolDefinition,
 	];
-	const commandOperations = workspaceCommandOperations(workspace, cwd, input.remote);
-	if (commandOperations) {
-		customTools.push(
-			createBashToolDefinition(cwd, {
-				operations: commandOperations,
-			}) as unknown as ToolDefinition,
-		);
-		// Remote tools receive host paths; translate them to project-relative paths
-		// and serialize mutations per remote file.
-		for (const tool of customTools) {
-			if (!["read", "write", "edit"].includes(tool.name)) continue;
-			const execute = tool.execute;
-			tool.execute = async (toolCallId, params, signal, onUpdate, context) => {
-				const toolInput = params as Record<string, unknown>;
-				if (typeof toolInput.path !== "string") throw new HttpError(400, "文件路径无效");
-				const checked = await tools.check(toolInput.path, tool.name === "write", signal);
-				const args = { ...toolInput, path: join(...checked.relative.split(checked.paths.sep)) };
-				if (tool.name === "read") return execute(toolCallId, args, signal, onUpdate, context);
-				return withFileMutationQueue(checked.mutationKey, () =>
-					execute(toolCallId, args, signal, onUpdate, context),
-				);
-			};
-		}
-	}
 	const extensionFactories: InlineExtension[] = [
 		async (pi) => {
 			const pluginReadOnlyTools = new Set<string>();

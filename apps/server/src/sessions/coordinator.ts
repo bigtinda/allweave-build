@@ -232,7 +232,6 @@ export class SessionCoordinator {
 			tools: this.workspaceAccess.tools(workspace, cwd),
 			state: () => this.get(id),
 			transcriptFile: this.projector.file(id),
-			remote: this.workspaceAccess.remoteService(),
 			browser: this.browser,
 			appPlugins: this.appPlugins,
 			pluginWorkspaceId: detail.workspaceId,

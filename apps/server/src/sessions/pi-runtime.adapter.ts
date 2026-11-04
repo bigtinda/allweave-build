@@ -4,9 +4,6 @@ import { isModelType } from "@earendil-works/pi-ai/utils/model-operations";
 import {
 	type AgentSession,
 	type createAgentSession,
-	createCodemodeExtension,
-	createMcpExtension,
-	createToolSearchExtension,
 	DefaultResourceLoader,
 	defaultModelPerProvider,
 	getAgentDir,
@@ -28,7 +25,6 @@ import type {
 import type { AppPluginManager } from "../app-plugins.ts";
 import type { BrowserService } from "../browser.ts";
 import { prepareDoomCordisHostExtension } from "../legacy/doompi-host.ts";
-import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
 import { NativeAgentRuntime } from "./native-runtime.ts";
@@ -94,7 +90,7 @@ export interface AgentRuntimeInput {
 	sessionId: string;
 	workspace: Workspace;
 	pluginDevelopment: boolean;
-	/** Working directory of the session: the project path, or the remote mirror. */
+	/** Working directory of the session. */
 	cwd: string;
 	/** File access boundary shared with the HTTP API. */
 	tools: WorkspaceTools;
@@ -102,7 +98,6 @@ export interface AgentRuntimeInput {
 	state: () => SessionDetail;
 	/** Existing transcript of a restored session. */
 	transcriptFile?: string;
-	remote?: RemoteWorkspaceService;
 	browser: BrowserService;
 	appPlugins?: AppPluginManager;
 	pluginWorkspaceId: string;
@@ -115,7 +110,7 @@ export interface AgentRuntimeInput {
 export interface AgentRuntimeFactoryOptions {
 	/** Seam for tests: the Pi session factory. */
 	createSession?: typeof createAgentSession;
-	/** Console data directory: transcripts and remote project mirrors. */
+	/** Console data directory: transcripts. */
 	directory: string;
 	/** Workbench agent directory: settings, credentials and extensions. */
 	agentDirectory?: string;
@@ -304,47 +299,29 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 	}
 
 	async open(input: AgentRuntimeInput): Promise<AgentRuntime> {
+		if (input.workspace.remote) throw new HttpError(410, "远程工作区已移除");
 		if (
 			process.env.KERNEL_ENGINE !== "pi" &&
 			process.env.KERNEL_EXTENSIONS !== "legacy" &&
 			!this.createSession &&
-			this.providers &&
-			!input.workspace.remote
+			this.providers
 		) {
 			return new NativeAgentRuntime(input, await this.providers.runtime(), this.agentDirectory);
 		}
 		const createSession = this.createSession;
 		if (!createSession) throw new Error("会话工厂不可用");
 		const { cwd, pluginDevelopment, workspace } = input;
-		const remoteWorkspace = workspace.remote !== undefined;
-		const remoteService = input.remote;
-		if (remoteWorkspace && !remoteService) throw new HttpError(501, "远程主机服务不可用");
-		if (remoteWorkspace) {
-			// Resolve the remote environment eagerly: an unreachable host fails the session start.
-			await remoteService!.workspaceEnvironment(workspace);
-			await mkdir(cwd, { recursive: true });
-			await remoteService!.prepareMcpConfigs(workspace, cwd);
-		}
 		if (pluginDevelopment) await mkdir(workspace.path, { recursive: true });
 		const agentDir = this.agentDirectory;
 		const settingsManager = SettingsManager.create(pluginDevelopment ? this.directory : cwd, agentDir);
 		// Workspace authorization also trusts its configuration/extensions. They execute native server code.
 		if (!pluginDevelopment) settingsManager.setProjectTrusted(true);
 		const cordisHostPath = pluginDevelopment ? undefined : await prepareDoomCordisHostExtension(agentDir);
-		const remoteExtensions = remoteWorkspace
-			? [
-					{ name: "codemode", factory: createCodemodeExtension(), builtin: true, replaceable: true },
-					{ name: "tool-search", factory: createToolSearchExtension(), builtin: true, replaceable: true },
-					{ name: "mcp", factory: createMcpExtension(), builtin: true, replaceable: true },
-				]
-			: [];
 		const toolFactory = await createWorkbenchTools({
 			sessionId: input.sessionId,
-			workspace,
 			cwd,
 			tools: input.tools,
 			pluginDevelopment,
-			remote: remoteService,
 			browser: input.browser,
 			appPlugins: input.appPlugins,
 			pluginWorkspaceId: input.pluginWorkspaceId,
@@ -364,11 +341,9 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 			noContextFiles: pluginDevelopment,
 			systemPrompt: pluginDevelopment
 				? "你是 AllWeave Build 的插件开发助手。用户直接在主聊天框描述插件新增或升级需求，你在此默认插件开发工作区中协作。你可以读取、编辑和写入此工作区中的插件 JSON 清单；不能运行 shell、脚本或其他程序。清单路径使用 plugins/<plugin-id>.json。先调用 plugin_list 了解已安装插件，再按需要创建或升级清单；调用 plugin_validate 检查协议、版本和数据字段兼容性。只有用户明确要求安装或启用时才调用 plugin_install，该操作会请求用户确认。插件目前使用声明式 manifestVersion 1：字段驱动表单，页面使用 table 或 board 视图，navigation 生成软件侧栏入口；不得编造脚本执行能力。升级时必须提高版本号并保留现有字段 ID、类型、必填状态和选项。"
-				: workspace.remote
-					? `你正在 SSH 远程主机 ${workspace.remote.host} 的项目 ${workspace.path} 中工作。read、edit、write 和 bash 工具会在该远程项目中执行。文件工具请使用相对于项目根目录的路径。`
-					: undefined,
+				: undefined,
 			appendSystemPrompt: pluginDevelopment ? [] : undefined,
-			extensionFactories: [...remoteExtensions, ...toolFactory.extensionFactories],
+			extensionFactories: toolFactory.extensionFactories,
 		});
 		await resourceLoader.reload();
 		const sessionManager = input.transcriptFile
@@ -393,13 +368,7 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 						],
 						noTools: "all" as const,
 					}
-				: remoteWorkspace
-					? {
-							noTools: "builtin" as const,
-							tools: ["+read", "+bash", "+edit", "+write"],
-							excludeTools: ["ls", "find", "grep"],
-						}
-					: {}),
+				: {}),
 			customTools: toolFactory.customTools,
 		});
 		const runtime = new PiAgentRuntime(session, modelFallbackMessage, input.state);

@@ -12,7 +12,6 @@ import { BrowserService } from "../browser.ts";
 import { PiPackageManager } from "../packages.ts";
 import { KernelSessionStore } from "../persistence/kernel-session-store.ts";
 import { ProviderManager } from "../providers.ts";
-import { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError, tokenMatches } from "../security.ts";
 import type { SessionFactory } from "../sessions/pi-runtime.adapter.ts";
 import { StorageManager } from "../storage.ts";
@@ -33,7 +32,6 @@ export interface AppOptions {
 	logger?: boolean;
 	/** Seam for tests: the Pi session factory used by the runtime boundary. */
 	createSession?: SessionFactory;
-	remoteWorkspaces?: RemoteWorkspaceService;
 }
 
 /**
@@ -47,12 +45,10 @@ export async function createApp(options: AppOptions) {
 	const allowedHosts = new Set([`127.0.0.1:${options.port}`, "127.0.0.1:5173"]);
 	const store = new ConsoleStore(options.directory);
 	const sessions = new KernelSessionStore(options.directory, store.db);
-	const remoteWorkspaces = options.remoteWorkspaces ?? new RemoteWorkspaceService(options.directory);
 	const workspaces = new WorkspaceService({
 		directory: options.directory,
 		roots: options.roots,
 		store,
-		remote: remoteWorkspaces,
 	});
 	const pluginWorkspace = await workspaces.initialize();
 	sessions.reassignPluginDevelopmentSessions(pluginWorkspace.id);
@@ -74,7 +70,6 @@ export async function createApp(options: AppOptions) {
 	const packages = new PiPackageManager(agentDirectory, agentDirectory, () => agents.prepareForProviderChange());
 	const storage = new StorageManager(options.directory, agentDirectory, sessions, agents);
 	const app = Fastify({ logger: options.logger ?? true, bodyLimit: 2 * 1024 * 1024 });
-	app.addHook("onClose", async () => remoteWorkspaces.close());
 	await app.register(websocket, { options: { maxPayload: 4096 } });
 	app.addHook("onRequest", async (request, reply) => {
 		reply.header("X-Content-Type-Options", "nosniff");

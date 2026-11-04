@@ -4,13 +4,13 @@ set -euo pipefail
 # Isolate user resources, credentials, temporary files, and tool configuration.
 temp_parent="${TMPDIR:-/tmp}"
 temp_parent="${temp_parent%/}"
-test_root="$(mktemp -d "$temp_parent/pi-test.XXXXXX")"
+test_root="$(mktemp -d "$temp_parent/allweave-test.XXXXXX")"
 git_askpass="$(type -P false)"
 readonly temp_parent test_root git_askpass
 
 mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm"
 # Mark the generated root so cleanup can verify ownership before deleting it.
-touch "$test_root/.pi-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
+touch "$test_root/.allweave-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
 
 # Only remove the marked directory created above, never an unverified path.
 cleanup() {
@@ -18,8 +18,8 @@ cleanup() {
 	trap - EXIT
 
 	case "$test_root" in
-		"$temp_parent"/pi-test.*)
-			if [[ -d "$test_root" && ! -L "$test_root" && -f "$test_root/.pi-test-owned" ]]; then
+		"$temp_parent"/allweave-test.*)
+			if [[ -d "$test_root" && ! -L "$test_root" && -f "$test_root/.allweave-test-owned" ]]; then
 				# Windows browser cache handles can outlive a just-closed test process.
 				for attempt in 1 2 3 4 5; do
 					if rm -rf -- "$test_root" 2>/dev/null; then break; fi
@@ -91,7 +91,7 @@ test_env=(
 	"NPM_CONFIG_USERCONFIG=$test_root/npm-userconfig"
 	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
 	"NPM_CONFIG_CACHE=$test_root/cache/npm"
-	"PI_NO_LOCAL_LLM=1"
+	"ALLWEAVE_NO_LOCAL_LLM=1"
 	"AWS_EC2_METADATA_DISABLED=true"
 )
 

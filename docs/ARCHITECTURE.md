@@ -237,7 +237,8 @@ SQLite 使用 WAL。写入按 16 ms / 64 条批量提交；关闭前 flush。`ap
 
 - `ModelGateway.stream()` 把内核消息转换成 wire 消息，返回 `NativeModelEvent`。
 - `modelOption()` 生成前端可展示的模型信息。
-- `GatewayUsage` 汇总输入、输出、缓存和推理 token，供会话统计使用。
+- `GatewayUsage` 汇总输入、输出、缓存和推理 token，供会话统计使用；供应商未返回的字段保持 `undefined`。
+- 网关把供应商异常映射为 `NativeModelError`，分类为 `auth`、`rate_limit`、`context_length`、`network`、`aborted`、`provider`，并携带 `retryable` 和原始 `cause`；内核只用该分类决定是否重试。
 
 内核不直接依赖 `@allweave/model`；替换模型传输层只需保持网关接口。
 

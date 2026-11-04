@@ -1587,7 +1587,7 @@ describe("Generate E2E Tests", () => {
 		it("should pass requestMetadata to the SDK payload", { retry: 3 }, async () => {
 			const llmSonnet = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 			let capturedPayload: unknown;
-			const metadata = { app: "pi-test", env: "ci" };
+			const metadata = { app: "allweave-test", env: "ci" };
 			const response = await complete(
 				llmSonnet,
 				{
@@ -1641,7 +1641,7 @@ describe("Generate E2E Tests", () => {
 
 	// Check if ollama is installed and local LLM tests are enabled
 	let ollamaInstalled = false;
-	if (!process.env.PI_NO_LOCAL_LLM) {
+	if (!process.env.ALLWEAVE_NO_LOCAL_LLM) {
 		try {
 			execSync("which ollama", { stdio: "ignore" });
 			ollamaInstalled = true;

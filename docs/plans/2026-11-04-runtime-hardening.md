@@ -1,6 +1,6 @@
 # 1.2.1 运行时自主化与适配计划
 
-状态：阶段 0–2 完成，阶段 3 待开始
+状态：阶段 0–5 完成，阶段 6 验证中
 开始日期：2026-11-04
 目标版本：1.2.1
 范围：模型层、MCP 层、工具沙箱层的契约化与依赖替换评估
@@ -211,6 +211,23 @@ node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run te
 - `docs/ARCHITECTURE.md` 与计划文档一致，不出现旧 Pi 运行时描述。
 - 版本保持 1.2.1；不生成安装包。
 - 提交信息使用 `fix(server): ...` / `refactor(kernel-adapters): ...` 等格式，只暂存本计划相关文件。
+
+## 8.1 实际结果
+
+| 阶段 | 提交 | 结果 |
+|---|---|---|
+| 基线改名 | `04d45913c refactor: rebrand runtime to allweave 1.2.1` | 847 文件，产品源码无旧 Pi 导入 |
+| 计划与契约 | `90d262cd9 docs: add runtime hardening and port contracts` | 计划、端口契约、候选评估 |
+| 阶段 3 MCP | `d01fa9dde feat(kernel): replace custom MCP client with official SDK` | 官方客户端接入，删除 5020 行自定义实现 |
+| 阶段 4 沙箱 | `bc687d301 fix(kernel): harden sandbox result and tool boundaries` | 非 JSON 返回值、内存上限、只读过滤测试 |
+| 阶段 5 模型 | `1b44af2e7 feat(model): classify gateway failures for retry decisions` | 统一错误分类，usage 缺失字段保持 undefined |
+
+阶段 6 验证：
+
+- `npm run check` 通过。
+- kernel 34/34、kernel-adapters 12 通过/1 跳过、server 50/50、sandbox 76/76、telemetry 15/15、protocol 6/6。
+- `packages/model` 在修正测试夹具路径后全量通过（1327 通过/859 跳过）；重跑期间出现过一次未复现失败，记录在 `docs/note/2026-11-04-runtime.md`。
+- `./test.sh` 需要中性的 `TMPDIR`，否则会因用户目录下的 `.agents/skills` 拒绝运行；这是脚本的保护行为，不是测试失败。
 
 ## 9. 风险与应对
 

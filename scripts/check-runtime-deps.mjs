@@ -90,7 +90,8 @@ const packages = findPackageDirectories()
 			manifest: JSON.parse(readFileSync(join(directory, "package.json"), "utf8")),
 			configPath: existsSync(configPath) ? configPath : resolve(directory, fallbackConfigName),
 		};
-	});
+	})
+	.filter(({ manifest }) => !manifest.private);
 
 const fallbackConfigs = new Set(
 	packages.map(({ configPath }) => configPath).filter((path) => path.endsWith(fallbackConfigName)),

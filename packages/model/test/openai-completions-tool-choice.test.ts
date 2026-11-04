@@ -977,7 +977,7 @@ describe("openai-completions tool_choice", () => {
 								{
 									id: "tc_list_no_index",
 									type: "function",
-									function: { arguments: '/ai"}' },
+									function: { arguments: '/model"}' },
 								},
 							],
 						},

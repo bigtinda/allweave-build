@@ -1,4 +1,5 @@
 node_modules/
+.allweave/
 .pi-console/
 data/
 dist/

@@ -8,12 +8,12 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { type Browser, chromium } from "playwright-core";
 import { createServer } from "vite";
 import { createHarness } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type { FileContent, SessionDetail, SocketMessage, Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
+import { nativeGateway } from "./native-harness.ts";
 
 test(
 	"the chat feature preserves streaming, reconnect, workspace navigation and adjacent pages",
@@ -38,8 +38,7 @@ test(
 			roots: [root, secondRoot],
 			port,
 			logger: false,
-			createSession: (options) =>
-				createAgentSession({ ...options, model: harness.getModel(), modelRuntime: harness.session.modelRuntime }),
+			createGateway: () => nativeGateway(harness),
 		});
 		const webRoot = fileURLToPath(new URL("../../web/", import.meta.url));
 		const vite = existsSync(join(webRoot, "dist/index.html"))

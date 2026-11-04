@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
 import { applyEvent, type SessionDetail, type SocketMessage } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
+import { nativeGateway } from "./native-harness.ts";
 
 test(
 	"interrupt and recall change the native context, broadcast rewind and survive restart",
@@ -27,12 +27,7 @@ test(
 			roots: [root],
 			port: 8787,
 			logger: false,
-			createSession: ((options) =>
-				createAgentSession({
-					...options,
-					model: harness.getModel(),
-					modelRuntime: harness.session.modelRuntime,
-				})) as typeof createAgentSession,
+			createGateway: () => nativeGateway(harness),
 		};
 		let { app } = await createApp(options);
 		const headers = { host: "127.0.0.1:8787", origin: "http://127.0.0.1:5173" };

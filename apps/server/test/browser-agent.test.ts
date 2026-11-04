@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { createHarness } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type { BrowserSnapshot, BrowserStreamEvent } from "../../shared/src/browser.ts";
 import type { SessionDetail, Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
+import { nativeGateway } from "./native-harness.ts";
 
 test("user input, live browser frames and agent tools share the same isolated page", { timeout: 60_000 }, async () => {
 	const fixture = createServer((_request, response) => {
@@ -30,8 +30,7 @@ test("user input, live browser frames and agent tools share the same isolated pa
 		roots: [root],
 		port: 8787,
 		logger: false,
-		createSession: (options) =>
-			createAgentSession({ ...options, model: harness.getModel(), modelRuntime: harness.session.modelRuntime }),
+		createGateway: () => nativeGateway(harness),
 	});
 	const headers = { host: "127.0.0.1:8787", origin: "http://127.0.0.1:5173" };
 	const request = (method: "GET" | "POST" | "PUT", url: string, payload?: Record<string, unknown>) =>

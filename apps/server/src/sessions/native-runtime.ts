@@ -94,7 +94,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private tools: NativeTool[] = this.builtinTools;
 	private readonly workspace: LocalWorkspace;
 	private readonly listeners = new Set<(event: RuntimeEvent) => void>();
-	private readonly messages: ChatMessage[];
+	private messages: ChatMessage[];
 	private controller: AbortController | undefined;
 	private model: Model<Api> | undefined;
 	private thinking: ThinkingLevel;
@@ -161,6 +161,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
 		const history = nativeHistory(this.messages);
+		this.messages.push(userMessage);
 		const mcp = await this.mcpTools();
 		const discovered = await discoverResources(this.input.cwd);
 		this.resourcesLoaded = discovered;
@@ -169,6 +170,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 			pluginDevelopment: this.input.pluginDevelopment,
 			pluginWorkspaceId: this.input.pluginWorkspaceId,
 			appPlugins: this.input.appPlugins,
+			browser: this.input.browser,
 			tools: this.input.tools,
 			refreshAfterPluginChange: this.input.refreshAfterPluginChange,
 		});
@@ -304,7 +306,6 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 				text,
 			);
 			if (!this.controller.signal.aborted) {
-				this.messages.push(userMessage);
 				this.messages.push({
 					id: assistantId ?? `assistant:${randomUUID()}`,
 					role: "assistant",
@@ -389,8 +390,15 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 			diagnostics: [],
 		};
 	}
-	async navigate(_message: ChatMessage, _role: "user" | "assistant"): Promise<BranchOutcome> {
-		throw new HttpError(409, "原生引擎暂不支持会话分支");
+	async navigate(message: ChatMessage, role: "user" | "assistant"): Promise<BranchOutcome> {
+		const index = this.messages.findIndex((entry) => entry.id === message.id);
+		if (index < 0) throw new HttpError(409, "消息不在当前原生会话中");
+		const cut = index + (role === "assistant" ? 1 : 0);
+		const toolIds = this.messages
+			.slice(cut)
+			.flatMap((entry) => entry.toolResults?.map((result) => result.toolCallId) ?? []);
+		this.messages = this.messages.slice(0, cut);
+		return { editorText: message.text, toolIds, usage: this.usage() };
 	}
 	async dispose(): Promise<void> {
 		this.controller?.abort();

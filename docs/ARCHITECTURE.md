@@ -1122,6 +1122,18 @@ interface KernelExtension {
 
 #### M4：上下文、压缩、模型网关
 
+**状态**：基础版进行中。
+
+已完成：
+
+- `packages/kernel/src/context/budget.ts`：无依赖的 CJK/拉丁 token 估算。
+- `packages/kernel/src/context/compaction.ts`：按 turn 边界保留近期消息，可注入摘要器。
+- `packages/kernel/src/context/builder.ts`：稳定 system 前缀（工作目录、工具、AGENTS.md/CLAUDE.md、资源索引）、预算检查、超限压缩。
+- `NativeAgentRuntime` 接入 builder；压缩使用独立 `PiAiGateway` 请求，不污染主对话 usage。
+- 验证：kernel 21/21；`npm run check` 通过。
+
+未完成项见 `docs/note/M4.md`。
+
 **目标**：让原生引擎支持长会话和真实 provider，移除 server 对 `ModelRuntime`/`DefaultResourceLoader`/`SettingsManager` 的依赖。
 
 **改动**

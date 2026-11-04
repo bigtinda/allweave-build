@@ -13,6 +13,7 @@ import type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 import {
+	buildContext,
 	createBuiltinTools,
 	decideToolAccess,
 	LocalWorkspace,
@@ -87,6 +88,26 @@ class PiAiGateway implements NativeModelGateway {
 
 	lastUsage(): RuntimeUsage | undefined {
 		return this.usage;
+	}
+
+	async summarize(messages: NativeMessage[], signal: AbortSignal): Promise<string> {
+		const transcript = messages
+			.map(
+				(message) =>
+					message.role + ": " + message.text + (message.toolCalls ? " " + JSON.stringify(message.toolCalls) : ""),
+			)
+			.join(String.fromCharCode(10, 10));
+		let text = "";
+		for await (const event of this.stream({
+			system:
+				"Summarize the earlier conversation for continuity. Keep decisions, files, commands and unresolved work. Be concise.",
+			messages: [{ role: "user", text: transcript, timestamp: Date.now() }],
+			tools: [],
+			signal,
+		})) {
+			if (event.type === "text") text += event.delta;
+		}
+		return text.trim();
 	}
 
 	async *stream(request: NativeModelRequest): AsyncIterable<NativeModelEvent> {
@@ -213,6 +234,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private model: Model<Api> | undefined;
 	private thinking: ThinkingLevel;
 	private tokens: RuntimeUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 };
+	private compactionCount = 0;
 
 	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime) {
 		this.input = input;
@@ -256,6 +278,22 @@ export class NativeAgentRuntime implements AgentRuntime {
 				thinking: message.thinking,
 				timestamp: Date.parse(message.timestamp),
 			}));
+		const context = await buildContext({
+			cwd: this.input.cwd,
+			workspace: this.workspace,
+			messages: history,
+			tools: this.tools,
+			maxTokens: model.contextWindow,
+			summarize: async (dropped) => {
+				const summarizer = new PiAiGateway(this.modelRuntime, model, this.thinking);
+				const summary = await summarizer.summarize(
+					dropped,
+					this.controller?.signal ?? new AbortController().signal,
+				);
+				return summary || `Earlier conversation was compacted (${dropped.length} messages).`;
+			},
+		});
+		this.compactionCount += context.compacted;
 		let assistantId: string | undefined;
 		let assistantText = "";
 		let assistantThinking = "";
@@ -265,7 +303,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 				{
 					sessionId: this.input.sessionId,
 					cwd: this.input.cwd,
-					system: this.systemPrompt(),
+					system: context.system,
 					gateway,
 					tools: this.tools,
 					workspace: this.workspace,
@@ -327,7 +365,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 						}
 					},
 				},
-				history,
+				context.messages,
 				text,
 			);
 			if (!this.controller.signal.aborted) {
@@ -358,15 +396,6 @@ export class NativeAgentRuntime implements AgentRuntime {
 		return this.input.requestApproval(call.id, call.name, call.input);
 	}
 
-	private systemPrompt(): string {
-		return [
-			"你是运行在本地工作区中的编码助手。",
-			`工作目录: ${this.input.cwd}`,
-			"使用工具读取和修改文件。路径必须是工作区相对路径。",
-			"修改前先读取相关文件；完成后简要说明改动。",
-		].join("\n");
-	}
-
 	abort(): Promise<void> {
 		this.controller?.abort();
 		return Promise.resolve();
@@ -376,7 +405,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		return this.tokens;
 	}
 	compactions(): number {
-		return 0;
+		return this.compactionCount;
 	}
 	subscribe(listener: (event: RuntimeEvent) => void): () => void {
 		this.listeners.add(listener);

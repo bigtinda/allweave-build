@@ -1,3 +1,6 @@
+export * from "./context/budget.ts";
+export * from "./context/builder.ts";
+export * from "./context/compaction.ts";
 export * from "./engine/loop.ts";
 export * from "./engine/policy.ts";
 export * from "./engine/retry.ts";

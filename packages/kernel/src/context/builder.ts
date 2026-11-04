@@ -17,6 +17,8 @@ export interface ContextBuildOptions {
 	maxTokens?: number;
 	reserveTokens?: number;
 	keepRecentTokens?: number;
+	/** Multiplier learned from provider usage; 1 is the cold-start estimate. */
+	estimateScale?: number;
 	summarize?: (messages: NativeMessage[]) => Promise<string>;
 }
 
@@ -64,9 +66,16 @@ export async function buildContext(options: ContextBuildOptions): Promise<Contex
 	let messages = options.messages;
 	let compacted = 0;
 	let dropped = 0;
+	const scale = options.estimateScale ?? 1;
 	if (options.maxTokens !== undefined) {
-		const before = estimateMessages(messages);
-		if (!fitsBudget(before + estimateText(system), options.maxTokens, options.reserveTokens ?? 16_384)) {
+		const before = estimateMessages(messages, scale);
+		if (
+			!fitsBudget(
+				before + Math.ceil(estimateText(system) * scale),
+				options.maxTokens,
+				options.reserveTokens ?? 16_384,
+			)
+		) {
 			const result = await compactMessages(messages, {
 				keepRecentTokens: options.keepRecentTokens ?? 20_000,
 				summarize: options.summarize,
@@ -76,5 +85,11 @@ export async function buildContext(options: ContextBuildOptions): Promise<Contex
 			dropped = result.dropped;
 		}
 	}
-	return { system, messages, estimatedTokens: estimateMessages(messages) + estimateText(system), compacted, dropped };
+	return {
+		system,
+		messages,
+		estimatedTokens: estimateMessages(messages, scale) + Math.ceil(estimateText(system) * scale),
+		compacted,
+		dropped,
+	};
 }

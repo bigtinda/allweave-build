@@ -40,6 +40,7 @@
 			"@earendil-works/pi-coding-agent/*": ["./packages/coding-agent/src/*"],
 			"@pi-console/protocol": ["./packages/protocol/src/index.ts"],
 			"@pi-console/kernel": ["./packages/kernel/src/index.ts"],
+			"@pi-console/kernel-adapters": ["./packages/kernel-adapters/src/index.ts"],
 			"@pi-console/kernel/*": ["./packages/kernel/src/*"],
 			"@pi-console/protocol/*": ["./packages/protocol/src/*"],
 			"@earendil-works/pi-protocol": ["./packages/pi-protocol/src/index.ts"],

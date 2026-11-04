@@ -18,10 +18,11 @@ export function estimateMessage(message: { text: string; thinking?: string; tool
 
 export function estimateMessages(
 	messages: readonly { text: string; thinking?: string; toolCalls?: unknown[] }[],
+	scale = 1,
 ): number {
 	let total = 0;
 	for (const message of messages) total += estimateMessage(message);
-	return total;
+	return Math.ceil(total * scale);
 }
 
 export function fitsBudget(tokens: number, maxTokens: number, reserveTokens = 0): boolean {

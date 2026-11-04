@@ -14,6 +14,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type {
 	AccessMode,
 	ChatMessage,
@@ -29,7 +30,7 @@ import { prepareDoomCordisHostExtension } from "../legacy/doompi-host.ts";
 import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
-import { NativeAgentRuntime, type NativeModelRuntime } from "./native-runtime.ts";
+import { NativeAgentRuntime } from "./native-runtime.ts";
 import { adaptRuntimeEvent, type RuntimeEvent } from "./pi-events.ts";
 import { createWorkbenchTools } from "./tool-factory.ts";
 

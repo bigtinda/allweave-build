@@ -79,3 +79,22 @@ test("budget compacts before the model request", async () => {
 		rmSync(directory, { recursive: true, force: true });
 	}
 });
+
+test("estimate scale applies to the whole context", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "kernel-context-"));
+	try {
+		const workspace = new LocalWorkspace(directory);
+		const messages: NativeMessage[] = [{ role: "user", text: "x".repeat(400), timestamp: 0 }];
+		const cold = await buildContext({ cwd: directory, workspace, messages, tools: [read] });
+		const calibrated = await buildContext({
+			cwd: directory,
+			workspace,
+			messages,
+			tools: [read],
+			estimateScale: 1.5,
+		});
+		assert.ok(calibrated.estimatedTokens > cold.estimatedTokens);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});

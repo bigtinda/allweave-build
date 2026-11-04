@@ -11,8 +11,9 @@ import type {
 	Model,
 	SimpleStreamOptions,
 } from "@earendil-works/pi-ai";
+import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type { SessionDetail } from "../../shared/src/protocol.ts";
-import { NativeAgentRuntime, type NativeModelRuntime } from "../src/sessions/native-runtime.ts";
+import { NativeAgentRuntime } from "../src/sessions/native-runtime.ts";
 import type { AgentRuntimeInput } from "../src/sessions/pi-runtime.adapter.ts";
 
 const model = {

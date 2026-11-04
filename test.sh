@@ -2,8 +2,35 @@
 set -euo pipefail
 
 # Isolate user resources, credentials, temporary files, and tool configuration.
-temp_parent="${TMPDIR:-/tmp}"
+has_agent_skills() {
+	local path="$1"
+	if command -v cygpath >/dev/null 2>&1; then
+		path="$(cygpath -w "$path")"
+	fi
+	path="${path//\\//}"
+	while [[ "$path" != "." ]]; do
+		[[ ! -d "$path/.agents/skills" ]] || return 0
+		local next
+		next="$(dirname "$path")"
+		[[ "$next" != "$path" ]] || break
+		path="$next"
+	done
+	return 1
+}
+
+temp_parent="${ALLWEAVE_TEST_TMPDIR:-${TMPDIR:-/tmp}}"
 temp_parent="${temp_parent%/}"
+# A temp directory under the user's home inherits ~/.agents/skills. Fall back
+# to an ignored directory inside the repository, which has no such ancestor.
+if has_agent_skills "$temp_parent"; then
+	temp_parent="$PWD/.artifacts/test-tmp"
+	mkdir -p "$temp_parent"
+fi
+if has_agent_skills "$temp_parent"; then
+	printf 'Test temporary files inherit .agents/skills from %s; set ALLWEAVE_TEST_TMPDIR.\n' "$temp_parent" >&2
+	exit 1
+fi
+temp_parent="$(cd "$temp_parent" && pwd -P)"
 test_root="$(mktemp -d "$temp_parent/allweave-test.XXXXXX")"
 git_askpass="$(type -P false)"
 readonly temp_parent test_root git_askpass
@@ -18,7 +45,7 @@ cleanup() {
 	trap - EXIT
 
 	case "$test_root" in
-		"$temp_parent"/allweave-test.*)
+		"$temp_parent"/allweave-test.* | */.artifacts/test-tmp/allweave-test.*)
 			if [[ -d "$test_root" && ! -L "$test_root" && -f "$test_root/.allweave-test-owned" ]]; then
 				# Windows browser cache handles can outlive a just-closed test process.
 				for attempt in 1 2 3 4 5; do
@@ -53,20 +80,6 @@ native_test_path() {
 		printf '%s' "$1"
 	fi
 }
-
-# Resource discovery walks ancestors. A fake HOME under the real user home
-# still inherits project skills from that real home; use a neutral TMPDIR.
-temp_ancestor="$(native_test_path "$temp_parent")"
-temp_ancestor="${temp_ancestor//\\//}"
-while [[ "$temp_ancestor" != "." ]]; do
-	if [[ -d "$temp_ancestor/.agents/skills" ]]; then
-		printf 'Test temporary files inherit resources from %s/.agents/skills. Set TMPDIR to a neutral directory.\n' "$temp_ancestor" >&2
-		exit 1
-	fi
-	next_ancestor="$(dirname "$temp_ancestor")"
-	[[ "$next_ancestor" != "$temp_ancestor" ]] || break
-	temp_ancestor="$next_ancestor"
-done
 
 # Start from an empty environment and allow only required platform and test settings.
 test_env=(

@@ -225,9 +225,9 @@ node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run te
 阶段 6 验证：
 
 - `npm run check` 通过。
-- kernel 34/34、kernel-adapters 12 通过/1 跳过、server 50/50、sandbox 76/76、telemetry 15/15、protocol 6/6。
+- kernel 34/34、kernel-adapters 13 通过/1 跳过、server 50/50、sandbox 76/76、telemetry 15/15、protocol 6/6。
 - `packages/model` 在修正测试夹具路径后全量通过（1327 通过/859 跳过）；重跑期间出现过一次未复现失败，记录在 `docs/note/2026-11-04-runtime.md`。
-- `./test.sh` 需要中性的 `TMPDIR`，否则会因用户目录下的 `.agents/skills` 拒绝运行；这是脚本的保护行为，不是测试失败。
+- `./test.sh` 会自动避开包含 `.agents/skills` 的临时目录，回退到仓库内 `.artifacts/test-tmp`。
 
 ## 9. 风险与应对
 

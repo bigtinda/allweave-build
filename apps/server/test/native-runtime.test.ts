@@ -183,6 +183,60 @@ test("native runtime denies write tools in plan mode", async () => {
 	}
 });
 
+test("native runtime replays tool results on the next prompt", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "native-runtime-"));
+	try {
+		const contexts: Context[] = [];
+		let calls = 0;
+		const gateway: NativeModelRuntime = {
+			getModel: () => model,
+			getModels: () => [model],
+			streamSimple: ((_model: Model<Api>, context: Context, _options?: SimpleStreamOptions) => {
+				contexts.push(context);
+				const toolUse = calls++ === 0;
+				const message = toolUse
+					? ({
+							...assistant(""),
+							content: [{ type: "toolCall", id: "call-ls", name: "ls", arguments: { path: "." } }],
+							stopReason: "toolUse",
+						} as AssistantMessage)
+					: assistant(calls === 2 ? "done" : "second");
+				return {
+					async *[Symbol.asyncIterator]() {
+						yield { type: "done", reason: toolUse ? "toolUse" : "stop", message } as const;
+					},
+					result: async () => message,
+				} as unknown as AssistantMessageEventStream;
+			}) as NativeModelRuntime["streamSimple"],
+		};
+		const runtime = new NativeAgentRuntime(
+			{
+				sessionId: "session",
+				workspace: { id: "workspace", name: "w", path: directory },
+				pluginDevelopment: false,
+				cwd: directory,
+				tools: {} as AgentRuntimeInput["tools"],
+				state: () => detail(),
+				browser: {} as AgentRuntimeInput["browser"],
+				pluginWorkspaceId: "workspace",
+				accessMode: () => "ask",
+				requestApproval: async () => true,
+				refreshAfterPluginChange: async () => {},
+			},
+			gateway,
+		);
+		await runtime.prompt("first");
+		await runtime.prompt("second");
+		const secondPrompt = contexts.at(-1);
+		assert.ok(secondPrompt, "second prompt context missing");
+		const serialized = JSON.stringify(secondPrompt.messages);
+		assert.match(serialized, /toolResult/u);
+		assert.match(serialized, /call-ls/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("native runtime abort stops a streaming run", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "native-runtime-"));
 	try {

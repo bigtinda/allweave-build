@@ -397,7 +397,7 @@ export class SessionCoordinator {
 			);
 			// A reference asks the agent to inspect an authorized file, without uploading host paths.
 			const prompt =
-				this.promptForAccessMode(id, text) +
+				(runtime.handlesPlanMode ? text : this.promptForAccessMode(id, text)) +
 				(references.length
 					? `\n\nWorkspace file references:\n${references.map((path) => `- ${JSON.stringify(path)}`).join("\n")}`
 					: "");

@@ -70,6 +70,8 @@ export interface ProjectModelDefaults {
 export interface AgentRuntime {
 	/** Transcript file of the Pi session. */
 	readonly sessionFile: string | undefined;
+	/** The runtime applies access-mode instructions to its own system prompt. */
+	readonly handlesPlanMode?: boolean;
 	prompt(text: string, signal?: AbortSignal): Promise<void>;
 	abort(): Promise<void>;
 	usage(): RuntimeUsage;

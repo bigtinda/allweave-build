@@ -26,7 +26,15 @@ import {
 	runNativeLoop,
 } from "@pi-console/kernel";
 import { Type } from "typebox";
-import type { ChatMessage, ModelOption, Resources, ThinkingLevel, ToolCall } from "../../../shared/src/protocol.ts";
+import type {
+	ChatMessage,
+	ChatToolCall,
+	ChatToolResult,
+	ModelOption,
+	Resources,
+	ThinkingLevel,
+	ToolCall,
+} from "../../../shared/src/protocol.ts";
 import { HttpError } from "../security.ts";
 import type { RuntimeEvent } from "./pi-events.ts";
 import type {
@@ -207,6 +215,34 @@ function modelOption(model: Model<Api>): ModelOption {
 	};
 }
 
+function nativeHistory(messages: readonly ChatMessage[]): NativeMessage[] {
+	const history: NativeMessage[] = [];
+	for (const message of messages) {
+		const timestamp = Date.parse(message.timestamp) || Date.now();
+		history.push({ role: message.role, text: message.text, thinking: message.thinking || undefined, timestamp });
+		if (message.role !== "assistant") continue;
+		const assistant = history[history.length - 1];
+		if (message.toolCalls?.length) {
+			assistant.toolCalls = message.toolCalls.map((call) => ({
+				id: call.id,
+				name: call.name,
+				input: (call.input ?? {}) as Record<string, unknown>,
+			}));
+		}
+		for (const result of message.toolResults ?? []) {
+			history.push({
+				role: "tool",
+				text: result.output ?? "",
+				toolCallId: result.toolCallId,
+				toolName: result.name,
+				isError: result.isError,
+				timestamp: result.timestamp ? Date.parse(result.timestamp) : timestamp,
+			});
+		}
+	}
+	return history;
+}
+
 function chatMessage(message: NativeMessage): ChatMessage {
 	return {
 		id: message.role === "assistant" ? `assistant:${randomUUID()}` : `user:${randomUUID()}`,
@@ -224,6 +260,7 @@ function chatMessage(message: NativeMessage): ChatMessage {
  */
 export class NativeAgentRuntime implements AgentRuntime {
 	readonly sessionFile = undefined;
+	readonly handlesPlanMode = true;
 	private readonly input: AgentRuntimeInput;
 	private readonly modelRuntime: NativeModelRuntime;
 	private readonly tools = createBuiltinTools();
@@ -270,14 +307,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const userMessage = chatMessage(user);
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
-		const history: NativeMessage[] = this.messages
-			.filter((message) => message.role === "user" || message.role === "assistant")
-			.map((message) => ({
-				role: message.role,
-				text: message.text,
-				thinking: message.thinking,
-				timestamp: Date.parse(message.timestamp),
-			}));
+		const history = nativeHistory(this.messages);
 		const context = await buildContext({
 			cwd: this.input.cwd,
 			workspace: this.workspace,
@@ -294,16 +324,30 @@ export class NativeAgentRuntime implements AgentRuntime {
 			},
 		});
 		this.compactionCount += context.compacted;
+		if (context.compacted) {
+			this.emit("update", {
+				type: "context.compacted",
+				compaction: { dropped: context.dropped, estimatedTokens: context.estimatedTokens },
+			});
+		}
 		let assistantId: string | undefined;
 		let assistantText = "";
 		let assistantThinking = "";
+		const assistantToolCalls: ChatToolCall[] = [];
+		const assistantToolResults: ChatToolResult[] = [];
 		this.emit("started", { type: "session.started" });
 		try {
 			await runNativeLoop(
 				{
 					sessionId: this.input.sessionId,
 					cwd: this.input.cwd,
-					system: context.system,
+					system:
+						this.input.accessMode() === "plan"
+							? `${context.system}
+
+## Plan mode
+Analyze the task and propose a clear implementation plan. Read-only tools are allowed; do not modify files, run state-changing commands, or call tools with external side effects. Wait for explicit user approval before execution.`
+							: context.system,
 					gateway,
 					tools: this.tools,
 					workspace: this.workspace,
@@ -329,6 +373,9 @@ export class NativeAgentRuntime implements AgentRuntime {
 							assistantId = event.messageId;
 							assistantText = event.message.text;
 							assistantThinking = event.message.thinking ?? "";
+							for (const call of event.message.toolCalls ?? []) {
+								assistantToolCalls.push({ id: call.id, name: call.name, input: call.input });
+							}
 							this.emit("update", {
 								type: "message.completed",
 								message: {
@@ -361,6 +408,13 @@ export class NativeAgentRuntime implements AgentRuntime {
 								durationMs: event.durationMs,
 								startedAt: new Date().toISOString(),
 							};
+							assistantToolResults.push({
+								toolCallId: event.toolCall.id,
+								name: event.toolCall.name,
+								output: event.result?.content,
+								isError: event.result?.isError,
+								timestamp: new Date().toISOString(),
+							});
 							this.emit("update", { type: "tool.completed", tool });
 						}
 					},
@@ -377,6 +431,8 @@ export class NativeAgentRuntime implements AgentRuntime {
 					thinking: assistantThinking,
 					complete: true,
 					timestamp: new Date().toISOString(),
+					...(assistantToolCalls.length ? { toolCalls: assistantToolCalls } : {}),
+					...(assistantToolResults.length ? { toolResults: assistantToolResults } : {}),
 				});
 				const usage = gateway.lastUsage();
 				if (usage) this.tokens = usage;

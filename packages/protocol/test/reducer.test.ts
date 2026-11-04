@@ -96,3 +96,12 @@ test("applyEvent keeps recoveryRequired until explicitly cleared", () => {
 	const next = applyEvent(current, event({ eventId: 1 }));
 	assert.equal(next.recoveryRequired, true);
 });
+
+test("applyEvent records context compaction", () => {
+	const next = applyEvent(
+		detail(),
+		event({ type: "context.compacted", compaction: { dropped: 12, estimatedTokens: 900 } }),
+	);
+	assert.equal(next.activity[0]?.type, "context.compacted");
+	assert.equal(next.sequence, 1);
+});

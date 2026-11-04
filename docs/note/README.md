@@ -27,4 +27,4 @@
 | `M1.md` | 协议与存储 | 5 |
 | `M2.md` | KernelSession + PiEngine | 4 |
 | `M3.md` | 原生 loop + 工具 | 6 |
-| `M4.md` | 上下文、压缩、网关 | 7 |
+| `M4.md` | 上下文、压缩、网关 | 4 |

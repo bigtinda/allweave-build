@@ -10,4 +10,5 @@ export interface AdaptedEvent {
 	tool?: ToolCall;
 	error?: string;
 	conversation?: { messages: ChatMessage[]; tools: ToolCall[] };
+	compaction?: { dropped: number; estimatedTokens: number };
 }

@@ -136,6 +136,18 @@ export interface StorageSummary {
 	disk?: { totalBytes: number; freeBytes: number };
 	sessions: StoredSession[];
 }
+export interface ChatToolCall {
+	id: string;
+	name: string;
+	input: unknown;
+}
+export interface ChatToolResult {
+	toolCallId: string;
+	name: string;
+	output?: string;
+	isError?: boolean;
+	timestamp?: string;
+}
 export interface ChatMessage {
 	id: string;
 	role: "user" | "assistant";
@@ -146,6 +158,9 @@ export interface ChatMessage {
 	error?: string;
 	changedFiles?: string[];
 	input?: { text: string; references: string[] };
+	/** Native-engine tool context, persisted so the next turn can replay it. */
+	toolCalls?: ChatToolCall[];
+	toolResults?: ChatToolResult[];
 }
 export interface ToolCall {
 	id: string;
@@ -261,6 +276,7 @@ export type EventType =
 	| "tool.started"
 	| "tool.updated"
 	| "tool.completed"
+	| "context.compacted"
 	| "agent.status"
 	| "agent.error"
 	| "approval.requested"
@@ -274,6 +290,7 @@ export interface SessionEvent {
 	message?: ChatMessage;
 	tool?: ToolCall;
 	conversation?: { messages: ChatMessage[]; tools: ToolCall[] };
+	compaction?: { dropped: number; estimatedTokens: number };
 	// Summary state accompanies every event so reconnects and model/status changes agree.
 	summary: SessionSummary;
 	approvals: Approval[];

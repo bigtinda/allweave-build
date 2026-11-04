@@ -1192,6 +1192,8 @@ interface KernelExtension {
 
 #### M6：移除 Pi
 
+**状态**：进行中。生产环境默认已切到 `NativeAgentRuntime`；`providers`、`packages`、`transcript` 与测试 harness 仍依赖 `pi-coding-agent`，远程/CLI 清理未开始。明细见 `docs/note/M6.md`。
+
 **目标**：工作台运行时只依赖 `protocol` + `kernel` + `kernel-adapters` + `pi-ai`（+ 可选 mcp/codemode）。
 
 **改动**

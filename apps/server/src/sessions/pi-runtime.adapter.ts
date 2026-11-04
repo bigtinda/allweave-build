@@ -305,11 +305,10 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 
 	async open(input: AgentRuntimeInput): Promise<AgentRuntime> {
 		if (
-			process.env.KERNEL_ENGINE === "native" &&
+			process.env.KERNEL_ENGINE !== "pi" &&
 			process.env.KERNEL_EXTENSIONS !== "legacy" &&
+			!this.createSession &&
 			this.providers &&
-			input.state().messages.length === 0 &&
-			!input.transcriptFile &&
 			!input.workspace.remote
 		) {
 			return new NativeAgentRuntime(input, await this.providers.runtime(), this.agentDirectory);

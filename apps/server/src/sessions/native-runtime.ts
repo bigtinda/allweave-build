@@ -175,7 +175,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const user: NativeMessage = { role: "user", text, images, timestamp: Date.now() };
 		const userMessage = chatMessage(user);
 		this.emit("update", { type: "message.completed", message: userMessage });
-		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
+		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
 		const history = nativeHistory(this.messages);
 		this.messages.push(userMessage);
 		const mcp = await this.mcpTools();
@@ -212,7 +212,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 			maxTokens: model.contextWindow,
 			estimateScale: this.estimateScale,
 			summarize: async (dropped) => {
-				const summarizer = new PiAiGateway(this.modelRuntime, model, this.thinking);
+				const summarizer = new PiAiGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
 				const summary = await summarizer.summarize(
 					dropped,
 					this.controller?.signal ?? new AbortController().signal,

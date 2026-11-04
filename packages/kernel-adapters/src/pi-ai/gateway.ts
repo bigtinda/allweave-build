@@ -78,12 +78,14 @@ export class PiAiGateway implements NativeModelGateway {
 	private readonly runtime: NativeModelRuntime;
 	private readonly model: Model<Api>;
 	private readonly thinkingLevel: PiThinkingLevel;
+	private readonly sessionId: string | undefined;
 	private usage: GatewayUsage | undefined;
 
-	constructor(runtime: NativeModelRuntime, model: Model<Api>, thinkingLevel: PiThinkingLevel) {
+	constructor(runtime: NativeModelRuntime, model: Model<Api>, thinkingLevel: PiThinkingLevel, sessionId?: string) {
 		this.runtime = runtime;
 		this.model = model;
 		this.thinkingLevel = thinkingLevel;
+		this.sessionId = sessionId;
 	}
 
 	lastUsage(): GatewayUsage | undefined {
@@ -158,6 +160,7 @@ export class PiAiGateway implements NativeModelGateway {
 			{ systemPrompt: request.system, messages, tools: request.tools.map(toPiTool) },
 			{
 				signal: request.signal,
+				sessionId: this.sessionId,
 				reasoning: this.thinkingLevel === "off" ? undefined : this.thinkingLevel,
 			},
 		);

@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { createHarness, getMessageText } from "../../../packages/coding-agent/test/suite/harness.ts";
 import type {
 	FileContent,
@@ -17,6 +16,7 @@ import type {
 } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
 import { contained } from "../src/security.ts";
+import { nativeGateway } from "./native-harness.ts";
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 10_000;
@@ -27,7 +27,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 test(
-	"local-origin REST + real SDK + WebSocket pipeline, approvals, abort, isolation and restart",
+	"local-origin REST + native runtime + WebSocket pipeline, approvals, abort, isolation and restart",
 	{ timeout: 60_000 },
 	async (t) => {
 		const directory = await mkdtemp(join(tmpdir(), "pi-console-api-"));
@@ -40,22 +40,13 @@ test(
 		const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 		process.env.PI_CODING_AGENT_DIR = agentDir;
 		const harness = await createHarness({ models: [{ id: "faux-1" }, { id: "faux-2" }] });
-		// Deterministic faux responses are used only in tests. The application always uses the real SDK factory.
-		let factoryCalls = 0;
-		const factory: typeof createAgentSession = (options) => {
-			factoryCalls++;
-			return createAgentSession({
-				...options,
-				model: harness.getModel(),
-				modelRuntime: harness.session.modelRuntime,
-			});
-		};
+		const gateway = nativeGateway(harness);
 		const options = {
 			directory: data,
 			roots: [root],
 			port: 8787,
 			logger: false,
-			createSession: factory,
+			createGateway: () => gateway,
 		};
 		let { app } = await createApp(options);
 		const baseHeaders = { host: "127.0.0.1:8787", origin: "http://127.0.0.1:5173" };
@@ -133,7 +124,6 @@ test(
 			};
 			const first = await create();
 			const second = await create();
-			assert.equal(factoryCalls, 0, "creating empty sessions should not initialize the SDK or create transcripts");
 			const database = new DatabaseSync(join(data, "console.sqlite"));
 			for (const session of [first, second]) {
 				const stored = database.prepare("SELECT file FROM kernel_sessions WHERE id = ?").get(session.id);
@@ -151,12 +141,8 @@ test(
 			);
 			await t.test("streaming and independent session context", async () => {
 				harness.setResponses([fauxAssistantMessage("streamed test response")]);
-				assert.equal(
-					(await request("POST", `/api/sessions/${first.id}/messages`, { text: "first prompt" })).statusCode,
-					202,
-				);
-				await waitFor(() => factoryCalls === 2);
-				assert.equal(factoryCalls, 2, "the first prompt reuses the warmed runtime");
+				const firstPrompt = await request("POST", `/api/sessions/${first.id}/messages`, { text: "first prompt" });
+				assert.equal(firstPrompt.statusCode, 202, firstPrompt.body);
 				await waitFor(() =>
 					messages.some((message) => message.type === "agent.status" && message.summary.status === "idle"),
 				);
@@ -316,6 +302,12 @@ test(
 				assert.equal((await request("DELETE", `/api/sessions/${rejected.id}`)).statusCode, 200);
 			});
 			await t.test("api and agent tools reject the same path with the same reason", async () => {
+				const idleDeadline = Date.now() + 5000;
+				while (Date.now() <= idleDeadline) {
+					const detail = (await request("GET", `/api/sessions/${first.id}`)).json<SessionDetail>();
+					if (detail.status === "idle") break;
+					await new Promise((resolve) => setTimeout(resolve, 10));
+				}
 				const denied = await request(
 					"GET",
 					`/api/workspaces/${workspace.id}/file?path=${encodeURIComponent("../outside")}`,
@@ -342,8 +334,7 @@ test(
 				}
 				assert.ok(tool, "the rejected tool call should still be recorded");
 				assert.equal(tool.status, "failed");
-				const toolOutput = tool.output as { content?: Array<{ text?: string }> } | undefined;
-				const toolReason = toolOutput?.content?.[0]?.text ?? "";
+				const toolReason = typeof tool.output === "string" ? tool.output : "";
 				assert.match(toolReason, new RegExp(apiReason.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
 			});
 			await t.test("restart restores metadata and native SDK transcript", async () => {
@@ -409,8 +400,7 @@ test(
 				const database = new DatabaseSync(join(data, "console.sqlite"));
 				const saved = database.prepare("SELECT file FROM kernel_sessions WHERE id = ?").get(first.id);
 				database.close();
-				if (!saved || typeof saved.file !== "string") throw new Error("The native session file was not saved");
-				const nativeSessionFile = saved.file;
+				assert.equal(saved?.file, null, "native sessions persist in the kernel store, not JSONL");
 
 				const removed = await request("DELETE", `/api/workspaces/${workspace.id}`);
 				assert.equal(removed.statusCode, 200, removed.body);
@@ -418,14 +408,12 @@ test(
 				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.deepEqual((await request("GET", "/api/sessions")).json(), []);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
-				await access(nativeSessionFile);
 
 				socket.terminate();
 				await app.close();
 				({ app } = await createApp(options));
 				assert.deepEqual((await request("GET", "/api/workspaces")).json<Workspace[]>(), managedWorkspaces);
 				assert.equal(await readFile(join(root, "hello.txt"), "utf8"), "written by SDK");
-				await access(nativeSessionFile);
 			});
 		} finally {
 			for (const socket of app.websocketServer.clients) socket.terminate();

@@ -20,17 +20,18 @@ export class LocalWorkspace implements NativeWorkspace {
 
 	async resolve(input: string, allowMissing = false): Promise<string> {
 		const path = resolve(this.root, input);
-		if (path !== this.root && !path.startsWith(this.root + sep)) error(`Path escapes workspace: ${input}`);
+		if (path !== this.root && !path.startsWith(this.root + sep)) error(`Path is outside the authorized workspace`);
 		try {
 			const info = await lstat(path);
 			if (info.isSymbolicLink()) error(`Symbolic links are not allowed: ${input}`);
 			const real = await realpath(path);
-			if (real !== this.root && !real.startsWith(this.root + sep)) error(`Path escapes workspace: ${input}`);
+			if (real !== this.root && !real.startsWith(this.root + sep)) error(`Path is outside the authorized workspace`);
 			return real;
 		} catch (cause) {
 			if (!allowMissing) throw cause;
 			const parent = await realpath(dirname(path)).catch(() => error(`Parent does not exist: ${input}`));
-			if (parent !== this.root && !parent.startsWith(this.root + sep)) error(`Path escapes workspace: ${input}`);
+			if (parent !== this.root && !parent.startsWith(this.root + sep))
+				error(`Path is outside the authorized workspace`);
 			return join(parent, path.slice(dirname(path).length + 1));
 		}
 	}

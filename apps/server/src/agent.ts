@@ -1,3 +1,4 @@
+import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type {
 	AccessMode,
 	ModelOption,
@@ -23,6 +24,7 @@ import { WorkspaceAccess } from "./workspaces/workspace-access.ts";
 export interface AgentServiceOptions {
 	/** Seam for tests: the Pi session factory used by the runtime boundary. */
 	createSession?: SessionFactory;
+	gateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 	providers?: ProviderManager;
 	agentDirectory?: string;
 	browser?: BrowserService;
@@ -59,6 +61,7 @@ export class AgentService {
 			hub: new EventHub(),
 			runtimeFactory: new AgentRuntimeFactory({
 				createSession: options.createSession,
+				gateway: options.gateway,
 				directory,
 				agentDirectory: options.agentDirectory,
 				providers: options.providers,

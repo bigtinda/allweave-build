@@ -123,8 +123,9 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private currentModel(): Model<Api> | undefined {
 		if (this.model) return this.model;
 		const selected = this.input.state().model;
-		if (!selected) return undefined;
-		this.model = this.modelRuntime.getModel(selected.provider, selected.id);
+		this.model = selected
+			? this.modelRuntime.getModel(selected.provider, selected.id)
+			: this.modelRuntime.getModels()[0];
 		return this.model;
 	}
 

@@ -260,29 +260,34 @@ export class EventProjector {
 		const record = this.records.get(id);
 		if (!record) throw new HttpError(404, "Session not found");
 		const file = record.meta.file;
-		if (!file) throw new HttpError(409, "该会话没有 transcript，无法恢复");
-		let transcript: ReturnType<typeof readTranscriptView>;
-		try {
-			transcript = readTranscriptView(file);
-		} catch {
-			throw new HttpError(409, "无法读取该会话的 transcript，无法恢复");
-		}
 		const updatedAt = new Date().toISOString();
 		let base: SessionDetail;
-		try {
-			const evidence =
-				record.meta.version < 2
-					? [
-							...(this.store.loadSessionSnapshot(id)?.detail.messages ?? []),
-							...(this.store.loadSessionEvents?.(id, 0) ?? []).flatMap(
-								(event) => event.conversation?.messages ?? (event.message ? [event.message] : []),
-							),
-						]
-					: [];
-			base = { ...normalizeRestored(mergeTranscript(record.meta, transcript, evidence)), updatedAt };
-		} catch (error) {
-			if (error instanceof LegacyMetadataConflict) throw new HttpError(409, error.message);
-			throw error;
+		if (!file) {
+			const snapshot = this.store.loadSessionSnapshot(id)?.detail;
+			if (!snapshot) throw new HttpError(409, "该会话没有可恢复的快照");
+			base = { ...normalizeRestored(snapshot), updatedAt };
+		} else {
+			let transcript: ReturnType<typeof readTranscriptView>;
+			try {
+				transcript = readTranscriptView(file);
+			} catch {
+				throw new HttpError(409, "无法读取该会话的 transcript，无法恢复");
+			}
+			try {
+				const evidence =
+					record.meta.version < 2
+						? [
+								...(this.store.loadSessionSnapshot(id)?.detail.messages ?? []),
+								...(this.store.loadSessionEvents?.(id, 0) ?? []).flatMap(
+									(event) => event.conversation?.messages ?? (event.message ? [event.message] : []),
+								),
+							]
+						: [];
+				base = { ...normalizeRestored(mergeTranscript(record.meta, transcript, evidence)), updatedAt };
+			} catch (error) {
+				if (error instanceof LegacyMetadataConflict) throw new HttpError(409, error.message);
+				throw error;
+			}
 		}
 		const { event, detail, meta } = this.store.withTransaction(() => {
 			const event = this.store.append({

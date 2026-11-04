@@ -114,8 +114,10 @@ export interface AgentRuntimeFactoryOptions {
 	directory: string;
 	/** Workbench agent directory: settings, credentials and extensions. */
 	agentDirectory?: string;
-	/** Server-owned model runtime, used by the native short-session engine. */
+	/** Server-owned model runtime, used by the native engine. */
 	providers?: { runtime(): Promise<NativeModelRuntime> };
+	/** Test seam: a native model gateway that replaces provider credentials. */
+	gateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 }
 
 /** The runtime factory contract used by the session coordinator. */
@@ -262,12 +264,14 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 	private directory: string;
 	private agentDirectory: string;
 	private providers?: { runtime(): Promise<NativeModelRuntime> };
+	private gateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 
 	constructor(options: AgentRuntimeFactoryOptions) {
 		this.createSession = options.createSession;
 		this.directory = options.directory;
 		this.agentDirectory = options.agentDirectory ?? getAgentDir();
 		this.providers = options.providers;
+		this.gateway = options.gateway;
 	}
 
 	/** Default model preference per provider, used to preselect a model. */
@@ -277,6 +281,14 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 
 	/** Models available to the workbench, without opening a session. */
 	async listModels(): Promise<ModelOption[]> {
+		if (this.gateway)
+			return (await this.gateway()).getModels().map((model) => ({
+				id: model.id,
+				provider: model.provider,
+				name: model.name,
+				reasoning: model.reasoning,
+				available: true,
+			}));
 		const runtime = await ModelRuntime.create({
 			authPath: join(this.agentDirectory, "auth.json"),
 			modelsPath: join(this.agentDirectory, "models.json"),
@@ -306,7 +318,13 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 			!this.createSession &&
 			this.providers
 		) {
-			return new NativeAgentRuntime(input, await this.providers.runtime(), this.agentDirectory);
+			const runtime = this.gateway
+				? await this.gateway()
+				: this.providers
+					? await this.providers.runtime()
+					: undefined;
+			if (!runtime) throw new Error("模型运行时不可用");
+			return new NativeAgentRuntime(input, runtime, this.agentDirectory);
 		}
 		const createSession = this.createSession;
 		if (!createSession) throw new Error("会话工厂不可用");

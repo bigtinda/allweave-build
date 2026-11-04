@@ -3,6 +3,7 @@ import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
+import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import Fastify from "fastify";
 import { z } from "zod";
 import { AgentService } from "../agent.ts";
@@ -31,6 +32,7 @@ export interface AppOptions {
 	logger?: boolean;
 	/** Seam for tests: the Pi session factory used by the runtime boundary. */
 	createSession?: SessionFactory;
+	createGateway?: () => Promise<NativeModelRuntime> | NativeModelRuntime;
 }
 
 /**
@@ -58,6 +60,7 @@ export async function createApp(options: AppOptions) {
 	const appPlugins = new AppPluginManager(options.directory);
 	const agents = new AgentService(store, options.directory, {
 		createSession: options.createSession,
+		gateway: options.createGateway,
 		providers,
 		agentDirectory,
 		browser,

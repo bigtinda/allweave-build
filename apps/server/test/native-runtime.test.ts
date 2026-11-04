@@ -137,6 +137,7 @@ test("native runtime streams assistant output and usage", async () => {
 				refreshAfterPluginChange: async () => {},
 			},
 			fakeRuntime("hello"),
+			join(directory, ".pi"),
 		);
 		runtime.subscribe((event) => events.push(`${event.phase}:${event.adapted.type}`));
 		await runtime.prompt("hi");
@@ -172,6 +173,7 @@ test("native runtime denies write tools in plan mode", async () => {
 				refreshAfterPluginChange: async () => {},
 			},
 			fakeToolRuntime(),
+			join(directory, ".pi"),
 		);
 		const tools: string[] = [];
 		runtime.subscribe((event) => {
@@ -225,6 +227,7 @@ test("native runtime replays tool results on the next prompt", async () => {
 				refreshAfterPluginChange: async () => {},
 			},
 			gateway,
+			join(directory, ".pi"),
 		);
 		await runtime.prompt("first");
 		await runtime.prompt("second");
@@ -269,6 +272,7 @@ test("native runtime abort stops a streaming run", async () => {
 					} as unknown as AssistantMessageEventStream;
 				}) as NativeModelRuntime["streamSimple"],
 			},
+			join(directory, ".pi"),
 		);
 		const run = runtime.prompt("hi");
 		setTimeout(() => runtime.abort(), 10);

@@ -5,6 +5,7 @@ export { discoverResources, type NativeResourceInfo } from "./context/resources.
 export * from "./engine/loop.ts";
 export * from "./engine/policy.ts";
 export * from "./engine/retry.ts";
+export * from "./engine/tool-search.ts";
 export * from "./engine/tools.ts";
 export * from "./engine/types.ts";
 export * from "./extensions/index.ts";

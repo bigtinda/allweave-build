@@ -89,7 +89,7 @@ export class PiAiGateway implements NativeModelGateway {
 		const transcript = messages
 			.map(
 				(message) =>
-					message.role + ": " + message.text + (message.toolCalls ? " " + JSON.stringify(message.toolCalls) : ""),
+					`${message.role}: ${message.text}${message.toolCalls ? ` ${JSON.stringify(message.toolCalls)}` : ""}`,
 			)
 			.join(String.fromCharCode(10, 10));
 		let text = "";

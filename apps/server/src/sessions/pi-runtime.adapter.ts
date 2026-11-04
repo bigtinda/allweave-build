@@ -306,12 +306,13 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 	async open(input: AgentRuntimeInput): Promise<AgentRuntime> {
 		if (
 			process.env.KERNEL_ENGINE === "native" &&
+			process.env.KERNEL_EXTENSIONS !== "legacy" &&
 			this.providers &&
 			input.state().messages.length === 0 &&
 			!input.transcriptFile &&
 			!input.workspace.remote
 		) {
-			return new NativeAgentRuntime(input, await this.providers.runtime());
+			return new NativeAgentRuntime(input, await this.providers.runtime(), this.agentDirectory);
 		}
 		const createSession = this.createSession;
 		if (!createSession) throw new Error("会话工厂不可用");

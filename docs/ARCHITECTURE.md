@@ -1187,7 +1187,8 @@ interface KernelExtension {
 - `packages/kernel/src/extensions` 已提供 hook/registry/diagnostics；原生 loop 接入 `turn_start/context/message_end/tool_call/tool_result/turn_end`。
 - app plugin 工具已改为 `NativeTool`；插件开发会话走原生引擎时限制为 read/write/edit/ls + `plugin_*`。
 - `packages/kernel-adapters` 提供 `createMcpNativeTools` 与 `bridgeLegacyExtension` 子集。
-- 未完成：browser/codemode/tool-search、MCP 连接生命周期、扩展热刷新、`KERNEL_EXTENSIONS=legacy`；见 `docs/note/M5.md`。
+- browser、codemode、tool-search、MCP stdio/HTTP 与 `KERNEL_EXTENSIONS=legacy` 已接入；codemode 只允许调用只读工具。
+- 未完成：MCP OAuth/重连、扩展 registry 热替换、legacy bridge 的 UI/command 能力、bundled codemode worker 路径；见 `docs/note/M5.md`。
 
 #### M6：移除 Pi
 

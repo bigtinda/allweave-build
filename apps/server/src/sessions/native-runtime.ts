@@ -12,7 +12,15 @@ import {
 	type NativeToolCall,
 	runNativeLoop,
 } from "@pi-console/kernel";
-import { modelOption, type NativeModelRuntime, PiAiGateway } from "@pi-console/kernel-adapters";
+import {
+	createCodemodeNativeTool,
+	createMcpManager,
+	loadMcpConfig,
+	type McpManager,
+	modelOption,
+	type NativeModelRuntime,
+	PiAiGateway,
+} from "@pi-console/kernel-adapters";
 import type {
 	ChatMessage,
 	ChatToolCall,
@@ -81,6 +89,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	readonly handlesPlanMode = true;
 	private readonly input: AgentRuntimeInput;
 	private readonly modelRuntime: NativeModelRuntime;
+	private readonly agentDir: string;
 	private readonly builtinTools = createBuiltinTools();
 	private tools: NativeTool[] = this.builtinTools;
 	private readonly workspace: LocalWorkspace;
@@ -94,9 +103,12 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private estimateScale = 1;
 	private resourcesLoaded: NativeResourceInfo[] = [];
 
-	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime) {
+	private mcp: Promise<McpManager> | undefined;
+
+	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime, agentDir: string) {
 		this.input = input;
 		this.modelRuntime = modelRuntime;
+		this.agentDir = agentDir;
 		this.workspace = new LocalWorkspace(input.cwd);
 		this.thinking = input.state().thinkingLevel;
 		this.estimateScale = input.state().tokenScale ?? 1;
@@ -115,6 +127,14 @@ export class NativeAgentRuntime implements AgentRuntime {
 		return this.model;
 	}
 
+	private mcpTools(): Promise<McpManager | undefined> {
+		if (this.mcp) return this.mcp;
+		if (this.input.pluginDevelopment || process.env.KERNEL_MCP === "off") return Promise.resolve(undefined);
+		const config = loadMcpConfig({ agentDir: this.agentDir, cwd: this.input.cwd, projectTrusted: true });
+		this.mcp = createMcpManager({ servers: config.servers });
+		return this.mcp;
+	}
+
 	prompt(text: string, signal?: AbortSignal): Promise<void> {
 		return this.run(text, signal);
 	}
@@ -130,6 +150,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
 		const history = nativeHistory(this.messages);
+		const mcp = await this.mcpTools();
 		const discovered = await discoverResources(this.input.cwd);
 		this.resourcesLoaded = discovered;
 		const workbenchTools = await createNativeWorkbenchTools({
@@ -143,7 +164,13 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const baseTools = this.input.pluginDevelopment
 			? this.builtinTools.filter((tool) => ["read", "write", "edit", "ls"].includes(tool.name))
 			: this.builtinTools;
-		this.tools = [...baseTools, ...workbenchTools, ...(this.input.extensions?.tools() ?? [])];
+		const callable = [
+			...baseTools,
+			...workbenchTools,
+			...(mcp?.tools ?? []),
+			...(this.input.extensions?.tools() ?? []),
+		];
+		this.tools = process.env.KERNEL_CODEMODE === "off" ? callable : [...callable, createCodemodeNativeTool(callable)];
 		const context = await buildContext({
 			cwd: this.input.cwd,
 			workspace: this.workspace,
@@ -307,6 +334,7 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 
 	abort(): Promise<void> {
 		this.controller?.abort();
+		void this.mcp?.then((manager) => manager.close());
 		return Promise.resolve();
 	}
 
@@ -355,6 +383,7 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 	}
 	async dispose(): Promise<void> {
 		this.controller?.abort();
+		void this.mcp?.then((manager) => manager.close());
 	}
 	modelFallbackMessage(): string | undefined {
 		return undefined;

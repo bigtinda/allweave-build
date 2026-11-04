@@ -25,12 +25,14 @@ test("exposes app plugin records to the native loop", async () => {
 			pluginDevelopment: false,
 			pluginWorkspaceId: "w1",
 			appPlugins: plugins,
+			browser: {} as never,
 			tools: { readBuffer: async () => Buffer.from("") } as never,
 			refreshAfterPluginChange: async () => {},
 		});
 		const create = tools.find((tool) => tool.name === "plugin_test_app_create");
 		const list = tools.find((tool) => tool.name === "plugin_test_app_list");
 		assert.equal(list?.readOnly, true);
+		assert.ok(tools.some((tool) => tool.name === "browser"));
 		assert.equal(create?.readOnly, false);
 		await create?.execute({ values: { title: "hello" } }, {} as never);
 		const result = await list?.execute({}, {} as never);

@@ -1,6 +1,7 @@
 import type { NativeTool, NativeToolResult } from "@pi-console/kernel";
 import type { AppPluginManager } from "../app-plugins.ts";
 import { parseAppPluginManifest } from "../app-plugins.ts";
+import { createBrowserTool } from "../browser.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
 
 export interface NativeWorkbenchToolInput {
@@ -8,6 +9,7 @@ export interface NativeWorkbenchToolInput {
 	pluginDevelopment: boolean;
 	pluginWorkspaceId: string;
 	appPlugins?: AppPluginManager;
+	browser?: Parameters<typeof createBrowserTool>[0];
 	tools: WorkspaceTools;
 	refreshAfterPluginChange: () => Promise<void>;
 }
@@ -27,8 +29,24 @@ async function readManifest(input: NativeWorkbenchToolInput, path: string): Prom
 /** Server-owned workbench tools exposed to the native loop. */
 export async function createNativeWorkbenchTools(input: NativeWorkbenchToolInput): Promise<NativeTool[]> {
 	const appPlugins = input.appPlugins;
-	if (!appPlugins) return [];
 	const tools: NativeTool[] = [];
+	if (input.browser) {
+		const browser = createBrowserTool(input.browser, input.sessionId);
+		tools.push({
+			name: browser.name,
+			description: browser.description,
+			parameters: browser.parameters as unknown as Record<string, unknown>,
+			readOnly: false,
+			execute: async (params, context) => {
+				const value = await browser.execute("native-browser", params, context.signal, () => {}, {} as never);
+				const content = value.content
+					.map((item) => (item.type === "text" ? item.text : `[${item.type}]`))
+					.join("\n");
+				return { content, isError: false };
+			},
+		});
+	}
+	if (!appPlugins) return tools;
 	if (input.pluginDevelopment) {
 		tools.push(
 			{

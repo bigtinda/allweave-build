@@ -1098,7 +1098,7 @@ interface KernelExtension {
 - `apps/server/src/sessions/native-runtime.ts`：`NativeAgentRuntime` 实现现有 `AgentRuntime`；`PiAiGateway` 把 pi-ai `streamSimple` 事件映射到内核；审批沿用 server 的 `requestApproval`。
 - `apps/server/src/sessions/pi-runtime.adapter.ts`：`KERNEL_ENGINE=native` 且满足新会话、无 transcript、非 remote、非插件开发时启用；其余走 `PiAgentRuntime`。
 - 工具执行：连续只读调用并行，含写调用回退串行；`retry.ts` 提供可重试错误退避；`policy.ts` 统一 plan/ask/auto/full；`LocalWorkspace` 负责路径、符号链接和每路径写锁。
-- 图片输入、金轨迹对比、CJK 预算仍未完成，记录在 `docs/note/M3.md`。
+- 图片输入、CJK 校准已完成；金轨迹因 PiEngine 删除不再适用。详见 `docs/note/M3.md`。
 - 验证：`npm run check` 通过；kernel 17/17；`native-runtime.test.ts` 3/3（流式、计划模式拒绝写、流式中断）；server suite 60 pass / 3 skipped / 1 fail（仅既有 `workbench-smoke` 超时）。
 - 轻量化：原生路径只新增 server 适配层和 kernel 纯逻辑；未引入新运行时依赖、事件总线、DI、ORM；PiEngine 保留为回退。
 
@@ -1138,7 +1138,7 @@ interface KernelExtension {
 - 压缩事件 `context.compacted` 进入协议与 activity；原生 tool 调用/结果持久化到 `ChatMessage.toolCalls/toolResults`。
 - 验证：kernel 22/22；`native-runtime.test.ts` 4/4；`npm run check` 通过。
 
-未完成项见 `docs/note/M4.md`。
+M4 当前无未关闭项，详见 `docs/note/M4.md`。
 
 **目标**：让原生引擎支持长会话和真实 provider，移除 server 对 `ModelRuntime`/`DefaultResourceLoader`/`SettingsManager` 的依赖。
 
@@ -1191,7 +1191,7 @@ interface KernelExtension {
 - app plugin 工具已改为 `NativeTool`；插件开发会话走原生引擎时限制为 read/write/edit/ls + `plugin_*`。
 - `packages/kernel-adapters` 提供 `createMcpNativeTools` 与 `bridgeLegacyExtension` 子集。
 - browser、codemode、tool-search、MCP stdio/HTTP 与 `KERNEL_EXTENSIONS=legacy` 已接入；codemode 只允许调用只读工具。
-- 未完成：MCP OAuth/重连、扩展 registry 热替换、legacy bridge 的 UI/command 能力、bundled codemode worker 路径；见 `docs/note/M5.md`。
+- 已完成 MCP 配置热更新与重连、扩展 registry 热替换；仅 MCP OAuth 待真实服务验证，legacy UI/command 明确不支持。详见 `docs/note/M5.md`。
 
 #### M6：移除 Pi
 

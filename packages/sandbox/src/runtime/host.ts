@@ -277,7 +277,11 @@ class Execution {
 			if (!tool) throw new Error(`Unknown ${isTool ? "tool" : "global"} "${name}"`);
 			const args: unknown = message.args === undefined ? undefined : JSON.parse(message.args);
 			const value = await tool.execute(args, { signal: pending.controller.signal });
-			reply = { type: "result", id, ok: true, payload: value === undefined ? undefined : JSON.stringify(value) };
+			const payload = value === undefined ? undefined : JSON.stringify(value);
+			if (value !== undefined && payload === undefined) {
+				throw new Error(`Tool "${name}" returned a value that is not JSON-serializable`);
+			}
+			reply = { type: "result", id, ok: true, payload };
 			status = "ok";
 		} catch (error) {
 			reply = { type: "result", id, ok: false, payload: errorMessage(error) };

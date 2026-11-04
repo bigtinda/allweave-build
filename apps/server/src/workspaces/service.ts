@@ -295,42 +295,6 @@ export class WorkspaceService {
 		return (await pickWindowsFolder()) ?? null;
 	}
 
-	private async mcpConfigFile(root: string, kind: "adapter" | "extension", createParent = false): Promise<string> {
-		const canonicalRoot = await realpath(root);
-		const target = resolve(canonicalRoot, kind === "adapter" ? ".mcp.json" : join(".pi", "mcp.json"));
-		if (!contained(canonicalRoot, target)) throw new HttpError(403, "MCP config path is outside the workspace");
-		const parent = dirname(target);
-		if (parent !== canonicalRoot) {
-			const parentStats = await lstat(parent).catch(() => undefined);
-			if (parentStats?.isSymbolicLink()) throw new HttpError(403, "MCP config cannot use linked directories");
-			if (parentStats && !parentStats.isDirectory())
-				throw new HttpError(400, "MCP config parent must be a directory");
-			if (!parentStats && createParent) await mkdir(parent);
-		}
-		const fileStats = await lstat(target).catch(() => undefined);
-		if (fileStats?.isSymbolicLink()) throw new HttpError(403, "MCP config cannot be a symbolic link");
-		if (fileStats && !fileStats.isFile()) throw new HttpError(400, "MCP config path must be a file");
-		return target;
-	}
-
-	async readMcpConfig(id: string, kind: "adapter" | "extension"): Promise<{ path: string; content: string }> {
-		const workspace = this.get(id);
-		const path = await this.mcpConfigFile(workspace.path, kind);
-		const content = await readFile(path, "utf8").catch((error: unknown) => {
-			if (error instanceof Error && "code" in error && error.code === "ENOENT") return '{\n  "mcpServers": {}\n}\n';
-			throw error;
-		});
-		return { path: kind === "adapter" ? ".mcp.json" : ".pi/mcp.json", content };
-	}
-
-	async writeMcpConfig(id: string, kind: "adapter" | "extension", content: string): Promise<void> {
-		const workspace = this.get(id);
-		const path = await this.mcpConfigFile(workspace.path, kind, true);
-		const temporary = `${path}.${randomUUID()}.tmp`;
-		await writeFile(temporary, content, { encoding: "utf8", mode: 0o600 });
-		await rename(temporary, path);
-	}
-
 	async repositoryStatus(id: string): Promise<RepositoryStatus> {
 		const workspace = this.get(id);
 		const operations = localGitOperations;

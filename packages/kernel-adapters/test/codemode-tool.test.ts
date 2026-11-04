@@ -18,3 +18,26 @@ test("runs scripts against read-only tools", async () => {
 	assert.equal(result.isError, undefined);
 	assert.match(result.content, /hi!/u);
 });
+
+test("exposes only read-only tools to scripts", async () => {
+	const tools = [
+		{
+			name: "read",
+			description: "read",
+			parameters: { type: "object", properties: {} },
+			readOnly: true,
+			execute: async () => ({ content: "read" }),
+		},
+		{
+			name: "write",
+			description: "write",
+			parameters: { type: "object", properties: {} },
+			readOnly: false,
+			execute: async () => ({ content: "write" }),
+		},
+	];
+	const tool = createCodemodeNativeTool(tools);
+	const result = await tool.execute({ code: "return ['read' in tools, 'write' in tools]" }, {} as never);
+	assert.equal(result.isError, undefined);
+	assert.match(result.content, /\[true,false\]/u);
+});

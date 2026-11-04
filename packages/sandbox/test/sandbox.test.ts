@@ -310,6 +310,33 @@ describe("tools", () => {
 		expect(result.calls).toMatchObject([{ name: "fail", status: "error" }]);
 	});
 
+	it("rejects tool results that are not JSON-serializable", async () => {
+		const sandbox = createSandbox([
+			{ name: "fn", execute: () => () => "nope" },
+			{
+				name: "cycle",
+				execute: () => {
+					const value: Record<string, unknown> = {};
+					value.self = value;
+					return value;
+				},
+			},
+		]);
+		const result = await sandbox.execute(`
+			const messages = [];
+			for (const run of [() => tools.fn(), () => tools.cycle()]) {
+				try { await run(); messages.push("no error"); } catch (error) { messages.push(error.message); }
+			}
+			return messages;
+		`);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value).toEqual([
+			'Tool "fn" returned a value that is not JSON-serializable',
+			expect.stringContaining("circular"),
+		]);
+	});
+
 	it("rejects calls to unknown tools", async () => {
 		const sandbox = createSandbox();
 		const result = await sandbox.execute("return await tools.missing()");
@@ -533,6 +560,19 @@ describe("limits and lifetime", () => {
 		// Returning while a call is still pending is not a stall.
 		const returned = await sandbox.execute("tools.echo(2); return 'early'", { timeoutMs: Number.POSITIVE_INFINITY });
 		expect(returned).toMatchObject({ ok: true, value: "early" });
+	});
+
+	it("stops a memory bomb at the configured limit", async () => {
+		const sandbox = new CodemodeSandbox({ memoryLimitBytes: 32 * 1024 * 1024, timeoutMs: 5_000 });
+		sandboxes.push(sandbox);
+		const started = performance.now();
+		const result = await sandbox.execute(`
+			const chunks = [];
+			for (;;) chunks.push("x".repeat(1 << 20));
+		`);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(["script", "sandbox"]).toContain(result.error.kind);
+		expect(performance.now() - started).toBeLessThan(5_000);
 	});
 
 	it("terminates a microtask-spinning loop on timeout", async () => {

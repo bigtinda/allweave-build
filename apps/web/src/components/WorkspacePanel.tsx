@@ -18,7 +18,6 @@ import type { FileContent, FileEntry, SessionDetail, Workspace } from "@pi-conso
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Markdown } from "./Markdown.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
 import { api } from "../services/api.ts";
 import { usePreferences } from "../stores/preferences.ts";
@@ -26,6 +25,7 @@ import { motionTokens, SpringValue } from "../theme/motion.ts";
 import { BrowserPanel } from "./BrowserPanel.tsx";
 import { GitPanel } from "./GitPanel.tsx";
 import { LoadingState } from "./LoadingState.tsx";
+import { Markdown } from "./Markdown.tsx";
 import { SpringPages } from "./SpringPages.tsx";
 import {
 	ArrowLeft,

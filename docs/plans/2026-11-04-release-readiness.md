@@ -30,9 +30,19 @@ npm run benchmark:kernel
 - `npm run check` 与 benchmark 通过。
 - 测试产物不写入仓库，`git status` 干净。
 
-当前结果：
+当前结果（2026-11-04）：
 
-- 待填写。
+- 完整非 e2e 套件：**3032 pass / 874 skipped / 0 fail**（合计 3906）。
+- `npm run check`：通过。
+- `npm run benchmark:kernel`：100 会话列表 0.25 ms、100 delta 8.38 ms / 98,912 B WAL、100 消息 context 0.62 ms；TTFT 0.02 ms、4 个 20 ms 只读工具 35.76 ms。
+- 运行条件：
+  - `TMPDIR` 必须指向不含 `.agents/skills` 的目录，否则 `test.sh` 主动退出。本次使用 `TMPDIR=D:/pi-test-tmp`。
+  - 先执行 `npm run build:offline`。`npm run build` 会访问 models.dev，本机网络超时。
+- 修复的回归：
+  - 删除引用已删除 CLI 脚本的 `scripts/local-release.mjs` 与测试断言。
+  - `kernel-adapters` 测试改用 `scripts/source-resolver.ts`，避免依赖未构建的 dist。
+  - `Markdown` 从 `features/chat` 移到 `components`，修复 Web feature boundary 测试。
+- 阶段状态：**完成**。
 
 ## 阶段 2：真实 provider 验证
 
@@ -57,7 +67,7 @@ npm run benchmark:kernel
 - 长会话 RSS、连续 20 轮稳定性。
 - 对比基线：TTFT 偏差 ≤10%，无重复工具调用、无丢失工具结果。
 
-当前结果：待 provider 凭据。
+当前结果：等待真实 provider 凭据。当前环境未检测到 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`OPENROUTER_API_KEY` 等。
 
 ## 阶段 3：MCP OAuth
 

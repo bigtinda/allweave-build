@@ -61,6 +61,7 @@ export class AgentService {
 				createSession: options.createSession,
 				directory,
 				agentDirectory: options.agentDirectory,
+				providers: options.providers,
 			}),
 			workspaceAccess,
 			browser: options.browser ?? new BrowserService(),

@@ -1085,6 +1085,19 @@ interface KernelExtension {
 
 #### M3：原生 loop + 工具
 
+**状态**：基础版完成，原生引擎可按需开启；完整验收尚未通过。
+
+已实现（M3 基础版）：
+
+- `packages/kernel/src/engine/loop.ts`：用户消息 → 模型流 → 文本/thinking 事件 → 工具执行 → 工具结果 → 下一轮；最大 24 轮；abort 通过 `AbortSignal` 贯穿模型流和工具。
+- `packages/kernel/src/engine/tools.ts`：read/write/edit/ls/grep/find/bash 内建工具；路径 containment、symlink 拒绝、输出 120 KB 上限、bash 超时。
+- `packages/kernel/src/engine/types.ts`：内核自有 `ModelGateway`、`NativeMessage`、`NativeTool`、`NativeLoopEvent`，不依赖 Pi 类型。
+- `apps/server/src/sessions/native-runtime.ts`：`NativeAgentRuntime` 实现现有 `AgentRuntime`；`PiAiGateway` 把 pi-ai `streamSimple` 事件映射到内核；审批沿用 server 的 `requestApproval`。
+- `apps/server/src/sessions/pi-runtime.adapter.ts`：`KERNEL_ENGINE=native` 且满足新会话、无 transcript、非 remote、非插件开发时启用；其余走 `PiAgentRuntime`。
+- 工具执行保持顺序执行；尚未实现并行工具批次、`retry.ts`、独立 `policy.ts`、`LocalWorkspace` 抽离、图片输入、金轨迹对比。
+- 验证：`npm run check` 通过；kernel 13/13；`native-runtime.test.ts` 3/3（流式、计划模式拒绝写、流式中断）；server suite 60 pass / 3 skipped / 1 fail（仅既有 `workbench-smoke` 超时）。
+- 轻量化：原生路径只新增 server 适配层和 kernel 纯逻辑；未引入新运行时依赖、事件总线、DI、ORM；PiEngine 保留为回退。
+
 **目标**：用自研 loop 替换 `AgentSession` 的执行部分；先覆盖短会话，长会话仍可回退。
 
 **改动**

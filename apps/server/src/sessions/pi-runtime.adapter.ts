@@ -29,6 +29,7 @@ import { prepareDoomCordisHostExtension } from "../legacy/doompi-host.ts";
 import type { RemoteWorkspaceService } from "../remote-workspaces.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceTools } from "../workspaces/workspace-access.ts";
+import { NativeAgentRuntime, type NativeModelRuntime } from "./native-runtime.ts";
 import { adaptRuntimeEvent, type RuntimeEvent } from "./pi-events.ts";
 import { createWorkbenchTools } from "./tool-factory.ts";
 
@@ -69,7 +70,7 @@ export interface ProjectModelDefaults {
 export interface AgentRuntime {
 	/** Transcript file of the Pi session. */
 	readonly sessionFile: string | undefined;
-	prompt(text: string): Promise<void>;
+	prompt(text: string, signal?: AbortSignal): Promise<void>;
 	abort(): Promise<void>;
 	usage(): RuntimeUsage;
 	compactions?(): number;
@@ -113,6 +114,8 @@ export interface AgentRuntimeFactoryOptions {
 	directory: string;
 	/** Workbench agent directory: settings, credentials and extensions. */
 	agentDirectory?: string;
+	/** Server-owned model runtime, used by the native short-session engine. */
+	providers?: { runtime(): Promise<NativeModelRuntime> };
 }
 
 /** The runtime factory contract used by the session coordinator. */
@@ -141,7 +144,7 @@ class PiAgentRuntime implements AgentRuntime {
 	get sessionFile(): string | undefined {
 		return this.session.sessionManager.getSessionFile();
 	}
-	prompt(text: string): Promise<void> {
+	prompt(text: string, _signal?: AbortSignal): Promise<void> {
 		return this.session.prompt(text);
 	}
 	async abort(): Promise<void> {
@@ -258,11 +261,13 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 	private createSession?: typeof createAgentSession;
 	private directory: string;
 	private agentDirectory: string;
+	private providers?: { runtime(): Promise<NativeModelRuntime> };
 
 	constructor(options: AgentRuntimeFactoryOptions) {
 		this.createSession = options.createSession;
 		this.directory = options.directory;
 		this.agentDirectory = options.agentDirectory ?? getAgentDir();
+		this.providers = options.providers;
 	}
 
 	/** Default model preference per provider, used to preselect a model. */
@@ -294,6 +299,16 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 	}
 
 	async open(input: AgentRuntimeInput): Promise<AgentRuntime> {
+		if (
+			process.env.KERNEL_ENGINE === "native" &&
+			this.providers &&
+			input.state().messages.length === 0 &&
+			!input.transcriptFile &&
+			!input.workspace.remote &&
+			input.state().purpose !== "plugin-development"
+		) {
+			return new NativeAgentRuntime(input, await this.providers.runtime());
+		}
 		const createSession = this.createSession;
 		if (!createSession) throw new Error("会话工厂不可用");
 		const { cwd, pluginDevelopment, workspace } = input;

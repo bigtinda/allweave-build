@@ -838,29 +838,6 @@ function Console() {
 			>
 				<DialogTitle>添加项目</DialogTitle>
 				<DialogContent className="workspace-picker-content">
-					<fieldset className="workspace-source-switch">
-						<legend className="visually-hidden">项目位置</legend>
-						<Button
-							size="small"
-							variant={workspaceSource === "local" ? "contained" : "outlined"}
-							onClick={() => {
-								setWorkspaceSource("local");
-								setPath("");
-							}}
-						>
-							本机项目
-						</Button>
-						<Button
-							size="small"
-							variant={workspaceSource === "remote" ? "contained" : "outlined"}
-							onClick={() => {
-								setWorkspaceSource("remote");
-								setPath("");
-							}}
-						>
-							远程主机
-						</Button>
-					</fieldset>
 					<div className="workspace-picker">
 						{workspaceSource === "local" ? (
 							<>

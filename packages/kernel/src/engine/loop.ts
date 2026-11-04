@@ -15,6 +15,7 @@ import type {
 
 const MAX_TURNS = 24;
 const MAX_RETRIES = 2;
+const MAX_TOOL_OUTPUT = 120_000;
 
 function fail(message: string): never {
 	throw new Error(message);
@@ -41,6 +42,12 @@ async function execute(
 		const patch = await extensions.toolResult({ sessionId: context.sessionId, toolCall: call, result });
 		if (patch.content !== undefined) result.content = patch.content;
 		if (patch.isError !== undefined) result.isError = patch.isError;
+	}
+	if (result.content.length > MAX_TOOL_OUTPUT) {
+		const path = await context.workspace.spill?.(result.content);
+		result.content = `${result.content.slice(0, MAX_TOOL_OUTPUT)}
+
+[output truncated; full output: ${path ?? "unavailable"}]`;
 	}
 	return { result, durationMs: Math.round(performance.now() - started) };
 }

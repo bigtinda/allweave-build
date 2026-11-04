@@ -60,6 +60,8 @@ export interface NativeWorkspace {
 	resolve(input: string, allowMissing?: boolean): Promise<string>;
 	read(path: string): Promise<string>;
 	write(path: string, content: string): Promise<void>;
+	/** Persist oversized tool output and return a readable path. */
+	spill?(content: string): Promise<string>;
 }
 
 export interface NativeToolResult {

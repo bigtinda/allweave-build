@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -163,7 +163,7 @@ test("rejects paths outside the workspace", async () => {
 		);
 		const tool = result.find((message) => message.role === "tool");
 		assert.equal(tool?.isError, true);
-		assert.match(tool?.text ?? "", /escapes workspace/u);
+		assert.match(tool?.text ?? "", /outside the authorized workspace/u);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
@@ -244,4 +244,46 @@ test("retries a retryable model error before emitting text", async () => {
 	);
 	assert.equal(attempts, 2);
 	assert.equal(result.at(-1)?.text, "ok");
+});
+
+test("spills oversized tool output and keeps a readable path", async () => {
+	const result = await runNativeLoop(
+		{
+			sessionId: "s",
+			cwd: process.cwd(),
+			system: "test",
+			signal: new AbortController().signal,
+			onEvent: () => undefined,
+			gateway: gateway([
+				[
+					{
+						type: "done",
+						result: {
+							text: "",
+							thinking: "",
+							toolCalls: [{ id: "big", name: "big", input: {} }],
+							stopReason: "toolUse",
+						},
+					},
+				],
+				[{ type: "done", result: { text: "ok", thinking: "", toolCalls: [], stopReason: "stop" } }],
+			]),
+			tools: [
+				{
+					name: "big",
+					description: "returns a large output",
+					parameters: {},
+					readOnly: true,
+					execute: async () => ({ content: "x".repeat(130_000) }),
+				},
+			],
+		},
+		[],
+		"go",
+	);
+	const text = result.at(-2)?.text ?? "";
+	assert.match(text, /\[output truncated; full output: (.+)\]/u);
+	const path = text.match(/full output: (.+)\]/u)?.[1];
+	assert.ok(path && existsSync(path));
+	rmSync(path, { force: true });
 });

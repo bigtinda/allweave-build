@@ -1,4 +1,6 @@
-import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import type { NativeWorkspace } from "../engine/types.ts";
 
@@ -12,6 +14,7 @@ function error(message: string): never {
  */
 export class LocalWorkspace implements NativeWorkspace {
 	readonly root: string;
+	private readonly spillRoot = join(tmpdir(), "pi-console-spill");
 	private readonly locks = new Map<string, Promise<void>>();
 
 	constructor(root: string) {
@@ -20,6 +23,13 @@ export class LocalWorkspace implements NativeWorkspace {
 
 	async resolve(input: string, allowMissing = false): Promise<string> {
 		const path = resolve(this.root, input);
+		if (path === this.spillRoot || path.startsWith(this.spillRoot + sep)) {
+			await mkdir(this.spillRoot, { recursive: true });
+			const real = await realpath(path);
+			if (real !== this.spillRoot && !real.startsWith(this.spillRoot + sep))
+				error(`Path is outside the authorized workspace`);
+			return real;
+		}
 		if (path !== this.root && !path.startsWith(this.root + sep)) error(`Path is outside the authorized workspace`);
 		try {
 			const info = await lstat(path);
@@ -38,6 +48,19 @@ export class LocalWorkspace implements NativeWorkspace {
 
 	read(path: string): Promise<string> {
 		return readFile(path, "utf8");
+	}
+
+	async spill(content: string): Promise<string> {
+		await mkdir(this.spillRoot, { recursive: true });
+		const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+		for (const name of await readdir(this.spillRoot)) {
+			const file = join(this.spillRoot, name);
+			const info = await lstat(file).catch(() => undefined);
+			if (info?.isFile() && info.mtimeMs < cutoff) await unlink(file).catch(() => undefined);
+		}
+		const path = join(this.spillRoot, `${randomUUID()}.txt`);
+		await writeFile(path, content, "utf8");
+		return path;
 	}
 
 	async write(path: string, content: string): Promise<void> {

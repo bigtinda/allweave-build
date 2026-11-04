@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, stat } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 import type { NativeTool, NativeToolContext, NativeToolResult } from "./types.ts";
 
 const MAX_READ_BYTES = 1024 * 1024;
@@ -15,23 +15,6 @@ function text(input: Record<string, unknown>, key: string): string {
 	const value = input[key];
 	if (typeof value !== "string" || value.length === 0) error(`Missing string parameter: ${key}`);
 	return value;
-}
-
-async function inside(root: string, input: string, allowMissing = false): Promise<string> {
-	const path = resolve(root, input);
-	if (path !== root && !path.startsWith(root + sep)) error(`Path escapes workspace: ${input}`);
-	try {
-		const info = await lstat(path);
-		if (info.isSymbolicLink()) error(`Symbolic links are not allowed: ${input}`);
-		const real = await realpath(path);
-		if (real !== root && !real.startsWith(root + sep)) error(`Path escapes workspace: ${input}`);
-		return real;
-	} catch (cause) {
-		if (!allowMissing) throw cause;
-		const parent = await realpath(dirname(path)).catch(() => error(`Parent does not exist: ${input}`));
-		if (parent !== root && !parent.startsWith(root + sep)) error(`Path escapes workspace: ${input}`);
-		return join(parent, path.slice(dirname(path).length + 1));
-	}
 }
 
 function clip(value: string, limit = MAX_OUTPUT): string {
@@ -54,11 +37,11 @@ export function createBuiltinTools(): NativeTool[] {
 				required: ["path"],
 			},
 			async execute(input, context) {
-				const path = await inside(context.cwd, text(input, "path"));
+				const path = await context.workspace.resolve(text(input, "path"));
 				const info = await stat(path);
 				if (!info.isFile()) error(`Not a file: ${input.path}`);
 				if (info.size > MAX_READ_BYTES) error(`File is larger than 1 MB: ${input.path}`);
-				const content = await readFile(path, "utf8");
+				const content = await context.workspace.read(path);
 				const offset = typeof input.offset === "number" ? Math.max(0, input.offset) : 0;
 				const limit = typeof input.limit === "number" ? Math.max(1, input.limit) : undefined;
 				return { content: clip(content.slice(offset, limit ? offset + limit : undefined)) };
@@ -74,9 +57,9 @@ export function createBuiltinTools(): NativeTool[] {
 				required: ["path", "content"],
 			},
 			async execute(input, context) {
-				const path = await inside(context.cwd, text(input, "path"), true);
+				const path = await context.workspace.resolve(text(input, "path"), true);
 				await mkdir(dirname(path), { recursive: true });
-				await writeFile(path, text(input, "content"), "utf8");
+				await context.workspace.write(path, text(input, "content"));
 				return { content: `Wrote ${path}` };
 			},
 		},
@@ -94,14 +77,14 @@ export function createBuiltinTools(): NativeTool[] {
 				required: ["path", "oldText", "newText"],
 			},
 			async execute(input, context) {
-				const path = await inside(context.cwd, text(input, "path"));
-				const content = await readFile(path, "utf8");
+				const path = await context.workspace.resolve(text(input, "path"));
+				const content = await context.workspace.read(path);
 				const oldText = text(input, "oldText");
 				const index = content.indexOf(oldText);
 				if (index < 0) error("oldText was not found");
 				if (content.indexOf(oldText, index + oldText.length) >= 0) error("oldText is not unique");
 				const next = content.slice(0, index) + text(input, "newText") + content.slice(index + oldText.length);
-				await writeFile(path, next, "utf8");
+				await context.workspace.write(path, next);
 				return { content: `Edited ${path}` };
 			},
 		},
@@ -114,7 +97,7 @@ export function createBuiltinTools(): NativeTool[] {
 				properties: { path: { type: "string", description: "Defaults to ." } },
 			},
 			async execute(input, context) {
-				const path = await inside(context.cwd, typeof input.path === "string" ? input.path : ".");
+				const path = await context.workspace.resolve(typeof input.path === "string" ? input.path : ".");
 				const entries = await readdir(path, { withFileTypes: true });
 				return {
 					content: entries
@@ -139,7 +122,7 @@ export function createBuiltinTools(): NativeTool[] {
 			},
 			async execute(input, context) {
 				const pattern = new RegExp(text(input, "pattern"), "u");
-				const root = await inside(context.cwd, typeof input.path === "string" ? input.path : ".");
+				const root = await context.workspace.resolve(typeof input.path === "string" ? input.path : ".");
 				const include = typeof input.include === "string" ? input.include : undefined;
 				const lines: string[] = [];
 				const visit = async (directory: string): Promise<void> => {
@@ -153,7 +136,7 @@ export function createBuiltinTools(): NativeTool[] {
 							continue;
 						}
 						if (!entry.isFile() || (include && !entry.name.includes(include))) continue;
-						const content = await readFile(path, "utf8").catch(() => "");
+						const content = await context.workspace.read(path).catch(() => "");
 						for (const [index, line] of content.split("\n").entries()) {
 							if (pattern.test(line)) {
 								lines.push(`${relative(root, path)}:${index + 1}:${line.slice(0, 300)}`);
@@ -177,7 +160,7 @@ export function createBuiltinTools(): NativeTool[] {
 			},
 			async execute(input, context) {
 				const pattern = text(input, "pattern").toLowerCase();
-				const root = await inside(context.cwd, typeof input.path === "string" ? input.path : ".");
+				const root = await context.workspace.resolve(typeof input.path === "string" ? input.path : ".");
 				const found: string[] = [];
 				const visit = async (directory: string): Promise<void> => {
 					if (found.length >= 200) return;

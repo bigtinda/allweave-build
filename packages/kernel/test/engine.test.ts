@@ -168,3 +168,80 @@ test("rejects paths outside the workspace", async () => {
 		rmSync(directory, { recursive: true, force: true });
 	}
 });
+
+test("runs read-only tool calls in parallel", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "kernel-loop-"));
+	const tool = {
+		name: "slow_read",
+		description: "slow",
+		parameters: { type: "object" },
+		readOnly: true,
+		async execute() {
+			await new Promise((resolve) => setTimeout(resolve, 60));
+			return { content: "ok" };
+		},
+	};
+	try {
+		const started = performance.now();
+		await runNativeLoop(
+			{
+				sessionId: "s",
+				cwd: directory,
+				system: "test",
+				gateway: gateway([
+					[
+						{
+							type: "done",
+							result: {
+								text: "",
+								thinking: "",
+								stopReason: "toolUse",
+								toolCalls: [
+									{ id: "call-1", name: "slow_read", input: {} },
+									{ id: "call-2", name: "slow_read", input: {} },
+								],
+							},
+						},
+					],
+					[{ type: "done", result: { text: "ok", thinking: "", toolCalls: [], stopReason: "stop" } }],
+				]),
+				tools: [tool],
+				signal: new AbortController().signal,
+				onEvent: () => {},
+			},
+			[],
+			"run",
+		);
+		assert.ok(performance.now() - started < 110, "read-only tools should overlap");
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+test("retries a retryable model error before emitting text", async () => {
+	let attempts = 0;
+	const model: NativeModelGateway = {
+		async *stream() {
+			attempts++;
+			if (attempts === 1) throw new Error("rate limit exceeded");
+			yield { type: "text", delta: "ok" };
+			yield { type: "done", result: { text: "ok", thinking: "", toolCalls: [], stopReason: "stop" } };
+		},
+	};
+	const result = await runNativeLoop(
+		{
+			sessionId: "s",
+			cwd: process.cwd(),
+			system: "test",
+			gateway: model,
+			tools: createBuiltinTools(),
+			signal: new AbortController().signal,
+			onEvent: () => {},
+			retryBaseMs: 5,
+		},
+		[],
+		"hi",
+	);
+	assert.equal(attempts, 2);
+	assert.equal(result.at(-1)?.text, "ok");
+});

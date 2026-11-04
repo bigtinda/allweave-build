@@ -52,6 +52,14 @@ export interface NativeModelGateway {
 	stream(request: NativeModelRequest): AsyncIterable<NativeModelEvent>;
 }
 
+/** Filesystem boundary shared by tools. Paths returned by resolve() are absolute and contained. */
+export interface NativeWorkspace {
+	readonly root: string;
+	resolve(input: string, allowMissing?: boolean): Promise<string>;
+	read(path: string): Promise<string>;
+	write(path: string, content: string): Promise<void>;
+}
+
 export interface NativeToolResult {
 	content: string;
 	isError?: boolean;
@@ -60,6 +68,7 @@ export interface NativeToolResult {
 export interface NativeToolContext {
 	sessionId: string;
 	cwd: string;
+	workspace: NativeWorkspace;
 	signal: AbortSignal;
 }
 
@@ -89,8 +98,12 @@ export interface NativeLoopOptions {
 	system: string;
 	gateway: NativeModelGateway;
 	tools: NativeTool[];
+	/** Defaults to a local workspace rooted at cwd. */
+	workspace?: NativeWorkspace;
 	/** Returns false when a write-capable tool is denied. Read-only tools are not asked. */
 	approve?: (call: NativeToolCall) => Promise<boolean | string>;
 	maxTurns?: number;
+	maxRetries?: number;
+	retryBaseMs?: number;
 	onEvent: (event: NativeLoopEvent) => void;
 }

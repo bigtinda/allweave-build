@@ -974,7 +974,7 @@ interface KernelExtension {
 | M0 | 文档与边界 | 本文、删除旧文档、边界检查脚本 | 0.5–1 周 |
 | M1 | 协议 + 存储 | `protocol` 包、事件日志、快照、审批表、WS resume | 2–3 周 |
 | M2 | 会话 actor + 旧引擎 | `KernelSession`、`AgentEngine`、`PiEngine`、server 接入 | 3–4 周 |
-| M3 | 原生 loop + 工具 | `NativeEngine`、工具注册/执行、local workspace、基础 context | 4–6 周 |
+| M3 | 原生 loop + 工具 | `NativeEngine`、工具注册/执行、local workspace、基础 context | 4–6 周（基础版完成） |
 | M4 | 上下文/压缩/网关 | token 预算、CJK 估算、compaction、`PiAiGateway`、settings 迁移 | 3–4 周 |
 | M5 | 扩展/MCP/codemode | hook bus、Pi bridge、MCP/codemode adapter、插件开发会话 | 3–4 周 |
 | M6 | 移除 Pi | 删除 server 的 Pi import、远程工作区、CLI 包、依赖门禁 | 2–3 周 |
@@ -1094,8 +1094,9 @@ interface KernelExtension {
 - `packages/kernel/src/engine/types.ts`：内核自有 `ModelGateway`、`NativeMessage`、`NativeTool`、`NativeLoopEvent`，不依赖 Pi 类型。
 - `apps/server/src/sessions/native-runtime.ts`：`NativeAgentRuntime` 实现现有 `AgentRuntime`；`PiAiGateway` 把 pi-ai `streamSimple` 事件映射到内核；审批沿用 server 的 `requestApproval`。
 - `apps/server/src/sessions/pi-runtime.adapter.ts`：`KERNEL_ENGINE=native` 且满足新会话、无 transcript、非 remote、非插件开发时启用；其余走 `PiAgentRuntime`。
-- 工具执行保持顺序执行；尚未实现并行工具批次、`retry.ts`、独立 `policy.ts`、`LocalWorkspace` 抽离、图片输入、金轨迹对比。
-- 验证：`npm run check` 通过；kernel 13/13；`native-runtime.test.ts` 3/3（流式、计划模式拒绝写、流式中断）；server suite 60 pass / 3 skipped / 1 fail（仅既有 `workbench-smoke` 超时）。
+- 工具执行：连续只读调用并行，含写调用回退串行；`retry.ts` 提供可重试错误退避；`policy.ts` 统一 plan/ask/auto/full；`LocalWorkspace` 负责路径、符号链接和每路径写锁。
+- 图片输入、金轨迹对比、CJK 预算仍未完成，记录在 `docs/note/M3.md`。
+- 验证：`npm run check` 通过；kernel 17/17；`native-runtime.test.ts` 3/3（流式、计划模式拒绝写、流式中断）；server suite 60 pass / 3 skipped / 1 fail（仅既有 `workbench-smoke` 超时）。
 - 轻量化：原生路径只新增 server 适配层和 kernel 纯逻辑；未引入新运行时依赖、事件总线、DI、ORM；PiEngine 保留为回退。
 
 **目标**：用自研 loop 替换 `AgentSession` 的执行部分；先覆盖短会话，长会话仍可回退。

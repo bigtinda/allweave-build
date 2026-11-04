@@ -1,4 +1,6 @@
 export * from "./engine/loop.ts";
+export * from "./engine/policy.ts";
+export * from "./engine/retry.ts";
 export * from "./engine/tools.ts";
 export * from "./engine/types.ts";
 export * from "./session/session.ts";
@@ -12,3 +14,4 @@ export type {
 	StoredSession,
 	StoredSnapshot,
 } from "./store/types.ts";
+export * from "./workspace/local.ts";

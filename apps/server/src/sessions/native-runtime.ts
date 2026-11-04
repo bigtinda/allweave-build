@@ -14,6 +14,8 @@ import type {
 } from "@earendil-works/pi-ai";
 import {
 	createBuiltinTools,
+	decideToolAccess,
+	LocalWorkspace,
 	type NativeMessage,
 	type NativeModelEvent,
 	type NativeModelGateway,
@@ -204,6 +206,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private readonly input: AgentRuntimeInput;
 	private readonly modelRuntime: NativeModelRuntime;
 	private readonly tools = createBuiltinTools();
+	private readonly workspace: LocalWorkspace;
 	private readonly listeners = new Set<(event: RuntimeEvent) => void>();
 	private readonly messages: ChatMessage[];
 	private controller: AbortController | undefined;
@@ -214,6 +217,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime) {
 		this.input = input;
 		this.modelRuntime = modelRuntime;
+		this.workspace = new LocalWorkspace(input.cwd);
 		this.thinking = input.state().thinkingLevel;
 		this.messages = input.state().messages.map((message) => ({ ...message }));
 	}
@@ -264,6 +268,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 					system: this.systemPrompt(),
 					gateway,
 					tools: this.tools,
+					workspace: this.workspace,
 					signal: this.controller.signal,
 					approve: async (call) => this.approve(call),
 					onEvent: (event) => {
@@ -347,13 +352,9 @@ export class NativeAgentRuntime implements AgentRuntime {
 
 	private async approve(call: NativeToolCall): Promise<boolean | string> {
 		const tool = this.tools.find((candidate) => candidate.name === call.name);
-		if (tool?.readOnly) {
-			return true;
-		}
-		if (this.input.accessMode() === "plan") {
-			return "计划模式仅允许只读工具。切换权限模式后再执行此操作。";
-		}
-		if (this.input.accessMode() === "auto" || this.input.accessMode() === "full") return true;
+		const decision = decideToolAccess(tool, this.input.accessMode());
+		if (decision.action === "allow") return true;
+		if (decision.action === "deny") return decision.reason;
 		return this.input.requestApproval(call.id, call.name, call.input);
 	}
 

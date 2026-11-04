@@ -21,6 +21,7 @@ import type {
 	Usage,
 } from "../types.ts";
 import { combineAbortSignals } from "../utils/abort-signals.ts";
+import { getAllWeaveUserAgent } from "../utils/allweave-user-agent.ts";
 import {
 	appendAssistantMessageDiagnostic,
 	createAssistantMessageDiagnostic,
@@ -30,7 +31,6 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
 	getDeclaredTools,
@@ -1644,7 +1644,7 @@ function buildBaseCodexHeaders(
 	token: string,
 ): Headers {
 	// Defaults first so model and caller headers can override them, matching the other providers.
-	const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
+	const headers = new Headers({ originator: "pi", "User-Agent": getAllWeaveUserAgent() });
 	for (const [key, value] of Object.entries(initHeaders || {})) {
 		headers.set(key, value);
 	}

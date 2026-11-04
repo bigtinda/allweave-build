@@ -1,5 +1,7 @@
 /** Provider error classification and abortable backoff. */
 
+import { NativeModelError } from "./types.ts";
+
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
 const RETRYABLE_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED", "EPIPE"]);
 
@@ -11,6 +13,7 @@ function statusOf(error: unknown): number | undefined {
 }
 
 export function isRetryable(error: unknown): boolean {
+	if (error instanceof NativeModelError) return error.retryable;
 	if (error instanceof Error && (error.name === "AbortError" || /aborted/u.test(error.message))) return false;
 	const status = statusOf(error);
 	if (status !== undefined) return RETRYABLE_STATUS.has(status);

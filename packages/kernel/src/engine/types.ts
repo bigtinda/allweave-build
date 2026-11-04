@@ -56,6 +56,27 @@ export type NativeModelEvent =
 	| { type: "done"; result: NativeModelResult }
 	| { type: "error"; error: string };
 
+export type NativeModelErrorKind = "auth" | "rate_limit" | "context_length" | "network" | "aborted" | "provider";
+
+/** A classified model failure. Adapters raise it so the kernel can decide whether to retry. */
+export class NativeModelError extends Error {
+	readonly kind: NativeModelErrorKind;
+	readonly retryable: boolean;
+	readonly status: number | undefined;
+
+	constructor(
+		message: string,
+		options: { kind: NativeModelErrorKind; retryable: boolean; status?: number; cause?: unknown },
+	) {
+		super(message);
+		this.name = "NativeModelError";
+		this.kind = options.kind;
+		this.retryable = options.retryable;
+		this.status = options.status;
+		if (options.cause !== undefined) this.cause = options.cause;
+	}
+}
+
 /** The only model dependency of the native loop. Adapters implement it. */
 export interface NativeModelGateway {
 	stream(request: NativeModelRequest): AsyncIterable<NativeModelEvent>;

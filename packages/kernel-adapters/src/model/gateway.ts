@@ -21,6 +21,7 @@ import type {
 } from "@allweave/model";
 import type { ModelOption } from "@allweave/protocol";
 import { Type } from "typebox";
+import { toModelError } from "./errors.ts";
 
 export type ModelThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -34,10 +35,16 @@ export interface NativeModelRuntime {
 export interface GatewayUsage {
 	input: number;
 	output: number;
-	cacheRead: number;
-	cacheWrite: number;
+	cacheRead?: number;
+	cacheWrite?: number;
 	total: number;
-	cost: number;
+	cost?: number;
+}
+
+function addOptional(current: number | undefined, next: number | undefined): number | undefined {
+	if (current === undefined) return next;
+	if (next === undefined) return current;
+	return current + next;
 }
 
 function toModelMessage(message: NativeMessage): UserMessage | ToolResultMessage {
@@ -96,10 +103,10 @@ export class ModelGateway implements NativeModelGateway {
 		this.usage = {
 			input: (this.usage?.input ?? 0) + usage.input,
 			output: (this.usage?.output ?? 0) + usage.output,
-			cacheRead: (this.usage?.cacheRead ?? 0) + usage.cacheRead,
-			cacheWrite: (this.usage?.cacheWrite ?? 0) + usage.cacheWrite,
+			cacheRead: addOptional(this.usage?.cacheRead, usage.cacheRead),
+			cacheWrite: addOptional(this.usage?.cacheWrite, usage.cacheWrite),
 			total: (this.usage?.total ?? 0) + usage.total,
-			cost: (this.usage?.cost ?? 0) + usage.cost,
+			cost: addOptional(this.usage?.cost, usage.cost),
 		};
 	}
 
@@ -165,26 +172,32 @@ export class ModelGateway implements NativeModelGateway {
 			},
 		);
 		let final: AssistantMessage | undefined;
-		for await (const event of stream) {
-			if (event.type === "text_delta") {
-				yield { type: "text", delta: event.delta };
-			} else if (event.type === "thinking_delta") {
-				yield { type: "thinking", delta: event.delta };
-			} else if (event.type === "done") {
-				final = event.message;
-			} else if (event.type === "error") {
-				throw new Error(event.error.errorMessage ?? "模型请求失败");
+		try {
+			for await (const event of stream) {
+				if (event.type === "text_delta") {
+					yield { type: "text", delta: event.delta };
+				} else if (event.type === "thinking_delta") {
+					yield { type: "thinking", delta: event.delta };
+				} else if (event.type === "done") {
+					final = event.message;
+				} else if (event.type === "error") {
+					throw toModelError(new Error(event.error.errorMessage ?? "模型请求失败"), request.signal);
+				}
 			}
+		} catch (error) {
+			throw toModelError(error, request.signal);
 		}
-		if (!final) throw new Error("模型请求没有返回结果");
-		if (final.stopReason === "error" && final.errorMessage) throw new Error(final.errorMessage);
+		if (!final) throw toModelError(new Error("模型请求没有返回结果"), request.signal);
+		if (final.stopReason === "error" && final.errorMessage) {
+			throw toModelError(new Error(final.errorMessage), request.signal);
+		}
 		this.addUsage({
 			input: final.usage.input,
 			output: final.usage.output,
 			cacheRead: final.usage.cacheRead,
 			cacheWrite: final.usage.cacheWrite,
 			total: final.usage.totalTokens,
-			cost: final.usage.cost.total,
+			cost: final.usage.cost?.total,
 		});
 		yield {
 			type: "done",

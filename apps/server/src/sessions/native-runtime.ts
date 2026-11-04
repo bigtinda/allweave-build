@@ -348,12 +348,18 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 					this.tokens = {
 						input: this.tokens.input + usage.input,
 						output: this.tokens.output + usage.output,
-						cacheRead: (this.tokens.cacheRead ?? 0) + usage.cacheRead,
-						cacheWrite: (this.tokens.cacheWrite ?? 0) + usage.cacheWrite,
+						cacheRead:
+							usage.cacheRead === undefined
+								? this.tokens.cacheRead
+								: (this.tokens.cacheRead ?? 0) + usage.cacheRead,
+						cacheWrite:
+							usage.cacheWrite === undefined
+								? this.tokens.cacheWrite
+								: (this.tokens.cacheWrite ?? 0) + usage.cacheWrite,
 						total: this.tokens.total + usage.total,
-						cost: (this.tokens.cost ?? 0) + usage.cost,
+						cost: usage.cost === undefined ? this.tokens.cost : (this.tokens.cost ?? 0) + usage.cost,
 					};
-					const observedInput = usage.input + usage.cacheRead + usage.cacheWrite;
+					const observedInput = usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
 					if (observedInput > 0 && context.estimatedTokens > 0) {
 						const observed = observedInput / context.estimatedTokens;
 						if (Number.isFinite(observed) && observed >= 0.25 && observed <= 4) {

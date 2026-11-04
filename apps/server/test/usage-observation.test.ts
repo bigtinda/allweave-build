@@ -95,6 +95,27 @@ test("native records prompt cache usage from the provider", { timeout: 30000 }, 
 		assert.equal(detail.lastRunUsage?.tokens?.cacheRead, 80);
 		assert.equal(detail.lastRunUsage?.tokens?.cacheWrite, 20);
 		assert.ok((detail.lastRunUsage?.tokens?.total ?? 0) >= 210);
+		const firstStartedAt = detail.lastRunUsage?.startedAt;
+		const second = fauxAssistantMessage("cache measured again");
+		second.usage = {
+			input: 5,
+			output: 2,
+			cacheRead: 90,
+			cacheWrite: 0,
+			totalTokens: 97,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		};
+		harness.setResponses([second]);
+		await agents.prompt(session.id, "measure the cache again", []);
+		const secondDeadline = Date.now() + 15000;
+		while (Date.now() < secondDeadline) {
+			const current = agents.get(session.id);
+			if (current.status === "idle" && current.lastRunUsage?.startedAt !== firstStartedAt) break;
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+		const afterSecond = agents.get(session.id);
+		assert.equal(afterSecond.tokens?.cacheRead, 170, "session usage accumulates across runs");
+		assert.equal(afterSecond.lastRunUsage?.tokens?.cacheRead, 90, "run usage stays a delta");
 	} finally {
 		await agents.close();
 		store.close();

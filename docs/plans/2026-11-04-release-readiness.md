@@ -46,7 +46,32 @@ npm run benchmark:kernel
 
 ## 阶段 2：真实 provider 验证
 
-前置条件：用户提供一个真实 provider 的 API key，或确认使用本机已有凭据。
+前置条件：使用内置 `minimax-cn` provider，API key 通过 `MINIMAX_CN_API_KEY` 或界面写入 `auth.json`。
+
+provider 配置：
+
+- provider：`minimax-cn`
+- 协议：`anthropic-messages`
+- base URL：`https://api.minimaxi.com/anthropic`（内置；如账号仅支持新域名，可改自定义 provider 为 `https://api.minimax.cn/anthropic`）
+- 模型：`MiniMax-M3`（1M 上下文，text+image），备用 `MiniMax-M2.7`（204k 上下文）
+
+当前结果：已通过内置 `minimax-cn` + `MiniMax-M3` 完成首轮真实调用；API Key 由界面写入 `auth.json`。
+
+实测（2026-11-04，`MiniMax-M3`，`thinkingLevel=off/low`）：
+
+| 场景 | 结果 | 记录 |
+|---|---|---|
+| 流式文本 | 通过 | “OK”，3.19 s，input 11,363 / output 3 |
+| 多工具调用 | 通过 | `ls` + `read` 并行，10/11 ms，6.24 s，结果进入下一轮 |
+| 审批拒绝 | 通过 | `ask` 模式下 write/bash 均被拒绝，工具标记 failed，run 回到 idle |
+| 流式中断 | 通过 | 运行中 abort，1.47 s 回到 idle，无悬挂 run |
+| 图片输入 | 通过 | 1×1 PNG 进入 provider context，5.20 s，返回颜色描述 |
+| prompt cache | 通过 | 第二轮 `cacheRead=11,264`，后续 11,130/11,145；成本按缓存价计 |
+| 上下文压缩 | 未执行 | 1M 窗口，真实触发成本过高；仅单测覆盖 |
+
+发现并修复：`NativeAgentRuntime` 原先用最近一次请求的 usage 覆盖累计值，导致第二轮 `lastRunUsage` 为 `unavailable` 且会话 token 倒退。现在 gateway 在一次 run 内累加各模型轮次，runtime 再累加到会话总量；`apps/server/test/usage-observation.test.ts` 增加两轮回归断言。
+
+未完成：20 轮长会话 RSS、TTFT 与旧 Pi 基线对比（PiEngine 已删除，需保留历史数据或重新建立基线）、真实上下文压缩。
 
 测试矩阵：
 
@@ -67,7 +92,7 @@ npm run benchmark:kernel
 - 长会话 RSS、连续 20 轮稳定性。
 - 对比基线：TTFT 偏差 ≤10%，无重复工具调用、无丢失工具结果。
 
-当前结果：等待真实 provider 凭据。当前环境未检测到 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`OPENROUTER_API_KEY` 等。
+阶段状态：**进行中**。基础场景已通过；长会话与基线指标待测。
 
 ## 阶段 3：MCP OAuth
 

@@ -350,7 +350,14 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 				});
 				const usage = gateway.lastUsage();
 				if (usage) {
-					this.tokens = usage;
+					this.tokens = {
+						input: this.tokens.input + usage.input,
+						output: this.tokens.output + usage.output,
+						cacheRead: (this.tokens.cacheRead ?? 0) + usage.cacheRead,
+						cacheWrite: (this.tokens.cacheWrite ?? 0) + usage.cacheWrite,
+						total: this.tokens.total + usage.total,
+						cost: (this.tokens.cost ?? 0) + usage.cost,
+					};
 					const observedInput = usage.input + usage.cacheRead + usage.cacheWrite;
 					if (observedInput > 0 && context.estimatedTokens > 0) {
 						const observed = observedInput / context.estimatedTokens;

@@ -90,6 +90,17 @@ export class PiAiGateway implements NativeModelGateway {
 		return this.usage;
 	}
 
+	private addUsage(usage: GatewayUsage): void {
+		this.usage = {
+			input: (this.usage?.input ?? 0) + usage.input,
+			output: (this.usage?.output ?? 0) + usage.output,
+			cacheRead: (this.usage?.cacheRead ?? 0) + usage.cacheRead,
+			cacheWrite: (this.usage?.cacheWrite ?? 0) + usage.cacheWrite,
+			total: (this.usage?.total ?? 0) + usage.total,
+			cost: (this.usage?.cost ?? 0) + usage.cost,
+		};
+	}
+
 	async summarize(messages: NativeMessage[], signal: AbortSignal): Promise<string> {
 		const transcript = messages
 			.map(
@@ -164,14 +175,14 @@ export class PiAiGateway implements NativeModelGateway {
 		}
 		if (!final) throw new Error("模型请求没有返回结果");
 		if (final.stopReason === "error" && final.errorMessage) throw new Error(final.errorMessage);
-		this.usage = {
+		this.addUsage({
 			input: final.usage.input,
 			output: final.usage.output,
 			cacheRead: final.usage.cacheRead,
 			cacheWrite: final.usage.cacheWrite,
 			total: final.usage.totalTokens,
 			cost: final.usage.cost.total,
-		};
+		});
 		yield {
 			type: "done",
 			result: {

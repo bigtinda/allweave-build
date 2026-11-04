@@ -1,6 +1,6 @@
 # AllWeave Build Windows 安装包
 
-桌面程序通过 Electron 启动随包提供的 Node.js 服务，在原生窗口中显示 React 工作台。Pi SDK 以源码方式在本地服务进程内运行，关闭窗口时停止服务进程树。
+桌面程序通过 Electron 启动随包提供的本地服务，在原生窗口中显示 React 工作台。自研内核以源码方式在本地服务进程内运行，关闭窗口时停止服务进程树。
 
 ## 构建
 
@@ -17,11 +17,11 @@
 Electron 运行时 ZIP 优先从 `desktop/dist/electron-cache` 复用；首次缺少缓存时，下载文件缓存在 `desktop/dist/electron-download-cache`。保留 `desktop/dist` 可避免后续打包重复下载大型 Electron 运行时；这些缓存不会进入安装包。
 
 安装包内置 Electron Chromium 运行时，目标电脑无需单独安装 WebView2。
-后端与 npm 复用 Electron 内置的 Node.js，不再另带独立 Node 可执行文件。首次启动会在 `shell/` 创建 `node.exe` 硬链接，供工具子进程使用；不支持硬链接的文件系统会回退为复制。SDK 保留源码和运行资源，排除重复的编译目录与调试 source map。
+后端与 npm 复用 Electron 内置的 Node.js，不再另带独立 Node 可执行文件。首次启动会在 `shell/` 创建 `node.exe` 硬链接，供工具子进程使用；不支持硬链接的文件系统会回退为复制。运行时保留源码和资源，排除重复的编译目录与调试 source map。
 
 ## 版本与升级
 
-桌面产品版本独立于底层 Pi 包版本。`desktop.json` 为版本来源，构建脚本同步 EXE 文件属性、安装包文件名、Windows 已安装应用版本和安装目录中的 `version.txt`。
+桌面产品版本独立于内核版本。`desktop.json` 为版本来源，构建脚本同步 EXE 文件属性、安装包文件名、Windows 已安装应用版本和安装目录中的 `version.txt`。
 
 - 每次运行默认递增补丁号，如 `0.1.2` → `0.1.3`。
 - 发布新功能版本时使用 `-Version 0.2.0`，必须高于当前版本。
@@ -42,6 +42,6 @@ Electron 运行时 ZIP 优先从 `desktop/dist/electron-cache` 复用；首次�
 
 ## 工作区与数据
 
-默认授权安装目录中的 `workspaces/`。在 `workspace-roots.txt` 中每行添加一个已存在的目录，相对路径以安装目录为基准；修改后重启软件。会话、Pi 模型配置、插件和浏览器数据（Electron `userData`，位于 `data/webview`）保存在安装目录的 `data/`，安装目录必须可写。
+默认授权安装目录中的 `workspaces/`。在 `workspace-roots.txt` 中每行添加一个已存在的目录，相对路径以安装目录为基准；修改后重启软件。会话、模型配置、插件和浏览器数据（Electron `userData`，位于 `data/webview`）保存在安装目录的 `data/`，安装目录必须可写。
 
 备份时同时保存 `data/`、`workspaces/` 和 `workspace-roots.txt`。

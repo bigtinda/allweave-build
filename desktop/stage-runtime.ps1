@@ -18,7 +18,7 @@ $nodeDirectory = Split-Path -Parent $NodeExecutable
 $npmCommand = Join-Path $nodeDirectory "npm.cmd"
 $npmPackage = Join-Path $nodeDirectory "node_modules/npm"
 if (-not (Test-Path -LiteralPath $npmCommand) -or -not (Test-Path -LiteralPath (Join-Path $npmPackage "bin/npm-cli.js"))) {
-	throw "The selected Node.js installation must include npm.cmd and node_modules/npm so bundled Pi package installation remains available."
+	throw "The selected Node.js installation must include npm.cmd and node_modules/npm so bundled npm package installation remains available."
 }
 $frontend = Join-Path $repoRoot "apps/web/dist/index.html"
 if (-not (Test-Path -LiteralPath $frontend)) {

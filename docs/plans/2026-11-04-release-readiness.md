@@ -122,7 +122,21 @@ npm run build
 - 无缺失运行时文件、无绝对路径依赖。
 - 卸载后无残留进程/端口。
 
-当前结果：待执行。
+当前结果：**安装包已生成，payload 验证通过；安装/升级/卸载自动化未执行**。
+
+已执行（2026-11-04）：
+
+- `build-installer.ps1` 生成 `desktop/dist/AllWeaveBuild-1.1.7-windows-x64-setup.exe`（120 MB），SHA-256 `bf194b49ee05f45fbf5bbcbb744acd3c570dc54b7c3f92ef17e8811a3d830228`。
+- 直接启动 `installer-payload/shell/AllWeaveBuild.exe`：创建 `data/console.sqlite`、生成 `shell/node.exe` 硬链接，`/api/health`、`/api/workspaces`、`/api/sessions`、`/api/app-plugins` 均 200，Web UI 正常加载。
+- packaged payload 执行 codemode：`return 1 + 1` 返回 `2`，worker 与 QuickJS wasm 路径正常。
+- packaged payload 连接 Chrome DevTools MCP：注册 32 个工具，`new_page` 打开 `https://example.com` 成功。
+
+未执行：
+
+- `desktop/test-installer.ps1` 的安装、升级、降级拒绝、运行中锁、卸载测试。脚本要求干净用户配置；本机已有 `AllWeave Build` 安装和快捷方式，直接运行会失败并可能干扰现有安装。
+- 安装后的真实用户数据升级验证。
+
+下一步：在干净 Windows 用户（或虚拟机）运行 `test-installer.ps1`；若接受先卸载现有安装，可在本机执行。
 
 ## 阶段 5：产品取舍
 

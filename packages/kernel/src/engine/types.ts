@@ -1,3 +1,5 @@
+import type { ExtensionRegistry } from "../extensions/registry.ts";
+
 /** Minimal native model/tool contracts. They intentionally avoid Pi runtime types. */
 
 export interface NativeToolCall {
@@ -105,5 +107,6 @@ export interface NativeLoopOptions {
 	maxTurns?: number;
 	maxRetries?: number;
 	retryBaseMs?: number;
+	extensions?: ExtensionRegistry;
 	onEvent: (event: NativeLoopEvent) => void;
 }

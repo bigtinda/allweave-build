@@ -8,6 +8,7 @@ import {
 	LocalWorkspace,
 	type NativeMessage,
 	type NativeResourceInfo,
+	type NativeTool,
 	type NativeToolCall,
 	runNativeLoop,
 } from "@pi-console/kernel";
@@ -22,6 +23,7 @@ import type {
 	ToolCall,
 } from "../../../shared/src/protocol.ts";
 import { HttpError } from "../security.ts";
+import { createNativeWorkbenchTools } from "./native-tools.ts";
 import type { RuntimeEvent } from "./pi-events.ts";
 import type {
 	AgentRuntime,
@@ -79,7 +81,8 @@ export class NativeAgentRuntime implements AgentRuntime {
 	readonly handlesPlanMode = true;
 	private readonly input: AgentRuntimeInput;
 	private readonly modelRuntime: NativeModelRuntime;
-	private readonly tools = createBuiltinTools();
+	private readonly builtinTools = createBuiltinTools();
+	private tools: NativeTool[] = this.builtinTools;
 	private readonly workspace: LocalWorkspace;
 	private readonly listeners = new Set<(event: RuntimeEvent) => void>();
 	private readonly messages: ChatMessage[];
@@ -129,6 +132,18 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const history = nativeHistory(this.messages);
 		const discovered = await discoverResources(this.input.cwd);
 		this.resourcesLoaded = discovered;
+		const workbenchTools = await createNativeWorkbenchTools({
+			sessionId: this.input.sessionId,
+			pluginDevelopment: this.input.pluginDevelopment,
+			pluginWorkspaceId: this.input.pluginWorkspaceId,
+			appPlugins: this.input.appPlugins,
+			tools: this.input.tools,
+			refreshAfterPluginChange: this.input.refreshAfterPluginChange,
+		});
+		const baseTools = this.input.pluginDevelopment
+			? this.builtinTools.filter((tool) => ["read", "write", "edit", "ls"].includes(tool.name))
+			: this.builtinTools;
+		this.tools = [...baseTools, ...workbenchTools, ...(this.input.extensions?.tools() ?? [])];
 		const context = await buildContext({
 			cwd: this.input.cwd,
 			workspace: this.workspace,
@@ -164,8 +179,12 @@ export class NativeAgentRuntime implements AgentRuntime {
 				{
 					sessionId: this.input.sessionId,
 					cwd: this.input.cwd,
-					system:
-						this.input.accessMode() === "plan"
+					system: this.input.pluginDevelopment
+						? `${context.system}
+
+## Plugin development
+Create or upgrade declarative plugin manifests in this workspace. Use plugin_list first, then plugin_validate, and only call plugin_install when the user explicitly asks to install or enable. Manifests use fields, table/board views and navigation; do not invent executable capabilities.`
+						: this.input.accessMode() === "plan"
 							? `${context.system}
 
 ## Plan mode
@@ -174,6 +193,7 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 					gateway,
 					tools: this.tools,
 					workspace: this.workspace,
+					extensions: this.input.extensions,
 					signal: this.controller.signal,
 					approve: async (call) => this.approve(call),
 					onEvent: (event) => {

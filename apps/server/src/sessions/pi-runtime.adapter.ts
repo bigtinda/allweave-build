@@ -14,6 +14,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import type { ExtensionRegistry } from "@pi-console/kernel";
 import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import type {
 	AccessMode,
@@ -108,6 +109,7 @@ export interface AgentRuntimeInput {
 	accessMode: () => AccessMode;
 	requestApproval: (toolCallId: string, name: string, input: unknown) => Promise<boolean>;
 	refreshAfterPluginChange: () => Promise<void>;
+	extensions?: ExtensionRegistry;
 }
 
 export interface AgentRuntimeFactoryOptions {
@@ -307,8 +309,7 @@ export class AgentRuntimeFactory implements RuntimeFactory {
 			this.providers &&
 			input.state().messages.length === 0 &&
 			!input.transcriptFile &&
-			!input.workspace.remote &&
-			input.state().purpose !== "plugin-development"
+			!input.workspace.remote
 		) {
 			return new NativeAgentRuntime(input, await this.providers.runtime());
 		}

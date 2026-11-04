@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ExtensionRegistry } from "../extensions/registry.ts";
 import { LocalWorkspace } from "../workspace/local.ts";
 import { isRetryable, retryDelay, sleep } from "./retry.ts";
 import type {
@@ -27,20 +28,21 @@ async function execute(
 	tool: NativeTool,
 	call: NativeToolCall,
 	context: { sessionId: string; cwd: string; workspace: NativeWorkspace; signal: AbortSignal },
+	extensions?: ExtensionRegistry,
 ): Promise<{ result: NativeToolResult; durationMs: number }> {
 	const started = performance.now();
+	let result: NativeToolResult;
 	try {
-		const result = await tool.execute(call.input, context);
-		return { result, durationMs: Math.round(performance.now() - started) };
+		result = await tool.execute(call.input, context);
 	} catch (error) {
-		return {
-			result: {
-				content: error instanceof Error ? error.message : String(error),
-				isError: true,
-			},
-			durationMs: Math.round(performance.now() - started),
-		};
+		result = { content: error instanceof Error ? error.message : String(error), isError: true };
 	}
+	if (extensions) {
+		const patch = await extensions.toolResult({ sessionId: context.sessionId, toolCall: call, result });
+		if (patch.content !== undefined) result.content = patch.content;
+		if (patch.isError !== undefined) result.isError = patch.isError;
+	}
+	return { result, durationMs: Math.round(performance.now() - started) };
 }
 
 interface Turn {
@@ -53,7 +55,11 @@ interface Turn {
  * Stream one model turn. Retries only when no delta has reached the UI,
  * so a retry can never duplicate text.
  */
-async function streamTurn(options: NativeLoopOptions, messages: NativeMessage[], messageId: string): Promise<Turn> {
+async function streamTurn(
+	options: NativeLoopOptions,
+	request: { system: string; messages: NativeMessage[]; tools: NativeTool[] },
+	messageId: string,
+): Promise<Turn> {
 	const maxRetries = options.maxRetries ?? MAX_RETRIES;
 	for (let attempt = 0; ; attempt++) {
 		let text = "";
@@ -62,9 +68,9 @@ async function streamTurn(options: NativeLoopOptions, messages: NativeMessage[],
 		let emitted = false;
 		try {
 			const stream = options.gateway.stream({
-				system: options.system,
-				messages,
-				tools: options.tools,
+				system: request.system,
+				messages: request.messages,
+				tools: request.tools,
 				signal: options.signal,
 			});
 			for await (const event of stream) {
@@ -91,6 +97,37 @@ async function streamTurn(options: NativeLoopOptions, messages: NativeMessage[],
 	}
 }
 
+interface PreparedCall {
+	call: NativeToolCall;
+	tool?: NativeTool;
+	blocked?: NativeToolResult;
+}
+
+async function prepareCall(
+	call: NativeToolCall,
+	tools: Map<string, NativeTool>,
+	sessionId: string,
+	extensions?: ExtensionRegistry,
+): Promise<PreparedCall> {
+	const tool = tools.get(call.name);
+	if (!tool) return { call, blocked: { content: `Unknown tool: ${call.name}`, isError: true } };
+	if (!extensions) return { call, tool };
+	const decision = await extensions.toolCall({ sessionId, toolCall: call, tool });
+	if (decision && "block" in decision) return { call, tool, blocked: { content: decision.reason, isError: true } };
+	return { call: decision && "input" in decision ? { ...call, input: decision.input } : call, tool };
+}
+
+function appendResult(messages: NativeMessage[], call: NativeToolCall, result: NativeToolResult): void {
+	messages.push({
+		role: "tool",
+		text: toolResultText(result),
+		toolCallId: call.id,
+		toolName: call.name,
+		isError: result.isError,
+		timestamp: Date.now(),
+	});
+}
+
 /**
  * Runs one prompt to completion: model stream, tool calls, tool results, next turn.
  * It owns no persistence, UI or provider setup.
@@ -103,13 +140,25 @@ export async function runNativeLoop(
 	if (options.tools.length === 0) fail("native loop requires at least one tool");
 	const tools = new Map(options.tools.map((tool) => [tool.name, tool]));
 	const workspace = options.workspace ?? new LocalWorkspace(options.cwd);
+	const extensions = options.extensions;
 	const messages: NativeMessage[] = [...history, { role: "user", text: prompt, timestamp: Date.now() }];
 	const maxTurns = options.maxTurns ?? MAX_TURNS;
 
 	for (let turn = 0; turn < maxTurns; turn++) {
 		if (options.signal.aborted) break;
+		await extensions?.run("turn_start", { sessionId: options.sessionId, turn, messages: [...messages] });
+		const patch = await extensions?.context({
+			sessionId: options.sessionId,
+			system: options.system,
+			messages,
+		});
+		const request = {
+			system: patch?.system ?? options.system,
+			messages: patch?.messages ?? messages,
+			tools: options.tools,
+		};
 		const messageId = `assistant:${randomUUID()}`;
-		const streamed = await streamTurn(options, messages, messageId);
+		const streamed = await streamTurn(options, request, messageId);
 		if (options.signal.aborted) break;
 		const assistant: NativeMessage = {
 			role: "assistant",
@@ -120,90 +169,77 @@ export async function runNativeLoop(
 		};
 		messages.push(assistant);
 		options.onEvent({ type: "message.completed", messageId, message: assistant });
-		if (streamed.result.toolCalls.length === 0) return messages;
+		await extensions?.run("message_end", { sessionId: options.sessionId, message: assistant });
+		if (streamed.result.toolCalls.length === 0) {
+			await extensions?.run("turn_end", { sessionId: options.sessionId, turn, messages: [...messages] });
+			return messages;
+		}
 
 		const calls = streamed.result.toolCalls;
-		const parallel = calls.every((call) => tools.get(call.name)?.readOnly === true);
+		const prepared = await Promise.all(calls.map((call) => prepareCall(call, tools, options.sessionId, extensions)));
+		const parallel = prepared.every((item) => item.tool?.readOnly === true);
 		if (parallel) {
-			for (const call of calls) options.onEvent({ type: "tool.started", toolCall: call });
+			for (const item of prepared) options.onEvent({ type: "tool.started", toolCall: item.call });
 			const executed = await Promise.all(
-				calls.map((call) => {
-					const tool = tools.get(call.name) ?? fail(`Unknown tool: ${call.name}`);
-					return execute(tool, call, {
-						sessionId: options.sessionId,
-						cwd: options.cwd,
-						workspace,
-						signal: options.signal,
-					});
+				prepared.map(async (item) => {
+					if (item.blocked || !item.tool) {
+						return { result: item.blocked ?? { content: "Unknown tool", isError: true }, durationMs: 0 };
+					}
+					return execute(
+						item.tool,
+						item.call,
+						{ sessionId: options.sessionId, cwd: options.cwd, workspace, signal: options.signal },
+						extensions,
+					);
 				}),
 			);
-			for (const [index, call] of calls.entries()) {
+			for (const [index, item] of prepared.entries()) {
 				const done = executed[index] ?? fail("missing tool result");
 				options.onEvent({
 					type: "tool.completed",
-					toolCall: call,
+					toolCall: item.call,
 					result: done.result,
 					durationMs: done.durationMs,
 				});
-				messages.push({
-					role: "tool",
-					text: toolResultText(done.result),
-					toolCallId: call.id,
-					toolName: call.name,
-					isError: done.result.isError,
-					timestamp: Date.now(),
-				});
+				appendResult(messages, item.call, done.result);
 			}
+			await extensions?.run("turn_end", { sessionId: options.sessionId, turn, messages: [...messages] });
 			continue;
 		}
 
-		for (const call of calls) {
-			const tool = tools.get(call.name);
-			if (!tool) {
-				messages.push({
-					role: "tool",
-					text: `Unknown tool: ${call.name}`,
-					toolCallId: call.id,
-					toolName: call.name,
-					isError: true,
-					timestamp: Date.now(),
-				});
-				continue;
-			}
-			options.onEvent({ type: "tool.started", toolCall: call });
+		for (const item of prepared) {
+			options.onEvent({ type: "tool.started", toolCall: item.call });
 			let done: { result: NativeToolResult; durationMs: number };
-			const approval = tool.readOnly ? true : options.approve ? await options.approve(call) : true;
-			if (approval !== true) {
-				done = {
-					result: {
-						content: typeof approval === "string" ? approval : "User denied or cancelled this tool call",
-						isError: true,
-					},
-					durationMs: 0,
-				};
+			if (item.blocked || !item.tool) {
+				done = { result: item.blocked ?? { content: "Unknown tool", isError: true }, durationMs: 0 };
 			} else {
-				done = await execute(tool, call, {
-					sessionId: options.sessionId,
-					cwd: options.cwd,
-					workspace,
-					signal: options.signal,
-				});
+				const approval = item.tool.readOnly ? true : options.approve ? await options.approve(item.call) : true;
+				if (approval !== true) {
+					done = {
+						result: {
+							content: typeof approval === "string" ? approval : "User denied or cancelled this tool call",
+							isError: true,
+						},
+						durationMs: 0,
+					};
+				} else {
+					done = await execute(
+						item.tool,
+						item.call,
+						{ sessionId: options.sessionId, cwd: options.cwd, workspace, signal: options.signal },
+						extensions,
+					);
+				}
 			}
 			options.onEvent({
 				type: "tool.completed",
-				toolCall: call,
+				toolCall: item.call,
 				result: done.result,
 				durationMs: done.durationMs,
 			});
-			messages.push({
-				role: "tool",
-				text: toolResultText(done.result),
-				toolCallId: call.id,
-				toolName: call.name,
-				isError: done.result.isError,
-				timestamp: Date.now(),
-			});
+			appendResult(messages, item.call, done.result);
 		}
+		await extensions?.run("turn_end", { sessionId: options.sessionId, turn, messages: [...messages] });
 	}
 	return messages;
 }

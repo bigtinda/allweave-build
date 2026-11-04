@@ -7,6 +7,7 @@ export * from "./engine/policy.ts";
 export * from "./engine/retry.ts";
 export * from "./engine/tools.ts";
 export * from "./engine/types.ts";
+export * from "./extensions/index.ts";
 export * from "./session/session.ts";
 export * from "./session/types.ts";
 export { SqliteEventStore } from "./store/sqlite.ts";

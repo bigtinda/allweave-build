@@ -28,3 +28,4 @@
 | `M2.md` | KernelSession + PiEngine | 4 |
 | `M3.md` | 原生 loop + 工具 | 6 |
 | `M4.md` | 上下文、压缩、网关 | 4 |
+| `M5.md` | 扩展、MCP、codemode | 7 |

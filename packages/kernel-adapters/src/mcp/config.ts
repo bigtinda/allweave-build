@@ -67,6 +67,9 @@ export function loadMcpConfig(options: { agentDir: string; cwd: string; projectT
 		else if (!config.command && !config.url) {
 			diagnostics.push(`mcp server "${name}": command or url is required`);
 			servers.delete(name);
+		} else if (config.auth && !config.url) {
+			diagnostics.push(`mcp server "${name}": auth requires url`);
+			servers.delete(name);
 		} else if (config.auth?.type === "bearer" && !config.auth.token) {
 			diagnostics.push(`mcp server "${name}": auth.token is required`);
 			servers.delete(name);

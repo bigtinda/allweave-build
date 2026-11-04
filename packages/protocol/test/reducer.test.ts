@@ -105,3 +105,10 @@ test("applyEvent records context compaction", () => {
 	assert.equal(next.activity[0]?.type, "context.compacted");
 	assert.equal(next.sequence, 1);
 });
+
+test("applyEvent persists learned token scale", () => {
+	const next = applyEvent(detail(), event({ tokenScale: 1.25 }));
+	assert.equal(next.tokenScale, 1.25);
+	const kept = applyEvent(next, event({ eventId: 2, tokenScale: undefined }));
+	assert.equal(kept.tokenScale, 1.25);
+});

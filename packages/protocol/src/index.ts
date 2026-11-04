@@ -224,6 +224,8 @@ export interface SessionDetail extends SessionSummary {
 	activity: Activity[];
 	sequence: number;
 	tokens?: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number; cost?: number };
+	/** Learned token-estimate multiplier for the native context builder. */
+	tokenScale?: number;
 	error?: string;
 	/** A failed projection left the workbench state behind; rebuild it from the transcript. */
 	recoveryRequired?: boolean;
@@ -295,6 +297,7 @@ export interface SessionEvent {
 	summary: SessionSummary;
 	approvals: Approval[];
 	tokens?: SessionDetail["tokens"];
+	tokenScale?: number;
 	error?: string;
 	/** Set by a recovery event; omitted events keep the current value. */
 	recoveryRequired?: boolean;
@@ -322,6 +325,7 @@ export function applyEvent(session: SessionDetail, event: SessionEvent): Session
 		sequence: event.eventId,
 		approvals: event.approvals,
 		tokens: event.tokens,
+		tokenScale: event.tokenScale ?? session.tokenScale,
 		error: event.error,
 		recoveryRequired: event.recoveryRequired ?? session.recoveryRequired,
 		lastRunUsage: event.lastRunUsage ?? session.lastRunUsage,

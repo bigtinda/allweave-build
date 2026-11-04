@@ -1129,7 +1129,8 @@ interface KernelExtension {
 - `packages/kernel/src/context/budget.ts`：无依赖的 CJK/拉丁 token 估算；支持 usage 校准系数。
 - `packages/kernel/src/context/compaction.ts`：按 turn 边界保留近期消息，可注入摘要器。
 - `packages/kernel/src/context/builder.ts`：稳定 system 前缀（工作目录、工具、AGENTS.md/CLAUDE.md、资源索引）、预算检查、超限压缩。
-- `NativeAgentRuntime` 接入 builder；压缩使用独立 `PiAiGateway` 请求，不污染主对话 usage；provider usage 做会话内 EMA 校准。
+- `NativeAgentRuntime` 接入 builder；压缩使用独立 `PiAiGateway` 请求，不污染主对话 usage；provider usage 做 EMA 校准并经 `tokenScale` 持久化。
+- `discoverResources` 扫描 `.pi/skills`，只注入索引，不加载正文。
 - `packages/kernel-adapters`：`PiAiGateway`、`NativeModelRuntime`、模型 DTO 映射集中到 adapter。
 - 压缩事件 `context.compacted` 进入协议与 activity；原生 tool 调用/结果持久化到 `ChatMessage.toolCalls/toolResults`。
 - 验证：kernel 22/22；`native-runtime.test.ts` 4/4；`npm run check` 通过。

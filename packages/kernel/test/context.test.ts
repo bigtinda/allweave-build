@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { estimateText } from "../src/context/budget.ts";
 import { buildContext } from "../src/context/builder.ts";
 import { compactMessages } from "../src/context/compaction.ts";
+import { discoverResources } from "../src/context/resources.ts";
 import type { NativeMessage, NativeTool } from "../src/engine/types.ts";
 import { LocalWorkspace } from "../src/workspace/local.ts";
 
@@ -94,6 +95,23 @@ test("estimate scale applies to the whole context", async () => {
 			estimateScale: 1.5,
 		});
 		assert.ok(calibrated.estimatedTokens > cold.estimatedTokens);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+test("discovers workspace skills without loading bodies", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "kernel-context-"));
+	try {
+		mkdirSync(join(directory, ".pi", "skills", "review"), { recursive: true });
+		writeFileSync(
+			join(directory, ".pi", "skills", "review", "SKILL.md"),
+			["---", "name: review", "description: Review code", "---", "secret body"].join(String.fromCharCode(10)),
+		);
+		const resources = await discoverResources(directory);
+		assert.equal(resources.length, 1);
+		assert.equal(resources[0]?.name, "review");
+		assert.equal(resources[0]?.description, "Review code");
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}

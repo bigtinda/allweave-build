@@ -4,8 +4,10 @@ import {
 	buildContext,
 	createBuiltinTools,
 	decideToolAccess,
+	discoverResources,
 	LocalWorkspace,
 	type NativeMessage,
+	type NativeResourceInfo,
 	type NativeToolCall,
 	runNativeLoop,
 } from "@pi-console/kernel";
@@ -87,12 +89,14 @@ export class NativeAgentRuntime implements AgentRuntime {
 	private tokens: RuntimeUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 };
 	private compactionCount = 0;
 	private estimateScale = 1;
+	private resourcesLoaded: NativeResourceInfo[] = [];
 
 	constructor(input: AgentRuntimeInput, modelRuntime: NativeModelRuntime) {
 		this.input = input;
 		this.modelRuntime = modelRuntime;
 		this.workspace = new LocalWorkspace(input.cwd);
 		this.thinking = input.state().thinkingLevel;
+		this.estimateScale = input.state().tokenScale ?? 1;
 		this.messages = input.state().messages.map((message) => ({ ...message }));
 	}
 
@@ -123,11 +127,14 @@ export class NativeAgentRuntime implements AgentRuntime {
 		this.emit("update", { type: "message.completed", message: userMessage });
 		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking);
 		const history = nativeHistory(this.messages);
+		const discovered = await discoverResources(this.input.cwd);
+		this.resourcesLoaded = discovered;
 		const context = await buildContext({
 			cwd: this.input.cwd,
 			workspace: this.workspace,
 			messages: history,
 			tools: this.tools,
+			resources: discovered.map((resource) => ({ name: resource.name, description: resource.description })),
 			maxTokens: model.contextWindow,
 			estimateScale: this.estimateScale,
 			summarize: async (dropped) => {
@@ -258,6 +265,7 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 						const observed = observedInput / context.estimatedTokens;
 						if (Number.isFinite(observed) && observed >= 0.25 && observed <= 4) {
 							this.estimateScale = Math.min(2, Math.max(0.5, this.estimateScale * 0.7 + observed * 0.3));
+							this.emit("update", { type: "session.updated", tokenScale: this.estimateScale });
 						}
 					}
 				}
@@ -311,7 +319,16 @@ Analyze the task and propose a clear implementation plan. Read-only tools are al
 		return this.modelRuntime.getModels().map(modelOption);
 	}
 	resources(): Resources {
-		return { skills: [], extensions: [], diagnostics: [] };
+		return {
+			skills: this.resourcesLoaded.map((resource) => ({
+				name: resource.name,
+				description: resource.description,
+				filePath: resource.filePath,
+				status: "loaded" as const,
+			})),
+			extensions: [],
+			diagnostics: [],
+		};
 	}
 	async navigate(_message: ChatMessage, _role: "user" | "assistant"): Promise<BranchOutcome> {
 		throw new HttpError(409, "原生引擎暂不支持会话分支");

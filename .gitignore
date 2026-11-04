@@ -1,5 +1,6 @@
 node_modules/
 .pi-console/
+data/
 dist/
 .artifacts/
 *.log

@@ -530,6 +530,13 @@ export class SessionCoordinator {
 		return detail;
 	}
 
+	/** Continue an interrupted session from its last completed turn. */
+	async resume(id: string): Promise<void> {
+		const session = this.get(id);
+		if (session.status !== "interrupted") throw new HttpError(409, "会话未处于中断状态");
+		await this.prompt(id, "继续上一次未完成的任务。基于当前对话继续，不要重复已经完成的写操作。", []);
+	}
+
 	async interrupt(id: string, text: string, references: string[]): Promise<void> {
 		this.get(id);
 		if (this.updating.has(id)) throw new HttpError(409, "会话正在更新，请稍后重试");

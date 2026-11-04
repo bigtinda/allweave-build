@@ -558,6 +558,16 @@ export function ChatPage({
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	};
+	const resumeInterruptedSession = async () => {
+		if (!session) return;
+		try {
+			await api(`/sessions/${session.id}/resume`, {}, "POST");
+			await client.invalidateQueries({ queryKey: ["session", session.id] });
+			await client.invalidateQueries({ queryKey: ["sessions"] });
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	};
 	const panel =
 		session && workspace ? (
 			<WorkspacePanel
@@ -698,6 +708,11 @@ export function ChatPage({
 						<span className="grow" />
 						{
 							<>
+								{session.status === "interrupted" && (
+									<Button size="small" variant="outlined" onClick={() => void resumeInterruptedSession()}>
+										继续
+									</Button>
+								)}
 								<Chip
 									className={`status-chip status-${session.status}`}
 									size="small"

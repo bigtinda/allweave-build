@@ -26,7 +26,7 @@
 | `M0.md` | 边界与命名 | 0 |
 | `M1.md` | 协议与存储 | 1 |
 | `M2.md` | KernelSession | 1 |
-| `M3.md` | 原生 loop + 工具 | 4 |
+| `M3.md` | 原生 loop + 工具 | 3 |
 | `M4.md` | 上下文、压缩、网关 | 2 |
 | `M5.md` | 扩展、MCP、codemode | 1 |
 | `M6.md` | 移除 Pi | 0 |

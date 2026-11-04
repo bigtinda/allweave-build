@@ -355,6 +355,7 @@ test(
 				const recovered = await request("POST", `/api/sessions/${first.id}/recover`, {});
 				assert.equal(recovered.statusCode, 200, recovered.body);
 				assert.equal(recovered.json<SessionDetail>().recoveryRequired, false);
+				assert.equal((await request("POST", `/api/sessions/${first.id}/resume`, {})).statusCode, 409);
 				assert.equal(restored.status, "idle");
 				assert.ok(restored.messages.some((message) => message.text === "first prompt"));
 				harness.setResponses([

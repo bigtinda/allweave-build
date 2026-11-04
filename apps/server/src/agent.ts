@@ -114,6 +114,9 @@ export class AgentService {
 	async interrupt(id: string, text: string, references: string[]): Promise<void> {
 		await this.coordinator.interrupt(id, text, references);
 	}
+	async resume(id: string): Promise<void> {
+		await this.coordinator.resume(id);
+	}
 	async recall(
 		id: string,
 		messageId: string,

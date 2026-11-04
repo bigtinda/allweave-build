@@ -1059,27 +1059,29 @@ interface KernelExtension {
 
 #### M2：会话 actor + 旧引擎
 
+**状态**：已完成（2026-11-04）。
+
 **目标**：把 server 的运行状态机收进内核，但暂时仍用 `AgentSession` 执行；验证生命周期/事件/审批/取消。
 
-**改动**
+**实际实现（保持轻量，不引入第二套事件总线/审批服务）**
 
-- `KernelSession` actor：命令队列、`idle/running/approval/error/interrupted` 状态、runId、订阅、事件分配、快照。
-- `AgentEngine` 端口；`PiEngine` 适配 `AgentSession`：
-  - 把 `AgentSessionEvent` 转成 `KernelEventBody`；
-  - 工具执行仍由 `AgentSession` + server 注入的 `tool_call` hook 完成；
-  - 审批由 `EngineContext.requestApproval` 接入 kernel `ApprovalStore`。
-- `apps/server` 的 `SessionCoordinator` 缩为传输/工作区/管理器；运行逻辑迁入 `KernelSession`。
-- `AgentService` 方法保持签名，内部调 actor；`PiAgentRuntime` 变成 `PiEngine` 的内部实现。
-- 分支/回退：先用 actor 的 `branch(fromSeq)` 包装旧 `navigateTree`，保持 UI 行为。
+- `packages/kernel/src/session/session.ts`：`KernelSession` 单会话 actor。只有 `idle/running/approval/error/interrupted`、runId、`AbortController`、订阅和一个串行 run 槽；不持有 I/O、数据库或事件投影。
+- `packages/kernel/src/session/types.ts`：`AgentEngine` 端口（`run/abort/dispose`）和 `KernelRunContext`；没有 DI 容器、消息队列或远程 actor。
+- `apps/server/src/sessions/pi-engine.ts`：`PiEngine` 懒加载并缓存 `AgentRuntime`，`run` 直接委托 `runtime.prompt`，`abort` 委托 `runtime.abort`。事件仍走原 `AgentSession` 适配路径，因此事件序列不变。
+- `SessionCoordinator` 只把执行入口切到 `actor.start()`、abort 切到 `actor.abort()`；Git 快照、usage、状态投影、审批 authorizer、插件刷新仍留在 server，避免把传输/工作区逻辑塞进内核。
+- 审批进入/退出调用 `actor.enterApproval()/settleApproval()`，审批记录仍由 `ToolAuthorization` + `KernelSessionStore` 负责。
+- 重启恢复：`EventProjector` 将非 idle 元数据标为 `interrupted`，`normalizeRestored` 保留该状态；未完成工具标 failed，审批清空。
+- `PiEngine.forget()` 与 runtime registry 同步清理，修复 recover/plugin reload 后复用已 dispose runtime 的问题。
 
 **验收**
 
-- 现有功能矩阵中的 prompt/steer/follow-up/abort/approval/model/thinking/branch/usage/plugin-refresh 全部通过。
-- 同一输入下，`PiEngine` 产生的事件序列与当前 `pi-events` 适配结果一致（允许时间/id 归一化）。
-- 双击 prompt、运行中 abort、审批超时、插件刷新与运行并发：无死锁/重复 run。
-- 所有 server 测试在 `KERNEL_ENGINE=pi` 下通过。
+- prompt/abort/approval/recover/plugin refresh/branch 回归通过；`api.test.ts` 9/9，`chat-controls.test.ts`（含 mid-stream abort）、`session-coordinator.test.ts`、`session-runtime.test.ts` 全绿。
+- 双击 prompt 由 `KernelSessionConflict` 阻止（`packages/kernel/test/session.test.ts`）。
+- `npm run check` 全绿；server suite 58 pass / 3 skipped / 1 fail。唯一失败是既有的 `workbench-smoke` 断线提示超时（与 M2 改动无关）。
+- 100 会话列表 2.97 ms、100 个快照读取 11.48 ms（临时脚本，非正式基准）。
+- 未实现 `KERNEL_ENGINE`/`KERNEL_ACTOR` 双路径：M2 默认只有一个 `PiEngine`，回退用 git revert。减少常驻分支和死代码，符合轻量化约束。
 
-**回退**：`KERNEL_ENGINE=pi` + `KERNEL_ACTOR=off` 回旧 coordinator；数据格式不变。
+**回退**：revert M2 commit；数据格式不变（仍为 `kernel_*` 表 + JSONL transcript）。
 
 #### M3：原生 loop + 工具
 

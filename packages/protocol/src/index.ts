@@ -1,4 +1,4 @@
-export type AgentStatus = "idle" | "running" | "approval" | "error";
+export type AgentStatus = "idle" | "running" | "approval" | "error" | "interrupted";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AccessMode = "plan" | "ask" | "auto" | "full";
 export type SessionPurpose = "plugin-development";

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { KernelSession } from "@pi-console/kernel";
 import type {
 	AccessMode,
 	ChatMessage,
@@ -21,6 +22,7 @@ import { HttpError } from "../security.ts";
 import type { WorkspaceAccess } from "../workspaces/workspace-access.ts";
 import type { EventHub, SessionEventListener } from "./event-hub.ts";
 import type { EventProjector, SessionMutation } from "./event-projector.ts";
+import { PiEngine } from "./pi-engine.ts";
 import type { RuntimeEvent } from "./pi-events.ts";
 import type { AgentRuntime, RuntimeFactory } from "./pi-runtime.adapter.ts";
 import { finishRunUsage } from "./run-usage.ts";
@@ -55,6 +57,8 @@ export class SessionCoordinator {
 	private appPlugins?: AppPluginManager;
 	private providers?: ProviderManager;
 	private runtimes: SessionRuntimeRegistry;
+	private engines = new Map<string, PiEngine>();
+	private actors = new Map<string, KernelSession>();
 	private authorizer: ToolAuthorization;
 	private busy = new Set<string>();
 	private cancelled = new Set<string>();
@@ -194,6 +198,27 @@ export class SessionCoordinator {
 		});
 	}
 
+	private engine(id: string): PiEngine {
+		let engine = this.engines.get(id);
+		if (!engine) {
+			engine = new PiEngine(() => this.agent(id));
+			this.engines.set(id, engine);
+		}
+		return engine;
+	}
+
+	private actor(id: string): KernelSession {
+		let actor = this.actors.get(id);
+		if (!actor) {
+			actor = new KernelSession({
+				id,
+				onAbort: () => this.engine(id).abort(),
+			});
+			this.actors.set(id, actor);
+		}
+		return actor;
+	}
+
 	private agent(id: string): Promise<AgentRuntime> {
 		const detail = this.get(id);
 		const workspace = this.workspace(detail.workspaceId);
@@ -212,7 +237,15 @@ export class SessionCoordinator {
 			appPlugins: this.appPlugins,
 			pluginWorkspaceId: detail.workspaceId,
 			accessMode: () => this.get(id).accessMode,
-			requestApproval: (toolCallId, name, input) => this.authorizer.request(id, { toolCallId, name, input }),
+			requestApproval: async (toolCallId, name, input) => {
+				const actor = this.actor(id);
+				actor.enterApproval();
+				try {
+					return await this.authorizer.request(id, { toolCallId, name, input });
+				} finally {
+					actor.settleApproval();
+				}
+			},
 			refreshAfterPluginChange: () => this.refreshIdleAgentsForPluginChange(),
 		});
 	}
@@ -305,6 +338,7 @@ export class SessionCoordinator {
 				return;
 			}
 			if (this.runtimes.pending(id) !== pending) return;
+			this.engines.get(id)?.forget();
 			this.runtimes.remove(id);
 			this.pendingPluginRefresh.delete(id);
 			await runtime.dispose("reload");
@@ -378,19 +412,25 @@ export class SessionCoordinator {
 				draft.error = undefined;
 				draft.status = "running";
 			});
-			void runtime
-				.prompt(prompt)
-				.catch((error) => {
-					runError = true;
-					this.emit(
-						id,
-						{ type: "agent.error", error: error instanceof Error ? error.message : String(error) },
-						(draft) => {
-							draft.status = "error";
-						},
-					);
-				})
-				.finally(async () => {
+			void this.actor(id).start(async (context) => {
+				try {
+					await this.engine(id).run(prompt, context);
+				} catch (error) {
+					if (!context.signal.aborted) {
+						runError = true;
+						this.emit(
+							id,
+							{
+								type: "agent.error",
+								error: error instanceof Error ? error.message : String(error),
+							},
+							(draft) => {
+								draft.status = "error";
+							},
+						);
+						throw error;
+					}
+				} finally {
 					try {
 						if (fileSnapshot) {
 							const currentSnapshot = await captureGitSnapshot(workspace.path).catch(() => undefined);
@@ -446,7 +486,8 @@ export class SessionCoordinator {
 							if (draft.status !== "error") draft.status = "idle";
 						});
 					}
-				});
+				}
+			});
 		} catch (error) {
 			this.busy.delete(id);
 			this.cancelled.delete(id);
@@ -467,8 +508,12 @@ export class SessionCoordinator {
 		const run = this.runs.get(id);
 		if (this.busy.has(id)) this.cancelled.add(id);
 		this.authorizer.cancel(id);
-		const pending = this.runtimes.pending(id);
-		if (pending) await (await pending).abort();
+		const actor = this.actors.get(id);
+		if (actor) await actor.abort();
+		else {
+			const pending = this.runtimes.pending(id);
+			if (pending) await (await pending).abort();
+		}
 		await run;
 	}
 
@@ -477,6 +522,8 @@ export class SessionCoordinator {
 		this.get(id);
 		if (this.busy.has(id) || this.updating.has(id) || this.refreshing.has(id))
 			throw new HttpError(409, "请先停止运行中的会话，再从 transcript 恢复");
+		this.engines.get(id)?.forget();
+		this.engines.delete(id);
 		await this.runtimes.dispose(id, "reload");
 		const { event, detail } = this.projector.recover(id);
 		this.failed.delete(id);
@@ -643,6 +690,10 @@ export class SessionCoordinator {
 	}
 
 	private async removeSession(id: string, removeTranscript: boolean): Promise<void> {
+		await this.actors.get(id)?.close();
+		this.actors.delete(id);
+		this.engines.get(id)?.forget();
+		this.engines.delete(id);
 		await this.runtimes.dispose(id, "quit");
 		await this.browser.release(id);
 		const file = this.projector.file(id);
@@ -654,6 +705,10 @@ export class SessionCoordinator {
 	async close(): Promise<void> {
 		this.closing = true;
 		this.authorizer.cancelAll();
+		for (const actor of this.actors.values()) await actor.close();
+		this.actors.clear();
+		for (const engine of this.engines.values()) engine.forget();
+		this.engines.clear();
 		for (const id of this.runtimes.ids()) {
 			const pending = this.runtimes.pending(id);
 			if (!pending) continue;

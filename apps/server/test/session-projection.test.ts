@@ -104,11 +104,11 @@ test("boot reads summaries and opens a session body only on demand", () => {
 		["a", "b"],
 	);
 	assert.equal(store.snapshotReads, 0, "listing must not read the full snapshots");
-	assert.equal(projector.list().find((session) => session.id === "a")?.status, "idle");
+	assert.equal(projector.list().find((session) => session.id === "a")?.status, "interrupted");
 
 	const first = projector.get("a");
 	assert.equal(store.snapshotReads, 1, "opening a session reads its body once");
-	assert.equal(first.status, "idle");
+	assert.equal(first.status, "interrupted");
 	assert.equal(first.messages[0].complete, true);
 	assert.equal(first.tools[0].status, "failed", "an unfinished tool is marked failed");
 	assert.equal(first.tools[0].output, "Server restarted before execution completed");

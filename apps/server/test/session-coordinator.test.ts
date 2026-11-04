@@ -307,6 +307,7 @@ test("a failed session is recovered from the transcript and resumes", async () =
 			"the conversation comes from the transcript",
 		);
 		await coordinator.prompt(session.id, "after recovery", []);
+		await waitFor(() => factory.runtimes.get(session.id)?.prompts.includes("after recovery") === true);
 		assert.deepEqual(factory.runtimes.get(session.id)?.prompts, ["after recovery"], "a fresh runtime is used");
 		await coordinator.abort(session.id);
 	} finally {

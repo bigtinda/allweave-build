@@ -109,7 +109,7 @@ export function parseSessionMeta(raw: string): SessionMeta {
 /** Apply the restart rules shared by every hydration path. */
 export function normalizeRestored(detail: SessionDetail): SessionDetail {
 	detail.accessMode ??= "ask";
-	detail.status = "idle";
+	detail.status = detail.status === "interrupted" ? "interrupted" : "idle";
 	detail.approvals = [];
 	for (const tool of detail.tools) {
 		if (tool.status === "running" || tool.status === "approval") {

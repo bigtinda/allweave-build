@@ -37,7 +37,7 @@ import { ExecutionProgress } from "./ExecutionProgress.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { useSession } from "./useSession.ts";
 
-const statusLabel = { idle: "就绪", running: "执行中", approval: "等待确认", error: "执行失败" };
+const statusLabel = { idle: "就绪", running: "执行中", approval: "等待确认", error: "执行失败", interrupted: "已中断" };
 const abortedMessage = "This operation was aborted";
 const collapsedUserMessageThreshold = 1_200;
 interface ConversationMarker {

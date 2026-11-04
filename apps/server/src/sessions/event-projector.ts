@@ -67,10 +67,10 @@ export class EventProjector {
 	constructor(store: SessionStore) {
 		this.store = store;
 		for (const meta of store.sessionMetas()) {
-			// A restart clears pending approvals and marks the session idle without
-			// loading the conversation body.
+			// A restart cannot know whether a run is still alive. Mark it interrupted
+			// without loading the conversation body; the next prompt resumes normally.
 			if (meta.summary.status !== "idle") {
-				meta.summary.status = "idle";
+				meta.summary.status = "interrupted";
 				store.saveSessionMeta(meta);
 			}
 			this.records.set(meta.summary.id, { meta });

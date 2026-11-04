@@ -879,9 +879,13 @@ function StoragePanel({ onError }: { onError: (message: string) => void }) {
 									<Chip
 										size="small"
 										label={
-											{ idle: "就绪", running: "执行中", approval: "等待确认", error: "执行失败" }[
-												session.status
-											]
+											{
+												idle: "就绪",
+												running: "执行中",
+												approval: "等待确认",
+												error: "执行失败",
+												interrupted: "已中断",
+											}[session.status]
 										}
 									/>
 								</article>

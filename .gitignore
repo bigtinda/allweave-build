@@ -46,6 +46,8 @@ packages/coding-agent/binaries/
 packages/env/bin/
 todo.md
 plans/
+!docs/plans/
+!docs/plans/**
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
 collect.sh

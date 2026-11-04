@@ -27,7 +27,7 @@ function detail(id: string): SessionDetail {
 }
 
 test("imports legacy global event ids as per-session sequences", (t) => {
-	const directory = mkdtempSync(join(tmpdir(), "pi-console-kernel-migrate-"));
+	const directory = mkdtempSync(join(tmpdir(), "allweave-kernel-migrate-"));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const path = join(directory, "console.sqlite");
 	const old = new DatabaseSync(path);

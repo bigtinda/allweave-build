@@ -26,7 +26,7 @@ export function contained(root: string, target: string): boolean {
  * The list is shared with the remote host implementation, so the policy has a
  * single source.
  */
-export const privatePathNames: readonly string[] = [".git", ".pi", ".env", ".pi-console"];
+export const privatePathNames: readonly string[] = [".git", ".pi", ".env", ".allweave"];
 
 /** Additional names refused on remote hosts, where the project home is shared. */
 export const remotePrivatePathNames: readonly string[] = [

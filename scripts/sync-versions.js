@@ -9,11 +9,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findPackageDirectories } from "./package-workspaces.mjs";
 
-const GENERATED_PACKAGE_SUFFIXES = [join("coding-agent", "install-lock")];
-
 const packageRoot = process.argv[2] ?? "packages";
 const workspacePackages = findPackageDirectories(packageRoot)
-	.filter((directory) => !GENERATED_PACKAGE_SUFFIXES.some((suffix) => directory.endsWith(suffix)))
 	.map((directory) => {
 		const path = join(directory, "package.json");
 		return { data: JSON.parse(readFileSync(path, "utf8")), path };
@@ -48,7 +45,7 @@ for (const pkg of workspacePackages) {
 		}
 
 		for (const [dependencyName, currentSpecifier] of Object.entries(dependencies)) {
-			// Registry aliases such as `npm:@earendil-works/pi-ai@0.1.2` are never workspace-linked,
+			// Registry aliases such as `npm:@allweave/model@0.1.2` are never workspace-linked,
 			// so lockstep bumping them would point at a version that is not published yet.
 			const version = versionMap.get(dependencyName);
 			const newSpecifier = version ? `^${version}` : null;

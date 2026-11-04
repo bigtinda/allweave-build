@@ -19,15 +19,14 @@
 - Inline single-line helpers that have only one call site.
 - Check node_modules for external API types; don't guess.
 - **No inline imports** (`await import()`, `import("pkg").Type`, dynamic type imports). Top-level imports only.
-- In `packages/coding-agent`, resolve package assets through helpers in `src/config.ts`. Do not use `__dirname` directly; the helpers account for source checkouts, npm installations, and standalone binaries.
 - Never remove or downgrade code to fix type errors from outdated deps; upgrade the dep instead.
-- Use only erasable TypeScript syntax (Node strip-only mode) in code checked by the root config (`packages/*/src`, `packages/*/test`, `packages/coding-agent/examples`): no parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other constructs needing JS emit. Use explicit fields with constructor assignments.
+- Use only erasable TypeScript syntax (Node strip-only mode) in code checked by the root config (`packages/*/src`, `packages/*/test`, `apps/*`): no parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other constructs needing JS emit. Use explicit fields with constructor assignments.
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it.
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
-- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
-- Preserve Pi's lightweight profile. The kernel path stays single-process: no new runtime dependencies, no DI container, ORM, generic event bus, or workflow engine. Lazy-load providers/resources/tools, batch event writes, keep the stable prompt prefix cacheable, and benchmark hot paths. Do not trade startup, memory, or streaming behavior for abstraction.
-- The target architecture removes remote workspaces and the CLI. Do not add new dependencies on `pi-env`, `chord`, `pi-durable`, `pi-tui`, or new CLI surfaces.
+- Never modify `packages/model/src/models.generated.ts` directly; update `packages/model/scripts/generate-models.ts` instead, then regenerate.
+- Preserve the lightweight profile. The kernel path stays single-process: no new runtime dependencies, no DI container, ORM, generic event bus, or workflow engine. Lazy-load providers/resources/tools, batch event writes, keep the stable prompt prefix cacheable, and benchmark hot paths. Do not trade startup, memory, or streaming behavior for abstraction.
+- The product is local-only: no remote workspace service and no CLI. Do not add external agent SDKs, orchestration frameworks, or new CLI surfaces.
 
 ## Commands
 
@@ -35,9 +34,8 @@
 - Never run `npm run build` or `npm test` unless requested by the user.
 - Never run the full vitest suite directly: it includes e2e tests that activate when endpoint/auth env vars are present. For all non-e2e tests, run `./test.sh` from the repo root. Otherwise run specific tests from the package root:
   - Vitest: `node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run test/specific.test.ts`
-  - `packages/tui` (`node:test`): `node --test test/specific.test.ts`
 - If you create or modify a test file, run it and iterate on test or implementation until it passes.
-- For `packages/coding-agent/test/suite/`, use `test/suite/harness.ts` + the faux provider. No real provider APIs, keys, or paid tokens.
+- Tests must use local fakes or recorded fixtures. No real provider APIs, keys, or paid tokens.
 - When regressions tests for fixing a github issue, add a comment with the github issue number next to the test.
 - For ad-hoc scripts, `write` them to a temp file (e.g. `/tmp`), run, edit if needed, remove when done. Don't embed multi-line scripts in `bash` commands.
 - Never commit unless the user asks.
@@ -48,20 +46,19 @@
 - When updating `undici`, you MUST read its changelog/release notes for the target version and evaluate whether any changes may affect functionality before applying the update.
 - Hydrate/update locally with `npm install --ignore-scripts`; clean/CI-style with `npm ci --ignore-scripts`. Don't run lifecycle scripts unless the user asks.
 - If dep metadata changes, refresh `package-lock.json` with `npm install --package-lock-only --ignore-scripts`.
-- If `packages/coding-agent/install-lock/` needs regen, run `node scripts/generate-coding-agent-install-lock.mjs` (verify with `--check` or `npm run check`). New deps with lifecycle scripts require review and an explicit allowlist entry in that script; never add one silently.
 - Pre-commit blocks lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1`. Don't bypass unless the user wants the lockfile change committed.
 
 ## Git
 
-Multiple pi sessions may be running in this cwd at the same time, each modifying different files. Git operations that touch unstaged, staged, or untracked files outside your own changes will stomp on other sessions' work. Follow these rules:
+Multiple agent sessions may be running in this cwd at the same time, each modifying different files. Git operations that touch unstaged, staged, or untracked files outside your own changes will stomp on other sessions' work. Follow these rules:
 
 Committing:
 
 - Only commit files YOU changed in THIS session.
 - Stage explicit paths (`git add <path1> <path2>`); never `git add -A` / `git add .`.
 - Before committing, run `git status` and verify you are only staging your files.
-- `packages/ai/src/models.generated.ts` may always be included alongside your files.
-- Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
+- `packages/model/src/models.generated.ts` may always be included alongside your files.
+- Message format: `{feat,fix,docs,chore}[(model,kernel,server,web,desktop)]: <commit message>`. Message is informative and concise.
 - This worktree is authorized to commit after each completed change once checks pass. Do not push to GitHub; keep commits local. Still stage only files changed in this session; if checks fail for pre-existing unrelated errors, report them before committing.
 
 Never run (destroys other agents' work or bypasses checks):
@@ -76,7 +73,7 @@ If rebase conflicts occur:
 
 ## Issues and PRs
 
-See `CONTRIBUTING.md` for the contributor gate (auto-close workflows, `lgtm`/`lgtmi`, quality bar).
+See `CONTRIBUTING.md` for the contribution rules and quality bar.
 
 When reviewing PRs:
 
@@ -116,8 +113,8 @@ Rules:
 
 Attribution:
 
-- Internal (from issues): `Fixed foo bar ([#123](https://github.com/earendil-works/pi/issues/123))`
-- External contributions: `Added feature X ([#456](https://github.com/earendil-works/pi/pull/456) by [@username](https://github.com/username))`
+- Internal (from issues): `Fixed foo bar ([#123](https://github.com/bigtinda/allweave-build/issues/123))`
+- External contributions: `Added feature X ([#456](https://github.com/bigtinda/allweave-build/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 

@@ -1,1 +1,1 @@
-export * from "@pi-console/protocol";
+export * from "@allweave/protocol";

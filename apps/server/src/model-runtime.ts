@@ -13,10 +13,10 @@ import type {
 	ModelsStoreOperationOptions,
 	MutableModels,
 	Provider,
-} from "@earendil-works/pi-ai";
-import { createModels, createProvider } from "@earendil-works/pi-ai";
-import { getApiProvider, registerBuiltInApiProviders } from "@earendil-works/pi-ai/compat";
-import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+} from "@allweave/model";
+import { createModels, createProvider } from "@allweave/model";
+import { getApiProvider, registerBuiltInApiProviders } from "@allweave/model/compat";
+import { builtinProviders } from "@allweave/model/providers/all";
 
 type AuthFile = Record<string, Credential>;
 type ModelsFile = Record<string, ModelsStoreEntry>;
@@ -198,11 +198,11 @@ function customProvider(id: string, config: CustomProviderConfig): Provider {
 				},
 				async resolve({ ctx, credential }) {
 					const credentialKey = credential?.type === "api_key" ? credential.key : undefined;
-					const key = credentialKey ?? config.apiKey ?? (await ctx.env("PI_CONSOLE_MODEL_KEY"));
+					const key = credentialKey ?? config.apiKey ?? (await ctx.env("ALLWEAVE_MODEL_KEY"));
 					if (!key) return undefined;
 					return {
 						auth: { apiKey: key },
-						source: credentialKey ? "auth.json" : config.apiKey ? "models.json" : "PI_CONSOLE_MODEL_KEY",
+						source: credentialKey ? "auth.json" : config.apiKey ? "models.json" : "ALLWEAVE_MODEL_KEY",
 					};
 				},
 			},

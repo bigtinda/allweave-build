@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall } from "@allweave/model/compat";
 import { AgentService } from "../src/agent.ts";
 import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";
 import { ConsoleStore } from "../src/store.ts";
@@ -28,8 +28,8 @@ test(
 		const dataDirectory = join(directory, "data");
 		await mkdir(root);
 		await mkdir(agentDirectory);
-		const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = agentDirectory;
+		const previousAgentDirectory = process.env.ALLWEAVE_AGENT_DIR;
+		process.env.ALLWEAVE_AGENT_DIR = agentDirectory;
 		const harness = await createHarness();
 		const store = new ConsoleStore(dataDirectory);
 		const workspace = { id: randomUUID(), name: "project", path: root };
@@ -119,8 +119,8 @@ test(
 			await agents.close();
 			store.close();
 			harness.cleanup();
-			if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
-			else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+			if (previousAgentDirectory === undefined) delete process.env.ALLWEAVE_AGENT_DIR;
+			else process.env.ALLWEAVE_AGENT_DIR = previousAgentDirectory;
 			await rm(directory, { recursive: true, force: true });
 		}
 	},
@@ -133,8 +133,8 @@ test("a failed native gateway is not cached and the next run starts clean", { ti
 	const dataDirectory = join(directory, "data");
 	await mkdir(root);
 	await mkdir(agentDirectory);
-	const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-	process.env.PI_CODING_AGENT_DIR = agentDirectory;
+	const previousAgentDirectory = process.env.ALLWEAVE_AGENT_DIR;
+	process.env.ALLWEAVE_AGENT_DIR = agentDirectory;
 	const harness = await createHarness();
 	const store = new ConsoleStore(dataDirectory);
 	const workspace = { id: randomUUID(), name: "project", path: root };
@@ -164,8 +164,8 @@ test("a failed native gateway is not cached and the next run starts clean", { ti
 		await agents.close();
 		store.close();
 		harness.cleanup();
-		if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+		if (previousAgentDirectory === undefined) delete process.env.ALLWEAVE_AGENT_DIR;
+		else process.env.ALLWEAVE_AGENT_DIR = previousAgentDirectory;
 		await rm(directory, { recursive: true, force: true });
 	}
 });

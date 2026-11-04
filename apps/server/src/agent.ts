@@ -1,4 +1,4 @@
-import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
+import type { NativeModelRuntime } from "@allweave/kernel-adapters";
 import type {
 	AccessMode,
 	ChatImage,
@@ -18,7 +18,7 @@ import type { ProviderManager } from "./providers.ts";
 import { SessionCoordinator } from "./sessions/coordinator.ts";
 import { EventHub } from "./sessions/event-hub.ts";
 import { EventProjector, type SessionStore } from "./sessions/event-projector.ts";
-import { AgentRuntimeFactory } from "./sessions/pi-runtime.adapter.ts";
+import { AgentRuntimeFactory } from "./sessions/runtime.adapter.ts";
 import type { ApprovalStore } from "./sessions/tool-authorization.ts";
 import type { ConsoleStore } from "./store.ts";
 import { WorkspaceAccess } from "./workspaces/workspace-access.ts";

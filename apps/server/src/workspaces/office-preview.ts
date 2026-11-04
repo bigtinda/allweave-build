@@ -17,7 +17,7 @@ export function officePreview(buffer: Buffer, path: string): Promise<{ base64: s
 	const job = queue
 		.catch(() => {})
 		.then(async () => {
-			const directory = await mkdtemp(join(tmpdir(), "pi-office-"));
+			const directory = await mkdtemp(join(tmpdir(), "allweave-office-"));
 			try {
 				const input = join(directory, `document${extension}`);
 				await writeFile(input, buffer);

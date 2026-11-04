@@ -50,11 +50,3 @@ export interface AppPluginRegistry {
 	revision: number;
 	plugins: InstalledAppPlugin[];
 }
-
-/** Package identity used to compare configured sources independent of a pinned version. */
-export function packageIdentity(source: string): string {
-	if (!source.startsWith("npm:")) return source;
-	const name = source.slice(4);
-	const versionAt = name.startsWith("@") ? name.indexOf("@", name.indexOf("/") + 1) : name.indexOf("@");
-	return `npm:${versionAt === -1 ? name : name.slice(0, versionAt)}`;
-}

@@ -12,7 +12,7 @@ import { WorkspaceAccess } from "./workspace-access.ts";
 const hiddenDirectoryNames = new Set([
 	".git",
 	".pi",
-	".pi-console",
+	".allweave",
 	"node_modules",
 	"system volume information",
 	"$recycle.bin",

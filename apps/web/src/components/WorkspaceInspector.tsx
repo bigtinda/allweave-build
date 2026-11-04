@@ -1,5 +1,5 @@
+import type { SessionDetail } from "@allweave/protocol";
 import { IconButton, Tooltip } from "@mui/material";
-import type { SessionDetail } from "@pi-console/protocol";
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { ToolCard } from "./ToolCard.tsx";

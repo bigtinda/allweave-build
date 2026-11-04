@@ -5,38 +5,70 @@
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"paths": {
-			"@earendil-works/chord": ["./packages/chord/src/index.ts"],
-			"@earendil-works/chord/bundler": ["./packages/chord/src/bundler.ts"],
-			"@earendil-works/chord/context": ["./packages/chord/src/context/index.ts"],
-			"@earendil-works/chord/delta": ["./packages/chord/src/delta/index.ts"],
-			"@earendil-works/chord/node": ["./packages/chord/src/node.ts"],
-			"@earendil-works/pi-telemetry": ["./packages/telemetry/src/index.ts"],
-			"@earendil-works/pi-telemetry/testing": ["./packages/telemetry/src/testing/index.ts"],
-			"@earendil-works/pi-codemode": ["./packages/codemode/src/index.ts"],
-			"@earendil-works/pi-codemode/declarations": ["./packages/codemode/src/declarations.ts"],
-			"@earendil-works/pi-codemode/source": ["./packages/codemode/src/source.ts"],
-			"@earendil-works/pi-codemode/worker": ["./packages/codemode/src/runtime/worker.ts"],
-			"@earendil-works/pi-mcp": ["./packages/mcp/src/index.ts"],
-			"@earendil-works/pi-mcp/oauth": ["./packages/mcp/src/oauth/index.ts"],
-			"@earendil-works/pi-mcp/testing": ["./packages/mcp/src/testing/index.ts"],
-			"@earendil-works/pi-ai": ["./packages/ai/src/index.ts"],
-			"@earendil-works/pi-ai/oauth": ["./packages/ai/src/oauth.ts"],
-			"@earendil-works/pi-ai/*": ["./packages/ai/src/*.ts", "./packages/ai/src/providers/*.ts"],
-			"@earendil-works/pi-ai/dist/*": ["./packages/ai/src/*"],
-			"@earendil-works/pi-durable": ["./packages/durable/src/index.ts"],
-			"@earendil-works/pi-durable/testing": ["./packages/durable/src/testing/index.ts"],
-			"@earendil-works/pi-durable/*": [
-				"./packages/durable/src/*.ts",
-				"./packages/durable/src/*/index.ts",
-				"./packages/durable/src/*"
+			"@allweave/telemetry": [
+				"./packages/telemetry/src/index.ts"
 			],
-			"@pi-console/protocol": ["./packages/protocol/src/index.ts"],
-			"@pi-console/kernel": ["./packages/kernel/src/index.ts"],
-			"@pi-console/kernel-adapters": ["./packages/kernel-adapters/src/index.ts"],
-			"@pi-console/kernel/*": ["./packages/kernel/src/*"],
-			"@pi-console/protocol/*": ["./packages/protocol/src/*"],
-			"typebox": ["./node_modules/typebox"]
+			"@allweave/telemetry/testing": [
+				"./packages/telemetry/src/testing/index.ts"
+			],
+			"@allweave/sandbox": [
+				"./packages/sandbox/src/index.ts"
+			],
+			"@allweave/sandbox/declarations": [
+				"./packages/sandbox/src/declarations.ts"
+			],
+			"@allweave/sandbox/source": [
+				"./packages/sandbox/src/source.ts"
+			],
+			"@allweave/sandbox/worker": [
+				"./packages/sandbox/src/runtime/worker.ts"
+			],
+			"@allweave/mcp": [
+				"./packages/mcp/src/index.ts"
+			],
+			"@allweave/mcp/oauth": [
+				"./packages/mcp/src/oauth/index.ts"
+			],
+			"@allweave/mcp/testing": [
+				"./packages/mcp/src/testing/index.ts"
+			],
+			"@allweave/model": [
+				"./packages/model/src/index.ts"
+			],
+			"@allweave/model/oauth": [
+				"./packages/model/src/oauth.ts"
+			],
+			"@allweave/model/*": [
+				"./packages/model/src/*.ts",
+				"./packages/model/src/providers/*.ts"
+			],
+			"@allweave/model/dist/*": [
+				"./packages/model/src/*"
+			],
+			"@allweave/protocol": [
+				"./packages/protocol/src/index.ts"
+			],
+			"@allweave/kernel": [
+				"./packages/kernel/src/index.ts"
+			],
+			"@allweave/kernel-adapters": [
+				"./packages/kernel-adapters/src/index.ts"
+			],
+			"@allweave/kernel/*": [
+				"./packages/kernel/src/*"
+			],
+			"@allweave/protocol/*": [
+				"./packages/protocol/src/*"
+			],
+			"typebox": [
+				"./node_modules/typebox"
+			]
 		}
 	},
-	"include": ["scripts/model-catalog-protocol.ts", "scripts/model-catalog-protocol.test.ts", "packages/*/src/**/*", "packages/*/test/**/*"]
+	"include": [
+		"scripts/model-catalog-protocol.ts",
+		"scripts/model-catalog-protocol.test.ts",
+		"packages/*/src/**/*",
+		"packages/*/test/**/*"
+	]
 }

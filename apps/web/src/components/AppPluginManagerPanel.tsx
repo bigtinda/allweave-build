@@ -1,3 +1,4 @@
+import type { Workspace } from "@allweave/protocol";
 import {
 	Alert,
 	Button,
@@ -9,7 +10,6 @@ import {
 	MenuItem,
 	Select,
 } from "@mui/material";
-import type { Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";

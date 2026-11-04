@@ -28,7 +28,7 @@ export class KernelSessionConflict extends Error {
 	}
 }
 
-/** The engine seam: Pi today, native loop later. */
+/** The engine seam used by the native loop. */
 export interface AgentEngine {
 	run(text: string, context: KernelRunContext): Promise<void>;
 	abort(): Promise<void>;

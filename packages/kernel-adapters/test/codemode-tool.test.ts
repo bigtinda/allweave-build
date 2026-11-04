@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCodemodeNativeTool } from "../src/codemode/tool.ts";
+import { createCodemodeNativeTool } from "../src/sandbox/tool.ts";
 
 test("runs scripts against read-only tools", async () => {
 	const echo = {

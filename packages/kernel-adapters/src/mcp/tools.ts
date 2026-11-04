@@ -1,4 +1,4 @@
-import type { NativeTool, NativeToolResult } from "@pi-console/kernel";
+import type { NativeTool, NativeToolResult } from "@allweave/kernel";
 
 export interface McpToolInfo {
 	name: string;
@@ -21,7 +21,7 @@ export interface McpCallResult {
 	isError?: boolean;
 }
 
-/** Structural subset of @earendil-works/pi-mcp's client. */
+/** Structural subset of @allweave/mcp's client. */
 export interface McpToolClient {
 	listTools(): Promise<McpToolInfo[]>;
 	callTool(name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<McpCallResult>;

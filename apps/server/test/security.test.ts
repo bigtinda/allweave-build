@@ -18,7 +18,7 @@ test("the shared path predicate preserves local and remote access differences", 
 });
 
 test("workspace paths reject traversal, private configuration and directory links", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "pi-console-security-"));
+	const directory = await mkdtemp(join(tmpdir(), "allweave-security-"));
 	try {
 		const root = join(directory, "project");
 		const outside = join(directory, "outside");

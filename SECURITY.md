@@ -1,87 +1,59 @@
 # Security Policy
 
-This document should guide you about understanding the security concept behind
-Pi and also where the boundaries are.
+AllWeave Build is a local, single-user workbench. The service binds to
+`127.0.0.1`, runs with the permissions of the user that starts it, and is not
+designed for public exposure or multi-tenant isolation.
 
-In general Pi is a coding agent that runs locally within the security boundary
-of the user that is running it.  It's the responsibility of the user to monitor
-its operations or to contain it within a container, virtual machine or other
-Sandbox solution.
+The local user account, the workspace, and files writable by that account are
+inside the same trust boundary as the AllWeave process. If an attacker can
+modify the workspace, shell startup files, environment, or AllWeave data
+directory, they can generally influence the workbench or other local developer
+tools. Reports that require this prior local write access are not security
+boundary violations unless they show AllWeave granting access across an OS
+privilege boundary.
 
-Pi treats the local user account and files writable by that account as inside
-the same trust boundary as the Pi process itself.  If an attacker can modify files
-under the user's home directory, workspace, shell startup files, environment, or
-Pi configuration, they can generally influence Pi or other local developer tools.
-Reports that depend on such prior local write access are not security
-vulnerabilities unless they demonstrate how Pi grants that write access or crosses
-an operating-system privilege boundary.
-
-Pi relies on users installing trustworthy extensions and loading trustworthy
-skills and only to use pi within trusted repositories.  This is because files
-like `AGENTS.md` or instructions in comments can be used to prompt inject the
-coding agent trivially and this cannot be protected against.
+AllWeave loads model providers, MCP servers, skills, and application plugins
+chosen by the user. Only use trusted providers, MCP servers, repositories, and
+manifests. Prompt injection through repository files or model output is expected
+input, not a vulnerability.
 
 ## Reporting a Vulnerability
 
-If you believe you found a security vulnerability in pi or another package in
-this repository, please report it privately by either:
+Report privately through GitHub Security Advisories for this repository. Include:
 
-- Emailing `security@earendil.com`, or
-- Opening a private report through GitHub Security Advisories for this repository
+- a description of the issue and its impact;
+- steps to reproduce, a proof of concept, or relevant logs;
+- the affected package, version, commit, or configuration;
+- any known mitigations.
 
-Please include:
-
-- A description of the issue and its impact
-- Steps to reproduce, proof of concept, or relevant logs
-- Affected package, version, commit, or configuration
-- Any known mitigations
-
-Do not open a public issue for security-sensitive reports.  We will review
-reports and coordinate disclosure as appropriate.
+Do not open a public issue for a security-sensitive report.
 
 ## Scope
 
-Security issues in the distributed packages, command-line tools, APIs, and
-repository code are in scope as well as earendil operated infrastructure
-on `pi.dev`.
+- Repository code, published `@allweave/*` packages, and the desktop application.
+- Authentication and authorization boundaries inside the workbench.
+- File, command, model, MCP, browser, and sandbox isolation bugs.
+- Credential handling and accidental credential disclosure.
+- Dependency vulnerabilities reachable through the shipped runtime.
 
-## Out Of Scope
+## Out of Scope
 
-- Local code execution or sandboxing behavior (the Pi coding agent intentionally does not have a sandbox)
-- Behavior of pi extensions or skills installed by the user
-- Risks from working in untrusted repositories
-- Risks from installing untrusted extensions, skills, packages, or tools
-- Isuses caused by non trustworthy MITM proxies
-- Public internet exposure of a Pi installation
-- Prompt injection attacks
-- Exposed secrets that are third-party/user-controlled credentials
-- Reports requiring the ability to create, modify, delete, or replace files,
-  directories, symlinks, environment variables, shell configuration, or other
-  user-controlled local state on the target machine. This includes `~/.pi`,
-  `~/.pi/agent/models.json`, workspace files, `AGENTS.md`, skills, extensions,
-  extension configuration, dotfiles, and files synchronized through NFS, roaming
-  profiles, or dotfile managers, unless the report shows how Pi itself grants
-  that access.
-- Issues caused by intentionally weakened user configuration.
-- Resource/DOS claims that require trusted local input/config against the pi coding agent.
-- Reports about malicious model output.
-- User-approved or user-initiated local actions presented as vulnerabilities.
+- Prompt injection or malicious model output.
+- Behavior of user-installed skills, MCP servers, plugins, or models.
+- Risks from working in untrusted repositories or opening untrusted documents.
+- Local code execution or host-tool behavior that the user approved.
+- Missing OS-level sandboxing: the embedded QuickJS sandbox limits script
+  memory, output, and time, but host tools run with the user's permissions.
+- Public internet exposure or multi-user isolation; the server is loopback-only.
+- Reports requiring the ability to modify local files, environment variables,
+  shell configuration, or the AllWeave data directory, unless they show a
+  privilege boundary bypass.
+- Denial-of-service claims that require trusted local input or configuration.
 
 ## Notes for Reporters
 
-The most useful reports show a current, reproducible security boundary bypass
-with demonstrated impact.  Reports that only show expected local-agent behavior,
-prompt injection, or a malicious trusted extension/skill are not security
-vulnerabilities under this model.
-
-For example, a report showing that malicious contents written to a trusted Pi
-configuration file cause Pi to execute commands, load attacker-controlled tools,
-send credentials to an attacker-controlled endpoint, or otherwise change behavior
-is out of scope.
-
-When possible, include the exact affected path, package version or commit SHA,
-configuration, and a proof of concept against the latest release or latest
-`main`.  For dependency reports, include evidence that the shipped dependency is
-affected and that the issue is reachable through Pi.  For exposed-secret reports,
-include evidence that the credential is owned by Earendil or grants access to
-Earendil-operated infrastructure or services.
+The most useful reports show a current, reproducible boundary bypass with
+demonstrated impact. Include the exact path, package version or commit,
+configuration, and a proof of concept against the latest release or `main`.
+For dependency reports, include evidence that the shipped dependency is
+affected and reachable through AllWeave.

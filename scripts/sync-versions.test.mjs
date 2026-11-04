@@ -25,46 +25,36 @@ function runSyncVersions(root) {
 	});
 }
 
-test("synchronizes private dependencies without touching registry aliases, generated manifests, or published lockstep", async () => {
-	const root = await mkdtemp(join(tmpdir(), "pi-sync-versions-"));
+test("synchronizes private dependencies without touching registry aliases or published lockstep", async () => {
+	const root = await mkdtemp(join(tmpdir(), "allweave-sync-versions-"));
 	try {
-		await writeManifest(root, "packages/ai", {
-			name: "@earendil-works/pi-ai",
+		await writeManifest(root, "packages/model", {
+			name: "@allweave/model",
 			version: "2.0.0",
 		});
-		await writeManifest(root, "packages/coding-agent", {
-			name: "@earendil-works/pi-coding-agent",
+		await writeManifest(root, "packages/kernel", {
+			name: "@allweave/kernel",
 			version: "2.0.0",
 		});
-		await writeManifest(root, "packages/evals", {
-			name: "@earendil-works/pi-evals",
+		await writeManifest(root, "packages/app", {
+			name: "@allweave/app",
 			version: "9.9.9",
 			private: true,
 			dependencies: {
-				"@earendil-works/pi-coding-agent": "^1.0.0",
-				"@mariozechner/pi-ai": "npm:@earendil-works/pi-ai@1.0.0",
-			},
-		});
-		await writeManifest(root, "packages/coding-agent/install-lock", {
-			name: "generated-install-lock",
-			version: "0.0.0",
-			private: true,
-			dependencies: {
-				"@earendil-works/pi-coding-agent": "^1.0.0",
+				"@allweave/kernel": "^1.0.0",
+				"@vendor/model": "npm:@allweave/model@1.0.0",
 			},
 		});
 
 		const result = runSyncVersions(root);
 		assert.equal(result.status, 0, result.stderr);
 
-		const evalsManifest = await readManifest(root, "packages/evals");
-		assert.equal(evalsManifest.dependencies["@earendil-works/pi-coding-agent"], "^2.0.0");
-		assert.equal(evalsManifest.dependencies["@mariozechner/pi-ai"], "npm:@earendil-works/pi-ai@1.0.0");
-		const generatedManifest = await readManifest(root, "packages/coding-agent/install-lock");
-		assert.equal(generatedManifest.dependencies["@earendil-works/pi-coding-agent"], "^1.0.0");
+		const appManifest = await readManifest(root, "packages/app");
+		assert.equal(appManifest.dependencies["@allweave/kernel"], "^2.0.0");
+		assert.equal(appManifest.dependencies["@vendor/model"], "npm:@allweave/model@1.0.0");
 
-		await writeManifest(root, "packages/ai", {
-			name: "@earendil-works/pi-ai",
+		await writeManifest(root, "packages/model", {
+			name: "@allweave/model",
 			version: "3.0.0",
 		});
 		const lockstepFailure = runSyncVersions(root);

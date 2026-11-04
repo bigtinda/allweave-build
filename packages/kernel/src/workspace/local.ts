@@ -14,7 +14,7 @@ function error(message: string): never {
  */
 export class LocalWorkspace implements NativeWorkspace {
 	readonly root: string;
-	private readonly spillRoot = join(tmpdir(), "pi-console-spill");
+	private readonly spillRoot = join(tmpdir(), "allweave-spill");
 	private readonly locks = new Map<string, Promise<void>>();
 
 	constructor(root: string) {

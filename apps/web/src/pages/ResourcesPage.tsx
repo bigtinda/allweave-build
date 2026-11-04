@@ -1,3 +1,16 @@
+import type {
+	KernelInfo,
+	ProviderAuthPrompt,
+	ProviderLoginType,
+	ProviderLoginView,
+	ProviderOption,
+	Resources,
+	SessionDetail,
+	SessionSummary,
+	StorageSummary,
+	ThinkingLevel,
+	Workspace,
+} from "@allweave/protocol";
 import {
 	Accordion,
 	AccordionDetails,
@@ -20,36 +33,14 @@ import {
 	MenuItem,
 	Pagination,
 	Select,
-	Tab,
-	Tabs,
 	TextField,
 } from "@mui/material";
-import type {
-	DefaultPluginStatus,
-	KernelInfo,
-	PackageImportResult,
-	PiConfiguredPackage,
-	PiPackageJob,
-	ProviderAuthPrompt,
-	ProviderLoginType,
-	ProviderLoginView,
-	ProviderOption,
-	ResourceImportFile,
-	Resources,
-	SessionDetail,
-	SessionSummary,
-	StorageSummary,
-	ThinkingLevel,
-	Workspace,
-} from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { packageIdentity } from "../../../shared/src/plugins.ts";
 import { AppPluginManagerPanel } from "../components/AppPluginManagerPanel.tsx";
 import { LoadingState } from "../components/LoadingState.tsx";
 import { PersonalizationPanel } from "../components/PersonalizationPanel.tsx";
-import { type PluginFeatureId, PluginFeaturePanel } from "../components/PluginFeaturePanel.tsx";
 import { ProviderLogo } from "../components/ProviderLogo.tsx";
 import { LoadedExtensionsPanel, SkillLibraryPanel } from "../components/SkillLibraryPanel.tsx";
 import { SpringPages } from "../components/SpringPages.tsx";
@@ -60,7 +51,6 @@ import {
 	ChevronRight,
 	Database,
 	ExternalLink,
-	FolderUp,
 	HardDrive,
 	KeyRound,
 	Menu,
@@ -71,16 +61,10 @@ import {
 	Settings2,
 } from "../components/WorkbenchIcons.tsx";
 import { useSpringLayout } from "../hooks/useSpringLayout.ts";
-import { ApiError, api } from "../services/api.ts";
-import { encodeResourceImportFiles } from "../services/resource-import.ts";
+import { api } from "../services/api.ts";
 import { usePreferences } from "../stores/preferences.ts";
 import { SpringValue } from "../theme/motion.ts";
-import {
-	ArchiveManagementPanel,
-	BrowserManagementPanel,
-	SubagentManagementPanel,
-	UsageStatisticsPanel,
-} from "./WorkbenchSettingsPanels.tsx";
+import { ArchiveManagementPanel, BrowserManagementPanel, UsageStatisticsPanel } from "./WorkbenchSettingsPanels.tsx";
 
 interface Settings {
 	mode: string;
@@ -181,13 +165,6 @@ function SettingsNavigation({ section }: { section: SettingsSection }) {
 				浏览器
 			</NavLink>
 			<NavLink
-				to="/settings/subagents"
-				className={section === "subagents" ? "active" : ""}
-				aria-current={section === "subagents" ? "page" : undefined}
-			>
-				子智能体
-			</NavLink>
-			<NavLink
 				to="/settings/usage"
 				className={section === "usage" ? "active" : ""}
 				aria-current={section === "usage" ? "page" : undefined}
@@ -224,48 +201,8 @@ const customApis = [
 	{ id: "openai-responses", label: "OpenAI Responses" },
 	{ id: "anthropic-messages", label: "Anthropic Messages" },
 	{ id: "google-generative-ai", label: "Google Generative AI" },
-	{ id: "pi-messages", label: "兼容消息接口" },
+	{ id: "allweave-messages", label: "兼容消息接口" },
 ] as const;
-
-const pluginCatalog: Array<{ id: PluginFeatureId; source: string; title: string; description: string }> = [
-	{
-		id: "pi-mcp-adapter",
-		source: "npm:pi-mcp-adapter",
-		title: "MCP Adapter",
-		description: "配置 MCP 服务，按需发现并调用工具。",
-	},
-	{
-		id: "pi-web-access",
-		source: "npm:pi-web-access",
-		title: "Web Access",
-		description: "在会话中搜索网页、读取链接和整理来源。",
-	},
-	{
-		id: "pi-subagents",
-		source: "npm:pi-subagents",
-		title: "Subagents",
-		description: "把任务委派给分身并在主会话中汇总。",
-	},
-	{
-		id: "pi-mcp-extension",
-		source: "npm:pi-mcp-extension",
-		title: "MCP Extension",
-		description: "配置 stdio、HTTP 和 SSE MCP server。",
-	},
-	{
-		id: "@agimon-ai/doompi-git",
-		source: "npm:@agimon-ai/doompi-git",
-		title: "Git 工作树",
-		description: "在 Git 工作树中启动隔离的会话。",
-	},
-];
-
-const packagePageSize = 8;
-
-interface PackageCardData extends PiConfiguredPackage {
-	configured: boolean;
-	defaultStatus?: DefaultPluginStatus;
-}
 
 function promptIsSelect(prompt: ProviderAuthPrompt): prompt is Extract<ProviderAuthPrompt, { type: "select" }> {
 	return prompt.type === "select";
@@ -281,493 +218,6 @@ function formatBytes(bytes: number): string {
 		unit = units[index];
 	}
 	return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`;
-}
-
-function PackageManagerPanel({
-	onError,
-	sessions,
-	workspaces,
-}: {
-	onError: (message: string) => void;
-	sessions: SessionSummary[];
-	workspaces: Workspace[];
-}) {
-	const client = useQueryClient();
-	const [packageSearch, setPackageSearch] = useState("");
-	const [installInput, setInstallInput] = useState("");
-	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [jobId, setJobId] = useState("");
-	const [activePlugin, setActivePlugin] = useState<PluginFeatureId>();
-	const [packagePage, setPackagePage] = useState(1);
-	const [packageAction, setPackageAction] = useState<
-		{ source: string; kind: "remove" } | { source: string; kind: "apply"; applied: boolean }
-	>();
-	const [packageActionPending, setPackageActionPending] = useState(false);
-	const pluginFolderInput = useRef<HTMLInputElement>(null);
-	const packageGrid = useRef<HTMLDivElement>(null);
-	const [pendingPluginFiles, setPendingPluginFiles] = useState<ResourceImportFile[]>();
-	const [preparingPlugin, setPreparingPlugin] = useState(false);
-	useEffect(() => {
-		pluginFolderInput.current?.setAttribute("webkitdirectory", "");
-	}, []);
-	const packages = useQuery({
-		queryKey: ["packages"],
-		queryFn: () => api<{ packages: PiConfiguredPackage[] }>("/packages"),
-	});
-	const defaults = useQuery({
-		queryKey: ["default-plugins"],
-		queryFn: () => api<DefaultPluginStatus[]>("/packages/defaults"),
-		refetchInterval: (query) =>
-			query.state.data?.some((item) => item.status === "pending" || item.status === "running") ? 800 : false,
-	});
-	const defaultsUnavailable = Boolean(defaults.error && !defaults.data);
-	const job = useQuery({
-		queryKey: ["package-job", jobId],
-		enabled: !!jobId,
-		queryFn: () => api<PiPackageJob>(`/packages/jobs/${jobId}`),
-		refetchInterval: (query) => (query.state.data?.status === "running" ? 800 : false),
-	});
-	useEffect(() => {
-		if (job.data?.status === "succeeded") {
-			void client.invalidateQueries({ queryKey: ["packages"] });
-			void client.invalidateQueries({ queryKey: ["default-plugins"] });
-			void client.invalidateQueries({ queryKey: ["storage"] });
-		}
-	}, [job.data?.status, client]);
-	const packageCards = useMemo(() => {
-		const cards = new Map<string, PackageCardData>();
-		for (const item of packages.data?.packages ?? []) {
-			cards.set(packageIdentity(item.source), { ...item, configured: true });
-		}
-		for (const status of defaults.data ?? []) {
-			const identity = packageIdentity(status.source);
-			const existing = cards.get(identity);
-			cards.set(identity, {
-				...(existing ?? { source: status.source, applied: false, isDefault: true, configured: false }),
-				isDefault: true,
-				defaultStatus: status,
-			});
-		}
-		if (defaultsUnavailable) {
-			for (const plugin of pluginCatalog) {
-				const identity = packageIdentity(plugin.source);
-				const existing = cards.get(identity);
-				cards.set(
-					identity,
-					existing
-						? { ...existing, isDefault: true }
-						: { source: plugin.source, applied: false, isDefault: true, configured: false },
-				);
-			}
-		}
-		return [...cards.values()].sort((left, right) => {
-			if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
-			return left.source.localeCompare(right.source);
-		});
-	}, [packages.data?.packages, defaults.data, defaultsUnavailable]);
-	const packagePageCount = Math.max(1, Math.ceil(packageCards.length / packagePageSize));
-	const visiblePackageCards = packageCards.slice((packagePage - 1) * packagePageSize, packagePage * packagePageSize);
-	useSpringLayout(packageGrid, visiblePackageCards.map((item) => item.source).join("\0"));
-	useEffect(() => {
-		if (packagePage > packagePageCount) setPackagePage(packagePageCount);
-	}, [packagePage, packagePageCount]);
-	const install = async () => {
-		try {
-			let input = installInput.trim();
-			if (pendingPluginFiles) {
-				const staged = await api<PackageImportResult>("/packages/import", { files: pendingPluginFiles });
-				input = staged.source;
-				setInstallInput(input);
-				setPendingPluginFiles(undefined);
-			}
-			const created = await api<PiPackageJob>("/packages/install", { input });
-			setJobId(created.id);
-			setConfirmOpen(false);
-			onError("");
-		} catch (error) {
-			onError(error instanceof Error ? error.message : String(error));
-		}
-	};
-	const choosePluginFolder = async (files: FileList | null) => {
-		if (!files?.length || preparingPlugin) return;
-		setPreparingPlugin(true);
-		onError("");
-		try {
-			const payload = await encodeResourceImportFiles(files);
-			setPendingPluginFiles(payload);
-			setInstallInput(`本机插件文件夹（${payload.length} 个文件）`);
-			setConfirmOpen(true);
-		} catch (error) {
-			onError(error instanceof Error ? error.message : String(error));
-		} finally {
-			setPreparingPlugin(false);
-		}
-	};
-	const cancelInstall = () => {
-		setConfirmOpen(false);
-		if (pendingPluginFiles) {
-			setPendingPluginFiles(undefined);
-			setInstallInput("");
-		}
-	};
-	const installDefault = async (source: string) => {
-		try {
-			const created = await api<PiPackageJob>("/packages/install", { input: source });
-			setJobId(created.id);
-			onError("");
-		} catch (error) {
-			onError(error instanceof Error ? error.message : String(error));
-		}
-	};
-	const managePackage = async () => {
-		if (!packageAction) return;
-		setPackageActionPending(true);
-		try {
-			if (packageAction.kind === "remove") {
-				const created = await api<PiPackageJob>("/packages/remove", { source: packageAction.source });
-				setJobId(created.id);
-			} else {
-				await api<PiConfiguredPackage>("/packages/apply", {
-					source: packageAction.source,
-					applied: packageAction.applied,
-				});
-				await Promise.all([
-					client.invalidateQueries({ queryKey: ["packages"] }),
-					client.invalidateQueries({ queryKey: ["storage"] }),
-				]);
-			}
-			setPackageAction(undefined);
-			onError("");
-		} catch (error) {
-			onError(error instanceof Error ? error.message : String(error));
-		} finally {
-			setPackageActionPending(false);
-		}
-	};
-	if (activePlugin) {
-		return (
-			<PluginFeaturePanel
-				pluginId={activePlugin}
-				sessions={sessions}
-				workspaces={workspaces}
-				onBack={() => setActivePlugin(undefined)}
-				onError={onError}
-			/>
-		);
-	}
-	const catalogUrl = packageSearch.trim()
-		? `https://pi.dev/packages?name=${encodeURIComponent(packageSearch.trim())}`
-		: "https://pi.dev/packages";
-	return (
-		<>
-			<div className="package-setup-grid">
-				<div className="package-search-card">
-					<div>
-						<h2>官方插件目录</h2>
-						<p className="muted">按名称查找扩展、技能、提示模板和主题，再输入包名安装。</p>
-					</div>
-					<div className="package-search-row">
-						<TextField
-							fullWidth
-							size="small"
-							label="搜索官方目录"
-							placeholder="输入插件包名"
-							value={packageSearch}
-							onChange={(event) => setPackageSearch(event.target.value)}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") window.open(catalogUrl, "_blank", "noopener,noreferrer");
-							}}
-						/>
-						<Button
-							className="package-catalog-button"
-							component="a"
-							href={catalogUrl}
-							target="_blank"
-							rel="noreferrer"
-							variant="outlined"
-							endIcon={<ExternalLink size={16} />}
-						>
-							打开官网
-						</Button>
-					</div>
-				</div>
-				<div className="package-install-card">
-					<div className="package-card-title">
-						<PackageOpen size={20} />
-						<strong>安装插件</strong>
-					</div>
-					<p className="muted">输入 npm 包名或安装命令，工作台会调用内核执行安装。</p>
-					<div className="package-install-row">
-						<TextField
-							fullWidth
-							label="安装指令或包名"
-							placeholder="npm:package-name"
-							value={installInput}
-							onChange={(event) => {
-								setPendingPluginFiles(undefined);
-								setInstallInput(event.target.value);
-							}}
-							onKeyDown={(event) => {
-								if (event.key === "Enter" && installInput.trim() && job.data?.status !== "running")
-									setConfirmOpen(true);
-							}}
-						/>
-					</div>
-					<input
-						ref={pluginFolderInput}
-						className="visually-hidden"
-						type="file"
-						multiple
-						aria-label="选择本机插件文件夹"
-						onChange={(event) => {
-							void choosePluginFolder(event.currentTarget.files);
-							event.currentTarget.value = "";
-						}}
-					/>
-					<div className="plugin-import-row">
-						<Button
-							variant="outlined"
-							startIcon={preparingPlugin ? <CircularProgress size={15} /> : <FolderUp size={16} />}
-							disabled={preparingPlugin || job.data?.status === "running"}
-							onClick={() => pluginFolderInput.current?.click()}
-						>
-							导入本机插件文件夹
-						</Button>
-						<span className="muted">选择包含 package.json 的文件夹，确认后由工作台安装。</span>
-					</div>
-					<div className="package-install-actions">
-						<Button
-							variant="contained"
-							disabled={!installInput.trim() || preparingPlugin || job.data?.status === "running"}
-							onClick={() => setConfirmOpen(true)}
-						>
-							安装
-						</Button>
-					</div>
-				</div>
-			</div>
-			<Alert severity="warning">
-				第三方插件 可能执行本机扩展代码或安装依赖。安装前请检查来源；工作台会重启空闲会话，下一次运行时加载新扩展。
-			</Alert>
-			{defaultsUnavailable && (
-				<Alert severity={defaults.error instanceof ApiError && defaults.error.status === 404 ? "info" : "warning"}>
-					内置插件状态暂不可用，已显示内置插件列表；可继续安装和管理插件，状态将在服务端恢复后同步。
-				</Alert>
-			)}
-			<div className="section-heading-row">
-				<div>
-					<h2>已安装插件</h2>
-					<p className="muted">插件按卡片分页展示；默认插件保留功能入口，无法卸载或取消应用。</p>
-				</div>
-				<IconButton
-					aria-label="刷新插件"
-					onClick={() => {
-						void packages.refetch();
-						void defaults.refetch();
-					}}
-				>
-					<RefreshCw size={18} />
-				</IconButton>
-			</div>
-			{packages.isPending ? (
-				<LoadingState label="正在读取已安装插件…" />
-			) : packages.error ? (
-				<Alert severity="error">{packages.error.message}</Alert>
-			) : packageCards.length ? (
-				<>
-					<div ref={packageGrid} className="installed-plugin-grid">
-						{visiblePackageCards.map((item) => {
-							const plugin = pluginCatalog.find(
-								(candidate) => packageIdentity(candidate.source) === packageIdentity(item.source),
-							);
-							const defaultStatus = item.defaultStatus;
-							const installed = item.configured || defaultStatus?.status === "succeeded";
-							const busy = job.data?.status === "running" || packageActionPending;
-							const statusLabel = item.configured
-								? item.applied
-									? "已应用"
-									: "未应用"
-								: defaultStatus?.status === "failed"
-									? "安装失败"
-									: defaultStatus?.status === "succeeded"
-										? "已安装"
-										: defaultStatus?.status === "running"
-											? "安装中"
-											: defaultsUnavailable
-												? "状态暂不可用"
-												: "等待安装";
-							const statusColor =
-								statusLabel === "已应用" || statusLabel === "已安装"
-									? "success"
-									: statusLabel === "安装失败"
-										? "error"
-										: "default";
-							return (
-								<article className="installed-plugin-card" key={item.source}>
-									<div className="installed-plugin-main">
-										<div className="package-card-title">
-											<PackageOpen size={19} />
-											<strong>{plugin?.title ?? item.source.replace(/^npm:/u, "")}</strong>
-										</div>
-										<code>{item.source}</code>
-										{plugin?.description && <p className="muted">{plugin.description}</p>}
-										{!installed && defaultStatus?.error && (
-											<Alert severity="error">{defaultStatus.error}</Alert>
-										)}
-									</div>
-									<div className="installed-plugin-footer">
-										<div className="installed-plugin-badges">
-											<Chip size="small" color={statusColor} label={statusLabel} />
-											{item.isDefault && <Chip size="small" label="默认插件 · 受保护" />}
-										</div>
-										<div className="installed-plugin-actions">
-											{plugin && installed && (
-												<Button size="small" onClick={() => setActivePlugin(plugin.id)}>
-													打开功能
-												</Button>
-											)}
-											{item.isDefault &&
-												!installed &&
-												(defaultStatus?.status === "failed" || defaultsUnavailable) && (
-													<Button
-														size="small"
-														disabled={busy}
-														onClick={() => void installDefault(item.source)}
-													>
-														{defaultsUnavailable ? "安装" : "重试"}
-													</Button>
-												)}
-											<Button
-												size="small"
-												disabled={item.isDefault || !item.configured || busy}
-												title={item.isDefault ? "默认插件不可取消应用" : undefined}
-												onClick={() =>
-													setPackageAction({ source: item.source, kind: "apply", applied: !item.applied })
-												}
-											>
-												{item.applied ? "取消应用" : "应用"}
-											</Button>
-											<Button
-												size="small"
-												color="error"
-												disabled={item.isDefault || !item.configured || busy}
-												title={item.isDefault ? "默认插件不可卸载" : undefined}
-												onClick={() => setPackageAction({ source: item.source, kind: "remove" })}
-											>
-												卸载
-											</Button>
-										</div>
-									</div>
-								</article>
-							);
-						})}
-					</div>
-					{packagePageCount > 1 && (
-						<div className="plugin-pagination">
-							<span className="muted">
-								共 {packageCards.length} 个插件，每页 {packagePageSize} 个
-							</span>
-							<Pagination
-								count={packagePageCount}
-								page={packagePage}
-								size="small"
-								color="primary"
-								onChange={(_event, value) => setPackagePage(value)}
-							/>
-						</div>
-					)}
-				</>
-			) : (
-				<div className="plugin-empty-card muted">还没有安装插件。可以从上方官方目录搜索并安装。</div>
-			)}
-			{job.data && (
-				<div className="package-job">
-					<div className="section-heading-row">
-						<div>
-							<strong>{job.data.source}</strong>
-							<p className="muted">
-								{job.data.status === "running"
-									? job.data.action === "remove"
-										? "正在卸载…"
-										: "正在安装…"
-									: job.data.status === "succeeded"
-										? job.data.action === "remove"
-											? "卸载完成"
-											: "安装完成"
-										: job.data.action === "remove"
-											? "卸载失败"
-											: "安装失败"}
-							</p>
-						</div>
-						{job.data.status === "running" && <CircularProgress size={20} />}
-					</div>
-					{job.data.error && <Alert severity="error">{job.data.error}</Alert>}
-					{job.data.output && <pre className="package-output">{job.data.output}</pre>}
-				</div>
-			)}
-			<Dialog open={confirmOpen} onClose={cancelInstall} maxWidth="sm" fullWidth>
-				<DialogTitle>确认安装插件</DialogTitle>
-				<DialogContent>
-					<p>工作台将从此来源安装插件，并把它添加到个人配置中：</p>
-					<code className="package-confirm-source">
-						{pendingPluginFiles ? "本机插件文件夹（已准备上传，最多 7 MB）" : installInput.trim()}
-					</code>
-					<p className="muted">插件以本机服务进程权限运行。只安装你信任的来源。</p>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={cancelInstall}>取消</Button>
-					<Button variant="contained" onClick={() => void install()}>
-						确认安装
-					</Button>
-				</DialogActions>
-			</Dialog>
-			<Dialog
-				open={!!packageAction}
-				onClose={() => {
-					if (!packageActionPending) setPackageAction(undefined);
-				}}
-				maxWidth="sm"
-				fullWidth
-			>
-				<DialogTitle>
-					{packageAction?.kind === "remove"
-						? "确认卸载插件"
-						: packageAction?.applied
-							? "确认应用插件"
-							: "确认取消应用"}
-				</DialogTitle>
-				<DialogContent>
-					<code className="package-confirm-source">{packageAction?.source}</code>
-					<p>
-						{packageAction?.kind === "remove"
-							? "卸载会从配置中移除此插件，并删除其安装文件。"
-							: packageAction?.applied
-								? "将恢复该插件之前的应用配置。"
-								: "取消应用会保留插件文件，但停止加载其 Extensions、Skills、提示模板和主题。"}
-					</p>
-				</DialogContent>
-				<DialogActions>
-					<Button disabled={packageActionPending} onClick={() => setPackageAction(undefined)}>
-						返回
-					</Button>
-					<Button
-						color={packageAction?.kind === "remove" ? "error" : "primary"}
-						variant="contained"
-						disabled={packageActionPending}
-						onClick={() => void managePackage()}
-					>
-						{packageActionPending
-							? "处理中…"
-							: packageAction?.kind === "remove"
-								? "确认卸载"
-								: packageAction?.applied
-									? "应用"
-									: "取消应用"}
-					</Button>
-				</DialogActions>
-			</Dialog>
-		</>
-	);
 }
 
 function StoragePanel({ onError }: { onError: (message: string) => void }) {
@@ -972,7 +422,6 @@ export function ResourcesPage({
 	onBrowserRequest?: (sessionId: string, text: string) => void;
 }) {
 	const [selected, setSelected] = useState("");
-	const [resourceTab, setResourceTab] = useState<"skills" | "plugins">("skills");
 	const activeSessions = sessions.filter((session) => !session.archivedAt && session.purpose !== "plugin-development");
 	const id = selected || activeSessions[0]?.id;
 	const [error, setError] = useState("");
@@ -1185,9 +634,9 @@ export function ResourcesPage({
 					<Menu size={20} />
 				</IconButton>
 				{kind === "skills" ? <BookOpen size={24} /> : <Settings2 size={24} />}
-				<h1>{kind === "skills" ? "技能与插件" : "设置"}</h1>
+				<h1>{kind === "skills" ? "技能" : "设置"}</h1>
 			</div>
-			{kind === "skills" && <p className="muted">查看会话技能、管理插件，也可以导入自己的资源。</p>}
+			{kind === "skills" && <p className="muted">查看当前会话加载的技能，并导入自己的资源。</p>}
 			{kind === "settings" && <SettingsNavigation section={section ?? "providers"} />}
 			{kind === "settings" && section === "providers" && (
 				<p className="muted">按供应商分类配置认证；全部供应商均从当前内核读取。</p>
@@ -1244,64 +693,25 @@ export function ResourcesPage({
 			)}
 			{kind === "skills" && (
 				<section className="resource-library">
-					<Tabs
-						className="resource-tabs"
-						value={resourceTab}
-						onChange={(_event, value: "skills" | "plugins") => setResourceTab(value)}
-						aria-label="技能与插件"
-					>
-						<Tab value="skills" label="技能" />
-						<Tab value="plugins" label="插件" />
-					</Tabs>
-					<SpringPages
-						className="resource-page-switch"
-						pageKey={resourceTab}
-						pageIndex={resourceTab === "skills" ? 0 : 1}
-						axis="horizontal"
-					>
-						{resourceTab === "skills" ? (
-							<>
-								<SkillLibraryPanel
-									skills={resources.data?.skills ?? []}
-									loading={resources.isPending && !!id}
-								/>
-								{resources.data?.diagnostics.map((message, index) => (
-									<Alert key={`${index}:${message}`} severity="warning">
-										{message}
-									</Alert>
-								))}
-							</>
-						) : (
-							<>
-								<PackageManagerPanel onError={setError} sessions={sessions} workspaces={workspaces} />
-								<LoadedExtensionsPanel
-									extensions={resources.data?.extensions ?? []}
-									loading={resources.isPending && !!id}
-								/>
-								{resources.data?.diagnostics.map((message, index) => (
-									<Alert key={`${index}:${message}`} severity="warning">
-										{message}
-									</Alert>
-								))}
-							</>
-						)}
-					</SpringPages>
+					<SkillLibraryPanel skills={resources.data?.skills ?? []} loading={resources.isPending && !!id} />
+					{resources.data?.diagnostics.map((message, index) => (
+						<Alert key={`${index}:${message}`} severity="warning">
+							{message}
+						</Alert>
+					))}
+					<LoadedExtensionsPanel
+						extensions={resources.data?.extensions ?? []}
+						loading={resources.isPending && !!id}
+					/>
 				</section>
 			)}
 			{kind === "settings" && (
 				<SpringPages
 					className="settings-page-switch"
 					pageKey={section ?? "providers"}
-					pageIndex={[
-						"providers",
-						"plugins",
-						"browser",
-						"subagents",
-						"usage",
-						"archive",
-						"storage",
-						"system",
-					].indexOf(section ?? "providers")}
+					pageIndex={["providers", "plugins", "browser", "usage", "archive", "storage", "system"].indexOf(
+						section ?? "providers",
+					)}
 					axis="horizontal"
 				>
 					{section === "providers" && (
@@ -1541,21 +951,13 @@ export function ResourcesPage({
 							)}
 						</>
 					)}
-					{section === "plugins" && (
-						<>
-							<AppPluginManagerPanel onError={setError} workspaces={workspaces} />
-							<PackageManagerPanel onError={setError} sessions={activeSessions} workspaces={workspaces} />
-						</>
-					)}
+					{section === "plugins" && <AppPluginManagerPanel onError={setError} workspaces={workspaces} />}
 					{section === "browser" && (
 						<BrowserManagementPanel
 							sessions={activeSessions}
 							sessionsLoading={sessionsLoading}
 							onRequest={onBrowserRequest ?? (() => {})}
 						/>
-					)}
-					{section === "subagents" && (
-						<SubagentManagementPanel sessions={activeSessions} sessionsLoading={sessionsLoading} />
 					)}
 					{section === "usage" && <UsageStatisticsPanel workspaces={workspaces} />}
 					{section === "archive" && (
@@ -1569,10 +971,10 @@ export function ResourcesPage({
 					{section === "system" && (
 						<>
 							<PersonalizationPanel />
-							<h2>Pi SDK 与本地设置</h2>
+							<h2>AllWeave Runtime 与本地设置</h2>
 							<div className="settings-surface">
 								<div className="system-setting-row">
-									<span>Pi SDK 版本</span>
+									<span>Runtime 版本</span>
 									<strong>{settings.data?.kernel?.version ?? "不可用"}</strong>
 								</div>
 								<div className="system-setting-row">
@@ -1585,8 +987,11 @@ export function ResourcesPage({
 									<span>配置目录</span>
 									<code>{settings.data?.agentDirectory}</code>
 								</div>
-								<p>Pi SDK 与工作台在同一服务进程中运行，升级项目中的 Pi 源码后重新启动即可生效。</p>
-								<p>单用户，本机服务仅监听 127.0.0.1。获准命令和可信扩展使用主机权限，工作台未提供安全沙箱。</p>
+								<p>内核与工作台在同一服务进程中运行，升级项目源码后重新启动即可生效。</p>
+								<p>
+									单用户，本机服务仅监听 127.0.0.1。获准命令以主机权限执行；代码模式脚本运行在进程内 QuickJS
+									沙箱中。
+								</p>
 								<div className="system-roots">
 									<span>授权目录</span>
 									{settings.data?.roots.map((root) => (

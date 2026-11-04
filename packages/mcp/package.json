@@ -1,7 +1,7 @@
 {
-	"name": "@earendil-works/pi-mcp",
-	"version": "1.1.0",
-	"description": "Standalone Model Context Protocol client for pi and other applications",
+	"name": "@allweave/mcp",
+	"version": "1.2.1",
+	"description": "AllWeave Model Context Protocol client",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -25,9 +25,7 @@
 	"sideEffects": false,
 	"files": [
 		"dist",
-		"README.md",
-		"CHANGELOG.md",
-		"LICENSES"
+		"README.md"
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist",
@@ -40,13 +38,8 @@
 		"model-context-protocol",
 		"client"
 	],
-	"author": "Earendil Works",
+	"author": "AllWeave Build contributors",
 	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/mcp"
-	},
 	"engines": {
 		"node": ">=22.19.0"
 	},

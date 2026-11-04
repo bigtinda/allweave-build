@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, realpath, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ResourceImportFile } from "../../shared/src/protocol.ts";
 import { contained, HttpError } from "./security.ts";
 
 const maximumFileCount = 300;
 const maximumTotalBytes = 7 * 1024 * 1024;
-const protectedSegments = new Set([".git", ".pi", ".pi-console", "node_modules", ".env"]);
+const protectedSegments = new Set([".git", ".pi", ".allweave", "node_modules", ".env"]);
 
 interface DecodedImportFile {
 	path: string;
@@ -105,22 +105,6 @@ function skillNameFromManifest(files: DecodedImportFile[]): string | undefined {
 	return nameLine?.replace(/^(["'])(.*)\1$/u, "$2");
 }
 
-function pluginPackageName(files: DecodedImportFile[]): string | undefined {
-	const manifest = files.find((file) => file.path === "package.json");
-	if (!manifest) throw new HttpError(400, "A plugin folder must contain package.json at its root");
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(manifest.content.toString("utf8")) as unknown;
-	} catch {
-		throw new HttpError(400, "Plugin package.json is not valid JSON");
-	}
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-		throw new HttpError(400, "Plugin package.json must contain an object");
-	}
-	const name = "name" in parsed && typeof parsed.name === "string" ? parsed.name : undefined;
-	return name;
-}
-
 async function ensureImportParent(agentDirectory: string, category: "skills" | "imports"): Promise<string> {
 	const agentRoot = resolve(agentDirectory);
 	await mkdir(agentRoot, { recursive: true });
@@ -200,19 +184,4 @@ export async function importSkillPackage(
 	const name = safeDirectoryName(decoded.nameHint ?? skillNameFromManifest(decoded.files), fallback);
 	await writeImportBundle(agentDirectory, "skills", name, decoded.files);
 	return { name, filesImported: decoded.files.length };
-}
-
-export async function stagePluginPackage(
-	agentDirectory: string,
-	files: ResourceImportFile[],
-): Promise<{ name: string; source: string; filesImported: number }> {
-	const decoded = decodeUpload(files);
-	const name = safeDirectoryName(
-		pluginPackageName(decoded.files) ?? decoded.nameHint,
-		`plugin-${randomUUID().slice(0, 8)}`,
-	);
-	const destination = await writeImportBundle(agentDirectory, "imports", name, decoded.files);
-	const canonicalRoot = await realpath(resolve(agentDirectory));
-	const path = relative(canonicalRoot, destination).replace(/\\/gu, "/");
-	return { name, source: `./${path}`, filesImported: decoded.files.length };
 }

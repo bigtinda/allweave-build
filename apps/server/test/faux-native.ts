@@ -1,5 +1,5 @@
-import type { AssistantMessage, Context, Model } from "@earendil-works/pi-ai";
-import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
+import type { NativeModelRuntime } from "@allweave/kernel-adapters";
+import type { AssistantMessage, Context, Model } from "@allweave/model";
 
 export type FauxResponse = AssistantMessage | ((context: Context) => AssistantMessage | Promise<AssistantMessage>);
 

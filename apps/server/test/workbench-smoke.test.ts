@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage } from "@allweave/model/compat";
 import { type Browser, chromium } from "playwright-core";
 import { createServer } from "vite";
 import type { FileContent, SessionDetail, SocketMessage, Workspace } from "../../shared/src/protocol.ts";

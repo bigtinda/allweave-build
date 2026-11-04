@@ -1,3 +1,4 @@
+import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "@allweave/protocol";
 import {
 	Alert,
 	Box,
@@ -17,7 +18,6 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
-import type { LocalFolderListing, SessionDetail, SessionSummary, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";

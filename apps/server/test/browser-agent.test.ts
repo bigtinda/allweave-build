@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall } from "@allweave/model/compat";
 import type { BrowserSnapshot, BrowserStreamEvent } from "../../shared/src/browser.ts";
 import type { SessionDetail, Workspace } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";

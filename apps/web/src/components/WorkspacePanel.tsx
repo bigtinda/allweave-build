@@ -1,3 +1,4 @@
+import type { FileContent, FileEntry, SessionDetail, Workspace } from "@allweave/protocol";
 import {
 	Alert,
 	Button,
@@ -14,7 +15,6 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
-import type { FileContent, FileEntry, SessionDetail, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";

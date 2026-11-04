@@ -11,7 +11,7 @@ import type {
 export const SESSION_META_VERSION = 3;
 
 /**
- * UI-only fields of a chat message. They are not part of the Pi transcript, so
+ * UI-only fields of a chat message. They are not part of the session transcript, so
  * they are kept in the lightweight record and merged back on hydration.
  */
 export interface MessageUiMetadata {
@@ -136,7 +136,7 @@ export function emptyDetail(meta: SessionMeta): SessionDetail {
 	};
 }
 
-/** A transcript view rebuilt from the Pi JSONL file. */
+/** A transcript view rebuilt from the session JSONL file. */
 export interface TranscriptView {
 	messages: ChatMessage[];
 	tools: ToolCall[];

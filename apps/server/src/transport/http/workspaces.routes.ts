@@ -13,7 +13,7 @@ export interface WorkspaceRoutesOptions {
 }
 
 /**
- * Workbench HTTP routes for local workspaces, files, Git and MCP config.
+ * Workbench HTTP routes for local workspaces, files and Git.
  */
 export function registerWorkspaceRoutes(options: WorkspaceRoutesOptions): void {
 	const { app, workspaces, agents } = options;
@@ -45,46 +45,6 @@ export function registerWorkspaceRoutes(options: WorkspaceRoutesOptions): void {
 	app.delete("/api/workspaces/:id", async (request) => {
 		const { id } = idParams.parse(request.params);
 		return workspaces.remove(id, (workspaceId) => agents.deleteWorkspaceSessions(workspaceId));
-	});
-	app.get("/api/plugins/mcp-config", async (request) => {
-		const { workspaceId, kind } = z
-			.object({ workspaceId: z.string().uuid(), kind: z.enum(["adapter", "extension"]) })
-			.parse(request.query);
-		return workspaces.readMcpConfig(workspaceId, kind);
-	});
-	app.put("/api/plugins/mcp-config", async (request) => {
-		const input = z
-			.object({
-				workspaceId: z.string().uuid(),
-				kind: z.enum(["adapter", "extension"]),
-				content: z.string().max(512_000),
-			})
-			.parse(request.body);
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(input.content);
-		} catch {
-			throw new HttpError(400, "MCP config must be valid JSON");
-		}
-		if (
-			typeof parsed !== "object" ||
-			parsed === null ||
-			Array.isArray(parsed) ||
-			!("mcpServers" in parsed) ||
-			typeof parsed.mcpServers !== "object" ||
-			parsed.mcpServers === null ||
-			Array.isArray(parsed.mcpServers)
-		) {
-			throw new HttpError(400, "MCP config must contain an mcpServers object");
-		}
-		const content = `${JSON.stringify(parsed, null, 2)}\n`;
-		await workspaces.writeMcpConfig(input.workspaceId, input.kind, content);
-		await agents.refreshIdleAgentsForPluginChange();
-		return { saved: true, path: input.kind === "adapter" ? ".mcp.json" : ".pi/mcp.json" };
-	});
-	app.get("/api/plugins/git", async (request) => {
-		const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(request.query);
-		return workspaces.repositoryStatus(workspaceId);
 	});
 	app.get("/api/workspaces/:id/git", async (request) => workspaces.changes(idParams.parse(request.params).id));
 	app.get("/api/workspaces/:id/git/diff", async (request) => {
@@ -130,19 +90,6 @@ export function registerWorkspaceRoutes(options: WorkspaceRoutesOptions): void {
 		)
 			throw new HttpError(409, "此项目有任务正在执行，请停止任务后切换分支。");
 		return workspaces.changeBranch(workspace.id, input.action, input.name, input.revision, input.base);
-	});
-	app.post("/api/plugins/git/worktrees", async (request) => {
-		const input = z
-			.object({
-				workspaceId: z.string().uuid(),
-				mode: z.enum(["existing", "new"]),
-				branch: z.string().trim().min(1).max(120),
-				baseBranch: z.string().trim().min(1).max(120).optional(),
-			})
-			.parse(request.body);
-		const workspace = await workspaces.addWorktree(input);
-		const session = await agents.create(workspace.id, `工作树 · ${input.branch}`);
-		return { workspace, session };
 	});
 	app.get("/api/workspaces/:id/files", async (request) => {
 		const { id } = idParams.parse(request.params);

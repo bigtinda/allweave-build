@@ -1,5 +1,5 @@
+import type { SkillImportResult, SkillInfo } from "@allweave/protocol";
 import { Alert, Button, Chip, CircularProgress, Pagination } from "@mui/material";
-import type { SkillImportResult, SkillInfo } from "@pi-console/protocol";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileUp, FolderUp, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";

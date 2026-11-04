@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Api, AssistantMessage, Context, Model } from "@earendil-works/pi-ai";
-import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
-import { type NativeModelRuntime, PiAiGateway } from "../src/pi-ai/gateway.ts";
+import type { Api, AssistantMessage, Context, Model } from "@allweave/model";
+import { AssistantMessageEventStream } from "@allweave/model/utils/event-stream";
+import { ModelGateway, type NativeModelRuntime } from "../src/model/gateway.ts";
 
 test("maps native images to the provider image content", async () => {
 	let captured: Context | undefined;
@@ -40,7 +40,7 @@ test("maps native images to the provider image content", async () => {
 		provider: "fake",
 		api: "openai-completions",
 	} as Model<Api>;
-	const gateway = new PiAiGateway(runtime, model, "off");
+	const gateway = new ModelGateway(runtime, model, "off");
 	for await (const _event of gateway.stream({
 		system: "system",
 		messages: [
@@ -93,7 +93,7 @@ test("forwards the session id for provider routing headers", async () => {
 		},
 	};
 	const model = { id: "fake", name: "fake", provider: "fake", api: "openai-completions" } as Model<Api>;
-	const gateway = new PiAiGateway(runtime, model, "off", "session-123");
+	const gateway = new ModelGateway(runtime, model, "off", "session-123");
 	for await (const _event of gateway.stream({
 		system: "system",
 		messages: [{ role: "user", text: "hi", timestamp: Date.now() }],

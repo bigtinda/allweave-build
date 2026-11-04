@@ -59,7 +59,7 @@ interface SessionRecord {
  * the atomic event plus snapshot transaction.
  *
  * Boot only reads summaries. Opening a session rebuilds the conversation from
- * the Pi transcript (or the retained legacy snapshot) and merges the UI-only
+ * the session transcript (or the retained snapshot) and merges the UI-only
  * fields stored beside the summary. Every change still goes through
  * {@link EventProjector.project}, so the stored records and the event stream
  * cannot disagree.
@@ -256,7 +256,7 @@ export class EventProjector {
 	}
 
 	/**
-	 * Rebuild a session from its Pi transcript. The recovery is itself a
+	 * Rebuild a session from its transcript. The recovery is itself a
 	 * projected event, so the event stream, the lightweight record and the
 	 * retained snapshot return to a consistent state.
 	 */

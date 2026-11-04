@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
-import { LocalWorkspace } from "@pi-console/kernel";
+import { LocalWorkspace } from "@allweave/kernel";
 import { createMcpManager } from "../src/mcp/manager.ts";
 
 // Requires a local Chrome and the globally installed `chrome-devtools-mcp`:

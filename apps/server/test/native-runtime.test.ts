@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { NativeModelRuntime } from "@allweave/kernel-adapters";
 import type {
 	Api,
 	AssistantMessage,
@@ -10,11 +11,10 @@ import type {
 	Context,
 	Model,
 	SimpleStreamOptions,
-} from "@earendil-works/pi-ai";
-import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
+} from "@allweave/model";
 import type { SessionDetail } from "../../shared/src/protocol.ts";
 import { NativeAgentRuntime } from "../src/sessions/native-runtime.ts";
-import type { AgentRuntimeInput } from "../src/sessions/pi-runtime.adapter.ts";
+import type { AgentRuntimeInput } from "../src/sessions/runtime.adapter.ts";
 
 const model = {
 	id: "test-model",

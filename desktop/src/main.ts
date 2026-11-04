@@ -26,7 +26,7 @@ async function freePort(): Promise<number> {
 async function stopBackend(): Promise<void> {
 	const child = backend;
 	if (!child || child.exitCode !== null) return;
-	try { await fetch(`http://127.0.0.1:${port}/api/desktop/shutdown`, { method: "POST", headers: { Origin: `http://127.0.0.1:${port}`, "X-Pi-Console-Shutdown-Token": token }, signal: AbortSignal.timeout(3000) }); } catch {}
+	try { await fetch(`http://127.0.0.1:${port}/api/desktop/shutdown`, { method: "POST", headers: { Origin: `http://127.0.0.1:${port}`, "X-AllWeave-Shutdown-Token": token }, signal: AbortSignal.timeout(3000) }); } catch {}
 	await Promise.race([new Promise<void>((done) => child.once("exit", () => done())), new Promise<void>((done) => setTimeout(done, 5000))]);
 	if (child.exitCode === null && child.pid) {
 		if (process.platform === "win32") await new Promise<void>((done) => { const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }); killer.on("error", () => done()); killer.on("exit", () => done()); });
@@ -46,7 +46,7 @@ async function start(): Promise<void> {
 		catch { await copyFile(process.execPath, node); }
 	}
 	const log = createWriteStream(join(data, "desktop-server.log"));
-	backend = spawn(node, ["--import", "./scripts/source-resolver.ts", "./apps/server/src/main.ts"], { cwd: runtime, windowsHide: true, detached: process.platform !== "win32", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", PI_CONSOLE_DESKTOP: "1", PI_CONSOLE_PORT: String(port), PI_CONSOLE_SHUTDOWN_TOKEN: token, PI_CONSOLE_DATA_DIR: data, PI_CODING_AGENT_DIR: join(data, "agent"), PI_CONSOLE_ROOTS: roots.join(delimiter), PATH: `${dirname(node)}${delimiter}${runtime}${delimiter}${process.env.PATH ?? ""}` }, stdio: ["ignore", "pipe", "pipe"] });
+	backend = spawn(node, ["--import", "./scripts/source-resolver.ts", "./apps/server/src/main.ts"], { cwd: runtime, windowsHide: true, detached: process.platform !== "win32", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", ALLWEAVE_DESKTOP: "1", ALLWEAVE_PORT: String(port), ALLWEAVE_SHUTDOWN_TOKEN: token, ALLWEAVE_DATA_DIR: data, ALLWEAVE_AGENT_DIR: join(data, "agent"), ALLWEAVE_ROOTS: roots.join(delimiter), PATH: `${dirname(node)}${delimiter}${runtime}${delimiter}${process.env.PATH ?? ""}` }, stdio: ["ignore", "pipe", "pipe"] });
 	backend.stdout?.pipe(log); backend.stderr?.pipe(log, { end: false });
 	let startupError: Error | undefined;
 	backend.once("error", (error) => { startupError = error; });

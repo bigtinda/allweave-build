@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AuthEvent, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
-import { isModelType } from "@earendil-works/pi-ai";
+import type { AuthEvent, AuthPrompt, AuthType } from "@allweave/model";
+import { isModelType } from "@allweave/model";
 import { z } from "zod";
 import type { ModelOption } from "../../shared/src/protocol.ts";
 import { createModelRuntime, type WorkbenchModels } from "./model-runtime.ts";
@@ -17,7 +17,7 @@ const apiTypes = [
 	"azure-openai-responses",
 	"bedrock-converse-stream",
 	"openai-codex-responses",
-	"pi-messages",
+	"allweave-messages",
 ] as const;
 
 const customProviderSchema = z.object({
@@ -323,7 +323,7 @@ export class ProviderManager {
 			name: provider.name,
 			baseUrl: provider.baseUrl,
 			api: provider.api,
-			apiKey: "$PI_CONSOLE_MODEL_KEY",
+			apiKey: "$ALLWEAVE_MODEL_KEY",
 			models: provider.models,
 		};
 		const temporary = `${file}.${randomUUID()}.tmp`;

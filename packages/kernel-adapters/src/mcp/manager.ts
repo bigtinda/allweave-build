@@ -1,5 +1,5 @@
-import { McpClient, StdioTransport, StreamableHttpTransport } from "@earendil-works/pi-mcp";
-import type { NativeTool } from "@pi-console/kernel";
+import type { NativeTool } from "@allweave/kernel";
+import { McpClient, StdioTransport, StreamableHttpTransport } from "@allweave/mcp";
 import type { McpServerConfig } from "./config.ts";
 import { createMcpNativeTools, type McpToolClient } from "./tools.ts";
 
@@ -22,7 +22,7 @@ export interface McpManager {
 }
 
 async function connectServer(name: string, config: McpServerConfig): Promise<Connection> {
-	const client = new McpClient({ name: "pi-console", version: "0.1.0" });
+	const client = new McpClient({ name: "allweave", version: "0.1.0" });
 	const transport = config.url
 		? new StreamableHttpTransport({ url: config.url, headers: config.headers })
 		: new StdioTransport({ command: config.command!, args: config.args, cwd: config.cwd, env: config.env });

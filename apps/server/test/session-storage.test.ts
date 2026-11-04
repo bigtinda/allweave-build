@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage } from "@allweave/model/compat";
 import type { SessionDetail } from "../../shared/src/protocol.ts";
 import { AgentService } from "../src/agent.ts";
 import { KernelSessionStore } from "../src/persistence/kernel-session-store.ts";

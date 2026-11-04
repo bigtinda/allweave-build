@@ -1,5 +1,5 @@
+import type { SessionDetail } from "@allweave/protocol";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
-import type { SessionDetail } from "@pi-console/protocol";
 import { useState } from "react";
 
 export function UsageSummary({ tokens }: { tokens: SessionDetail["tokens"] }) {

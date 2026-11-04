@@ -3,16 +3,17 @@ import { fileURLToPath } from "node:url";
 import { configuredRoots, createApp } from "./bootstrap/create-app.ts";
 
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
-const port = Number(process.env.PI_CONSOLE_PORT ?? 8787);
-if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid PI_CONSOLE_PORT");
+const port = Number(process.env.ALLWEAVE_PORT ?? 8787);
+if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid ALLWEAVE_PORT");
+const dataDirectory = resolve(process.env.ALLWEAVE_DATA_DIR ?? resolve(repository, ".allweave"));
 const { app } = await createApp({
 	roots: configuredRoots(repository),
 	port,
-	directory: resolve(process.env.PI_CONSOLE_DATA_DIR ?? resolve(repository, ".pi-console")),
+	directory: dataDirectory,
 });
 await app.listen({ host: "127.0.0.1", port });
 process.stdout.write(
-	process.env.PI_CONSOLE_DESKTOP === "1"
+	process.env.ALLWEAVE_DESKTOP === "1"
 		? `\nAllWeave Build desktop backend ready at http://127.0.0.1:${port}\n\n`
 		: `\nAllWeave Build: http://127.0.0.1:5173\nProduction frontend (after build): http://127.0.0.1:${port}\n\n`,
 );

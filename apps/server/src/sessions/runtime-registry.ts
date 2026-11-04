@@ -1,11 +1,11 @@
-import type { AgentRuntime, AgentRuntimeInput } from "./pi-runtime.adapter.ts";
+import type { AgentRuntime, AgentRuntimeInput } from "./runtime.adapter.ts";
 
 export interface RuntimeFactory {
 	open(input: AgentRuntimeInput): Promise<AgentRuntime>;
 }
 
 /**
- * Owns the live Pi runtimes of the workbench: one runtime per session,
+ * Owns the live runtimes of the workbench: one runtime per session,
  * created lazily and reused until it is disposed.
  */
 export class SessionRuntimeRegistry {

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall } from "@allweave/model/compat";
 import { applyEvent, type SessionDetail, type SocketMessage } from "../../shared/src/protocol.ts";
 import { createApp } from "../src/bootstrap/create-app.ts";
 import { createHarness, getMessageText, nativeGateway } from "./faux-native.ts";
@@ -18,8 +18,8 @@ test(
 		await mkdir(root);
 		await mkdir(agentDir);
 		await writeFile(join(root, "reference.txt"), "reference");
-		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = agentDir;
+		const previousAgentDir = process.env.ALLWEAVE_AGENT_DIR;
+		process.env.ALLWEAVE_AGENT_DIR = agentDir;
 		const harness = await createHarness();
 		const options = {
 			directory: join(directory, "data"),
@@ -176,8 +176,8 @@ test(
 			for (const socket of app.websocketServer.clients) socket.terminate();
 			await app.close();
 			harness.cleanup();
-			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			if (previousAgentDir === undefined) delete process.env.ALLWEAVE_AGENT_DIR;
+			else process.env.ALLWEAVE_AGENT_DIR = previousAgentDir;
 			await rm(directory, { recursive: true, force: true });
 		}
 	},

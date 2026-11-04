@@ -15,13 +15,13 @@ import { HttpError } from "../src/security.ts";
 import { SessionCoordinator } from "../src/sessions/coordinator.ts";
 import { EventHub } from "../src/sessions/event-hub.ts";
 import { EventProjector, type SavedSession, type SessionStore } from "../src/sessions/event-projector.ts";
-import type { RuntimeEvent } from "../src/sessions/pi-events.ts";
 import type {
 	AgentRuntime,
 	AgentRuntimeInput,
 	ProjectModelDefaults,
 	RuntimeFactory,
-} from "../src/sessions/pi-runtime.adapter.ts";
+} from "../src/sessions/runtime.adapter.ts";
+import type { RuntimeEvent } from "../src/sessions/runtime-events.ts";
 import { ToolAuthorization } from "../src/sessions/tool-authorization.ts";
 import { WorkspaceAccess } from "../src/workspaces/workspace-access.ts";
 

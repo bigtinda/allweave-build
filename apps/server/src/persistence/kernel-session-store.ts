@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { gunzipSync } from "node:zlib";
-import { SqliteEventStore, type StoredEvent } from "@pi-console/kernel";
+import { SqliteEventStore, type StoredEvent } from "@allweave/kernel";
 import type { Approval, SessionDetail, SessionEvent } from "../../../shared/src/protocol.ts";
 import type { SavedSession, SessionStore } from "../sessions/event-projector.ts";
 import { parseSessionMeta, projectSessionMeta, type SessionMeta } from "./session-projection.ts";

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall } from "@allweave/model/compat";
 import type {
 	FileContent,
 	LocalFolderListing,
@@ -29,15 +29,15 @@ test(
 	"local-origin REST + native runtime + WebSocket pipeline, approvals, abort, isolation and restart",
 	{ timeout: 60_000 },
 	async (t) => {
-		const directory = await mkdtemp(join(tmpdir(), "pi-console-api-"));
+		const directory = await mkdtemp(join(tmpdir(), "allweave-api-"));
 		const root = join(directory, "project");
 		const data = join(directory, "data");
 		const agentDir = join(directory, "agent");
 		await mkdir(root);
 		await mkdir(agentDir);
 		await writeFile(join(root, "hello.txt"), "initial");
-		const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = agentDir;
+		const originalAgentDir = process.env.ALLWEAVE_AGENT_DIR;
+		process.env.ALLWEAVE_AGENT_DIR = agentDir;
 		const harness = await createHarness({ models: [{ id: "faux-1" }, { id: "faux-2" }] });
 		const gateway = nativeGateway(harness);
 		const options = {
@@ -419,8 +419,8 @@ test(
 			for (const socket of app.websocketServer.clients) socket.terminate();
 			await app.close();
 			harness.cleanup();
-			if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-			else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+			if (originalAgentDir === undefined) delete process.env.ALLWEAVE_AGENT_DIR;
+			else process.env.ALLWEAVE_AGENT_DIR = originalAgentDir;
 			assert.ok(contained(tmpdir(), directory));
 			await rm(directory, { recursive: true, force: true });
 		}

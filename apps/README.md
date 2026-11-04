@@ -8,25 +8,25 @@
 
 ```powershell
 npm install --ignore-scripts
-node --use-env-proxy scripts/hydrate-pinned-model-data.mjs
+npm run hydrate:model-data
 Copy-Item apps/server/.env.example .env
 ```
 
 双击仓库根目录的 `start-web.cmd`，或运行 `npm run dev:web`。打开 <http://127.0.0.1:5173>。服务只绑定 loopback，并校验本机 Host 与同源请求。
 
-完整的架构、迁移记录和遗留问题见 [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) 与 [../docs/note](../docs/note/)。
+完整架构见 [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)。
 
 ## 模型供应商
 
-打开“模型与设置”，配置 API Key、OAuth 或兼容接口。凭据保存在 `.pi-console/agent/auth.json` 与 `models.json`；也可以在 `.env` 中提供供应商环境变量。
+打开“模型与设置”，配置 API Key、OAuth 或兼容接口。凭据保存在 `.allweave/agent/auth.json` 与 `models.json`；也可以在 `.env` 中提供供应商环境变量。
 
-“添加兼容接口”支持 OpenAI Completions、OpenAI Responses、Anthropic Messages、Google Generative AI、Pi Messages 等协议。模型可用性以实际请求结果为准。
+“添加兼容接口”支持 OpenAI Completions、OpenAI Responses、Anthropic Messages、Google Generative AI、AllWeave Messages 等协议。模型可用性以实际请求结果为准。
 
 ## 工作区与会话
 
-默认授权当前仓库。其他工作区通过 `.env` 的 `PI_CONSOLE_ROOTS` 加入绝对路径；Windows 用分号分隔。远程工作区已移除。
+默认授权当前仓库。其他工作区通过 `.env` 的 `ALLWEAVE_ROOTS` 加入绝对路径；Windows 用分号分隔。远程工作区已移除。
 
-SQLite 在 `.pi-console/console.sqlite` 保存会话元数据、事件、快照与审批；旧版 JSONL 会话只作为迁移来源读取。文件工具检查真实路径、符号链接和私有配置路径。
+SQLite 在 `.allweave/console.sqlite` 保存会话元数据、事件、快照与审批；旧版 JSONL 会话只作为迁移来源读取。文件工具检查真实路径、符号链接和私有配置路径。
 
 ## 聊天与内置浏览器
 
@@ -44,7 +44,7 @@ apps/server/              Fastify / WebSocket / SQLite
   src/persistence/        kernel store 适配与旧 JSONL 读取
 packages/protocol/        纯 DTO 与事件 reducer
 packages/kernel/          会话、循环、工具、上下文、存储、扩展
-packages/kernel-adapters/ 模型、MCP、codemode 适配
+packages/kernel-adapters/ 模型、MCP、沙箱、浏览器适配
 ```
 
 `npm run build:web` 生成生产前端。开发模式由 `npm run dev:web` 同时启动后端和 Vite；生产模式由 Fastify 从 8787 端口提供静态资源。

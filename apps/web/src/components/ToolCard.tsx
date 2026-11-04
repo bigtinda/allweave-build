@@ -1,5 +1,5 @@
+import type { ToolCall } from "@allweave/protocol";
 import { Chip } from "@mui/material";
-import type { ToolCall } from "@pi-console/protocol";
 import { SpringDisclosure } from "./SpringDisclosure.tsx";
 import { Globe, Terminal } from "./WorkbenchIcons.tsx";
 

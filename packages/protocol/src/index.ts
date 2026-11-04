@@ -97,25 +97,6 @@ export interface KernelInfo {
 	version: string;
 	integration: "in-process";
 }
-export interface PiPackageJob {
-	id: string;
-	source: string;
-	action: "install" | "remove";
-	status: "running" | "succeeded" | "failed";
-	output: string;
-	error?: string;
-}
-export interface PiConfiguredPackage {
-	source: string;
-	applied: boolean;
-	isDefault: boolean;
-}
-export interface DefaultPluginStatus {
-	source: string;
-	status: "pending" | "running" | "succeeded" | "failed";
-	output: string;
-	error?: string;
-}
 export interface StorageCategory {
 	id: string;
 	label: string;
@@ -270,9 +251,6 @@ export interface ResourceImportFile {
 export interface SkillImportResult {
 	name: string;
 	filesImported: number;
-}
-export interface PackageImportResult extends SkillImportResult {
-	source: string;
 }
 export type EventType =
 	| "session.started"

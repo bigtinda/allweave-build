@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { SqliteEventStore } from "../src/index.ts";
 
 function store(t: { after: (fn: () => void) => void }): SqliteEventStore {
-	const directory = mkdtempSync(join(tmpdir(), "pi-console-kernel-store-"));
+	const directory = mkdtempSync(join(tmpdir(), "allweave-kernel-store-"));
 	let opened: SqliteEventStore | undefined;
 	t.after(() => {
 		opened?.close();

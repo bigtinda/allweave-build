@@ -1,4 +1,4 @@
-import { applyEvent, type SessionDetail, type SocketMessage } from "@pi-console/protocol";
+import { applyEvent, type SessionDetail, type SocketMessage } from "@allweave/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "../../services/api.ts";

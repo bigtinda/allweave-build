@@ -1,7 +1,7 @@
 {
-	"name": "@earendil-works/pi-telemetry",
-	"version": "1.1.0",
-	"description": "Vendor-neutral telemetry contracts and typed schema utilities for pi",
+	"name": "@allweave/telemetry",
+	"version": "1.2.1",
+	"description": "AllWeave telemetry contracts and schema utilities",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -30,13 +30,8 @@
 		"tracing",
 		"observability"
 	],
-	"author": "Mario Zechner",
+	"author": "AllWeave Build contributors",
 	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/telemetry"
-	},
 	"engines": {
 		"node": ">=22.19.0"
 	},

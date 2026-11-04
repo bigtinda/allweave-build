@@ -1,15 +1,14 @@
 import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { NativeModelRuntime } from "@allweave/kernel-adapters";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
-import type { NativeModelRuntime } from "@pi-console/kernel-adapters";
 import Fastify from "fastify";
 import { z } from "zod";
 import { AgentService } from "../agent.ts";
 import { AppPluginManager } from "../app-plugins.ts";
 import { BrowserService } from "../browser.ts";
-import { PiPackageManager } from "../packages.ts";
 import { KernelSessionStore } from "../persistence/kernel-session-store.ts";
 import { ProviderManager } from "../providers.ts";
 import { HttpError, tokenMatches } from "../security.ts";
@@ -37,8 +36,8 @@ export interface AppOptions {
  * instance and the transport hooks, and registers the route modules.
  */
 export async function createApp(options: AppOptions) {
-	const desktop = process.env.PI_CONSOLE_DESKTOP === "1";
-	const desktopShutdownToken = process.env.PI_CONSOLE_SHUTDOWN_TOKEN ?? "";
+	const desktop = process.env.ALLWEAVE_DESKTOP === "1";
+	const desktopShutdownToken = process.env.ALLWEAVE_SHUTDOWN_TOKEN ?? "";
 	const allowedOrigins = new Set([`http://127.0.0.1:${options.port}`, "http://127.0.0.1:5173"]);
 	const allowedHosts = new Set([`127.0.0.1:${options.port}`, "127.0.0.1:5173"]);
 	const store = new ConsoleStore(options.directory);
@@ -51,7 +50,7 @@ export async function createApp(options: AppOptions) {
 	const pluginWorkspace = await workspaces.initialize();
 	sessions.reassignPluginDevelopmentSessions(pluginWorkspace.id);
 	sessions.expireApprovals();
-	const agentDirectory = resolve(process.env.PI_CODING_AGENT_DIR ?? join(options.directory, "agent"));
+	const agentDirectory = resolve(process.env.ALLWEAVE_AGENT_DIR ?? join(options.directory, "agent"));
 	const providers = new ProviderManager(agentDirectory);
 	const browser = new BrowserService([...allowedOrigins]);
 	const appPlugins = new AppPluginManager(options.directory);
@@ -65,7 +64,6 @@ export async function createApp(options: AppOptions) {
 		sessionStore: sessions,
 	});
 	providers.setBeforeChange(() => agents.prepareForProviderChange());
-	const packages = new PiPackageManager(agentDirectory, agentDirectory, () => agents.prepareForProviderChange());
 	const storage = new StorageManager(options.directory, agentDirectory, sessions, agents);
 	const app = Fastify({ logger: options.logger ?? true, bodyLimit: 2 * 1024 * 1024 });
 	await app.register(websocket, { options: { maxPayload: 4096 } });
@@ -89,8 +87,8 @@ export async function createApp(options: AppOptions) {
 				request.url === "/api/desktop/shutdown" &&
 				request.method === "POST" &&
 				tokenMatches(
-					typeof request.headers["x-pi-console-shutdown-token"] === "string"
-						? request.headers["x-pi-console-shutdown-token"]
+					typeof request.headers["x-allweave-shutdown-token"] === "string"
+						? request.headers["x-allweave-shutdown-token"]
 						: "",
 					desktopShutdownToken,
 				)
@@ -130,11 +128,11 @@ export async function createApp(options: AppOptions) {
 		credentialStorage: "auth.json and models.json in the workbench configuration directory",
 		approvals: "Every command, file mutation and custom tool requires confirmation",
 		isolation:
-			"Authorized file APIs; trusted extensions and approved commands run with host permissions. No sandbox.",
+			"Authorized file APIs; approved commands run with host permissions. Code-mode scripts run in an in-process QuickJS sandbox.",
 		authentication: "Server credentials and environment variables; never sent to the browser",
 	}));
 	registerProviderRoutes({ app, providers });
-	registerResourceRoutes({ app, packages, storage, agents, workspaces, agentDirectory });
+	registerResourceRoutes({ app, storage, agents, workspaces, agentDirectory });
 	registerAppPluginRoutes({ app, appPlugins, agents, workspaces, pluginWorkspace });
 	registerWorkspaceRoutes({ app, workspaces, agents });
 	registerBrowserRoutes({ app, browser, agents });
@@ -152,16 +150,14 @@ export async function createApp(options: AppOptions) {
 	}
 	app.addHook("onClose", async () => {
 		await agents.close();
-		await packages.close();
 		await providers.close();
 		sessions.close();
 		store.close();
 	});
-	void packages.ensureDefaultPackages();
 	return { app };
 }
 
 /** Authorized workspace roots of the workbench. */
 export function configuredRoots(fallback: string): string[] {
-	return process.env.PI_CONSOLE_ROOTS?.split(delimiter).filter(Boolean) ?? [fallback];
+	return process.env.ALLWEAVE_ROOTS?.split(delimiter).filter(Boolean) ?? [fallback];
 }

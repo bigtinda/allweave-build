@@ -37,7 +37,7 @@ test("Web features expose only their entry point and depend on shared UI and con
 				if (!specifier || !isStringLiteral(specifier)) continue;
 				const name = specifier.text;
 				if (!name.startsWith(".")) {
-					if (feature) assert.ok(!/^(node:|@earendil-works\/)/u.test(name), `${path}: ${name}`);
+					if (feature) assert.ok(!/^(node:|@allweave\/(?!protocol(?:$|\/)))/u.test(name), `${path}: ${name}`);
 					continue;
 				}
 				const target = resolve(dirname(file), name);

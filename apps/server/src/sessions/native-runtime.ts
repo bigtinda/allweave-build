@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { Api, Model } from "@earendil-works/pi-ai";
 import {
 	buildContext,
 	createBuiltinTools,
@@ -13,16 +12,17 @@ import {
 	type NativeTool,
 	type NativeToolCall,
 	runNativeLoop,
-} from "@pi-console/kernel";
+} from "@allweave/kernel";
 import {
 	createCodemodeNativeTool,
 	createMcpManager,
 	loadMcpConfig,
 	type McpManager,
+	ModelGateway,
 	modelOption,
 	type NativeModelRuntime,
-	PiAiGateway,
-} from "@pi-console/kernel-adapters";
+} from "@allweave/kernel-adapters";
+import type { Api, Model } from "@allweave/model";
 import type {
 	ChatMessage,
 	ChatToolCall,
@@ -34,14 +34,8 @@ import type {
 } from "../../../shared/src/protocol.ts";
 import { HttpError } from "../security.ts";
 import { createNativeWorkbenchTools } from "./native-tools.ts";
-import type { RuntimeEvent } from "./pi-events.ts";
-import type {
-	AgentRuntime,
-	AgentRuntimeInput,
-	BranchOutcome,
-	RuntimeModel,
-	RuntimeUsage,
-} from "./pi-runtime.adapter.ts";
+import type { AgentRuntime, AgentRuntimeInput, BranchOutcome, RuntimeModel, RuntimeUsage } from "./runtime.adapter.ts";
+import type { RuntimeEvent } from "./runtime-events.ts";
 
 function nativeHistory(messages: readonly ChatMessage[]): NativeMessage[] {
 	const history: NativeMessage[] = [];
@@ -140,7 +134,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 	}
 
 	private mcpTools(): Promise<McpManager | undefined> {
-		if (this.input.pluginDevelopment || process.env.KERNEL_MCP === "off") return Promise.resolve(undefined);
+		if (this.input.pluginDevelopment || process.env.ALLWEAVE_MCP === "off") return Promise.resolve(undefined);
 		const config = loadMcpConfig({ agentDir: this.agentDir, cwd: this.input.cwd, projectTrusted: true });
 		const key = JSON.stringify([...config.servers]);
 		if (this.mcp && key === this.mcpKey) return this.mcp;
@@ -175,7 +169,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 		const user: NativeMessage = { role: "user", text, images, timestamp: Date.now() };
 		const userMessage = chatMessage(user);
 		this.emit("update", { type: "message.completed", message: userMessage });
-		const gateway = new PiAiGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
+		const gateway = new ModelGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
 		const history = nativeHistory(this.messages);
 		this.messages.push(userMessage);
 		const mcp = await this.mcpTools();
@@ -202,7 +196,8 @@ export class NativeAgentRuntime implements AgentRuntime {
 			...(mcp?.tools ?? []),
 			...(this.input.extensions?.tools() ?? []),
 		];
-		this.tools = process.env.KERNEL_CODEMODE === "off" ? callable : [...callable, createCodemodeNativeTool(callable)];
+		this.tools =
+			process.env.ALLWEAVE_CODEMODE === "off" ? callable : [...callable, createCodemodeNativeTool(callable)];
 		const context = await buildContext({
 			cwd: this.input.cwd,
 			workspace: this.workspace,
@@ -212,7 +207,7 @@ export class NativeAgentRuntime implements AgentRuntime {
 			maxTokens: model.contextWindow,
 			estimateScale: this.estimateScale,
 			summarize: async (dropped) => {
-				const summarizer = new PiAiGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
+				const summarizer = new ModelGateway(this.modelRuntime, model, this.thinking, this.input.sessionId);
 				const summary = await summarizer.summarize(
 					dropped,
 					this.controller?.signal ?? new AbortController().signal,

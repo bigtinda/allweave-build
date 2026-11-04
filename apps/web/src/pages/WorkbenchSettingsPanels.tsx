@@ -1,8 +1,15 @@
+import type {
+	RunUsage,
+	SessionDetail,
+	SessionSummary,
+	SessionUsageRecord,
+	UsageSummary,
+	Workspace,
+} from "@allweave/protocol";
 import {
 	Alert,
 	Button,
 	Chip,
-	CircularProgress,
 	Dialog,
 	DialogActions,
 	DialogContent,
@@ -13,24 +20,13 @@ import {
 	Select,
 	TextField,
 } from "@mui/material";
-import type {
-	PiConfiguredPackage,
-	PiPackageJob,
-	RunUsage,
-	SessionDetail,
-	SessionSummary,
-	SessionUsageRecord,
-	UsageSummary,
-	Workspace,
-} from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { formatDuration } from "../../../shared/src/format.ts";
 import { BrowserPanel } from "../components/BrowserPanel.tsx";
 import { LoadingState } from "../components/LoadingState.tsx";
-import { ToolCard } from "../components/ToolCard.tsx";
-import { ChevronDown, Clock, Globe, PackageOpen, Restore, Trash2 } from "../components/WorkbenchIcons.tsx";
+import { ChevronDown, Clock, Globe, Restore, Trash2 } from "../components/WorkbenchIcons.tsx";
 import { api } from "../services/api.ts";
 
 function SettingsSectionHeading({ title, description, badge }: { title: string; description: string; badge?: string }) {
@@ -212,232 +208,6 @@ export function BrowserManagementPanel({
 					</div>
 				</div>
 			</section>
-		</section>
-	);
-}
-
-function isSubagentTool(name: string): boolean {
-	return /subagent|agent[_-](spawn|send|wait)|spawn[_-]agent/iu.test(name);
-}
-
-export function SubagentManagementPanel({
-	sessions,
-	sessionsLoading,
-}: {
-	sessions: SessionSummary[];
-	sessionsLoading: boolean;
-}) {
-	const client = useQueryClient();
-	const [selectedId, setSelectedId] = useState("");
-	const [jobId, setJobId] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const [confirmInstall, setConfirmInstall] = useState(false);
-	const activeSessions = sessions.filter((session) => !session.archivedAt && session.purpose !== "plugin-development");
-	const selected = activeSessions.find((session) => session.id === selectedId) ?? activeSessions[0];
-	const packages = useQuery({
-		queryKey: ["packages"],
-		queryFn: () => api<{ packages: PiConfiguredPackage[] }>("/packages"),
-	});
-	const defaults = useQuery({
-		queryKey: ["default-plugins"],
-		queryFn: () => api<Array<{ source: string; status: string; error?: string }>>("/packages/defaults"),
-	});
-	const detail = useQuery({
-		queryKey: ["session", selected?.id],
-		enabled: !!selected,
-		queryFn: () => api<SessionDetail>(`/sessions/${selected?.id}`),
-	});
-	const job = useQuery({
-		queryKey: ["package-job", jobId],
-		enabled: !!jobId,
-		queryFn: () => api<PiPackageJob>(`/packages/jobs/${jobId}`),
-		refetchInterval: (query) => (query.state.data?.status === "running" ? 800 : false),
-	});
-	useEffect(() => {
-		if (job.data?.status !== "succeeded") return;
-		void client.invalidateQueries({ queryKey: ["packages"] });
-		void client.invalidateQueries({ queryKey: ["default-plugins"] });
-	}, [client, job.data?.status]);
-	const configured = packages.data?.packages.find(
-		(item) => item.source.replace(/@[^/]+$/u, "") === "npm:pi-subagents",
-	);
-	const defaultStatus = defaults.data?.find((item) => item.source.replace(/@[^/]+$/u, "") === "npm:pi-subagents");
-	const installed = !!configured || defaultStatus?.status === "succeeded";
-	const toolCalls = (detail.data?.tools ?? []).filter((tool) => isSubagentTool(tool.name));
-	const toggleApplied = async () => {
-		if (!configured || busy) return;
-		setBusy(true);
-		setError("");
-		try {
-			await api<PiConfiguredPackage>(
-				"/packages/apply",
-				{ source: configured.source, applied: !configured.applied },
-				"POST",
-			);
-			await client.invalidateQueries({ queryKey: ["packages"] });
-			await client.invalidateQueries({ queryKey: ["session", selected?.id] });
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setBusy(false);
-		}
-	};
-	const install = async () => {
-		setBusy(true);
-		setError("");
-		try {
-			const created = await api<PiPackageJob>("/packages/install", { input: "npm:pi-subagents" }, "POST");
-			setJobId(created.id);
-			setConfirmInstall(false);
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setBusy(false);
-		}
-	};
-	const refreshPackages = () => {
-		void client.invalidateQueries({ queryKey: ["packages"] });
-		void client.invalidateQueries({ queryKey: ["default-plugins"] });
-	};
-	if (packages.isPending || defaults.isPending) return <LoadingState label="正在读取子智能体配置…" />;
-	return (
-		<section className="management-panel subagent-management" aria-label="子智能体管理">
-			<div className="management-panel-toolbar">
-				<div className="management-panel-icon">
-					<PackageOpen size={18} />
-				</div>
-				<div className="management-panel-copy">
-					<strong>pi-subagents</strong>
-					<span className="muted">管理委派工具的安装与启用，并查看各会话中的子任务记录。</span>
-				</div>
-				<Chip
-					size="small"
-					color={configured?.applied || defaultStatus?.status === "succeeded" ? "success" : "default"}
-					label={configured?.applied ? "已启用" : installed ? "已安装" : "未安装"}
-				/>
-			</div>
-			{packages.error && <Alert severity="error">{packages.error.message}</Alert>}
-			{defaults.error && <Alert severity="warning">无法读取内置插件安装状态：{defaults.error.message}</Alert>}
-			{error && (
-				<Alert severity="error" onClose={() => setError("")}>
-					{error}
-				</Alert>
-			)}
-			{defaultStatus?.error && <Alert severity="error">{defaultStatus.error}</Alert>}
-			<div className="management-setting-row">
-				<div>
-					<strong>{installed ? "插件状态" : "安装子智能体插件"}</strong>
-					<p className="muted">
-						{installed
-							? "扩展在下一次会话运行时加载；变更会刷新空闲会话。"
-							: "安装会从 npm 获取 pi-subagents，并在本机服务中加载。"}
-					</p>
-				</div>
-				{configured ? (
-					<Button disabled={busy || job.data?.status === "running"} onClick={() => void toggleApplied()}>
-						{busy ? <CircularProgress size={16} /> : configured.applied ? "停用" : "启用"}
-					</Button>
-				) : !installed ? (
-					<Button
-						variant="contained"
-						disabled={busy || job.data?.status === "running"}
-						onClick={() => setConfirmInstall(true)}
-					>
-						安装
-					</Button>
-				) : (
-					<Chip size="small" label="由内置插件管理" />
-				)}
-			</div>
-			{job.data && (
-				<div className="management-job" aria-live="polite">
-					<strong>
-						{job.data.status === "running"
-							? "正在安装子智能体插件…"
-							: job.data.status === "succeeded"
-								? "安装完成"
-								: "安装失败"}
-					</strong>
-					{job.data.error && <Alert severity="error">{job.data.error}</Alert>}
-					{job.data.output && <pre>{job.data.output}</pre>}
-					{job.data.status !== "running" && (
-						<Button size="small" onClick={refreshPackages}>
-							刷新插件状态
-						</Button>
-					)}
-				</div>
-			)}
-			<div className="management-tools-heading">
-				<div>
-					<strong>会话委派记录</strong>
-					<span className="muted">{toolCalls.length} 次工具调用</span>
-				</div>
-				{activeSessions.length > 0 && (
-					<SessionSelector sessions={activeSessions} value={selected?.id ?? ""} onChange={setSelectedId} />
-				)}
-			</div>
-			{sessionsLoading ? (
-				<LoadingState label="正在读取会话委派记录…" />
-			) : !selected ? (
-				<div className="management-empty">
-					<strong>尚无会话记录</strong>
-					<p>创建会话并启用 pi-subagents 后，这里会显示委派任务。</p>
-				</div>
-			) : detail.isPending ? (
-				<LoadingState label="正在读取会话工具记录…" />
-			) : detail.error ? (
-				<Alert severity="error">{detail.error.message}</Alert>
-			) : toolCalls.length ? (
-				<div className="subagent-call-list">
-					{[...toolCalls]
-						.reverse()
-						.slice(0, 12)
-						.map((tool) => (
-							<details key={tool.id} className="subagent-call">
-								<summary>
-									<span>{tool.name}</span>
-									<Chip
-										size="small"
-										label={
-											tool.status === "completed"
-												? "已完成"
-												: tool.status === "failed"
-													? "失败"
-													: tool.status === "approval"
-														? "待确认"
-														: "执行中"
-										}
-									/>
-									<time>{new Date(tool.startedAt).toLocaleString()}</time>
-								</summary>
-								<ToolCard tool={tool} />
-							</details>
-						))}
-				</div>
-			) : (
-				<div className="management-empty">
-					<strong>这个会话还没有委派任务</strong>
-					<p>子智能体工具调用完成后会显示在这里。</p>
-				</div>
-			)}
-			<Button component={NavLink} to="/settings/plugins" size="small">
-				打开插件管理
-			</Button>
-			<Dialog open={confirmInstall} onClose={() => !busy && setConfirmInstall(false)} maxWidth="xs" fullWidth>
-				<DialogTitle>安装 pi-subagents</DialogTitle>
-				<DialogContent>
-					<Alert severity="warning">该扩展会在本机服务进程权限下运行。请确认你信任 npm 上的 pi-subagents。</Alert>
-				</DialogContent>
-				<DialogActions>
-					<Button disabled={busy} onClick={() => setConfirmInstall(false)}>
-						取消
-					</Button>
-					<Button variant="contained" disabled={busy} onClick={() => void install()}>
-						{busy ? "正在安装…" : "确认安装"}
-					</Button>
-				</DialogActions>
-			</Dialog>
 		</section>
 	);
 }

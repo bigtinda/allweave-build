@@ -1,5 +1,5 @@
+import type { SessionDetail, ToolCall } from "@allweave/protocol";
 import { Alert, Collapse } from "@mui/material";
-import type { SessionDetail, ToolCall } from "@pi-console/protocol";
 import { useEffect, useState } from "react";
 import { formatDuration } from "../../../../shared/src/format.ts";
 import { ToolCard } from "../../components/ToolCard.tsx";

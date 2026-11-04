@@ -16,7 +16,7 @@ import {
 	isStringLiteral,
 } from "typescript/unstable/ast/is";
 import { API } from "typescript/unstable/sync";
-import { getPublicWorkspacePackages } from "./release-packages.mjs";
+import { findPackageDirectories } from "./package-workspaces.mjs";
 
 // Packages without tsconfig.build.json are checked against a synthetic config.
 const fallbackConfigName = "tsconfig.runtime-deps-fallback.json";
@@ -80,8 +80,8 @@ function checkSource(source, manifest) {
 	visit(source);
 }
 
-const packages = getPublicWorkspacePackages()
-	.map(({ directory }) => ({ directory, sourceDirectory: resolve(directory, "src") }))
+const packages = findPackageDirectories()
+	.map((directory) => ({ directory, sourceDirectory: resolve(directory, "src") }))
 	.filter(({ sourceDirectory }) => existsSync(sourceDirectory))
 	.map(({ directory, sourceDirectory }) => {
 		const configPath = resolve(directory, "tsconfig.build.json");

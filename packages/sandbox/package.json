@@ -1,0 +1,59 @@
+{
+	"name": "@allweave/sandbox",
+	"version": "1.2.1",
+	"description": "AllWeave sandboxed JavaScript runtime for tool-only code execution",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./declarations": {
+			"source": "./src/declarations.ts",
+			"types": "./dist/declarations.d.ts",
+			"import": "./dist/declarations.js"
+		},
+		"./source": {
+			"source": "./src/source.ts",
+			"types": "./dist/source.d.ts",
+			"import": "./dist/source.js"
+		},
+		"./worker": {
+			"source": "./src/runtime/worker.ts",
+			"types": "./dist/runtime/worker.d.ts",
+			"import": "./dist/runtime/worker.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsc -p tsconfig.build.json",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"keywords": [
+		"sandbox",
+		"quickjs",
+		"wasm",
+		"tools",
+		"codemode"
+	],
+	"author": "AllWeave Build contributors",
+	"license": "MIT",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"dependencies": {
+		"quickjs-wasi": "3.6.2"
+	},
+	"devDependencies": {
+		"shx": "0.3.4",
+		"vitest": "4.1.11"
+	}
+}

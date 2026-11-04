@@ -96,7 +96,7 @@ Push-Location $repoRoot
 $previousErrorAction = $ErrorActionPreference
 try {
 	$ErrorActionPreference = "Continue"
-	$npmOutput = @(& $npmCommand ls --parseable --omit=dev --all --workspace=@pi-console/server 2>&1)
+	$npmOutput = @(& $npmCommand ls --parseable --omit=dev --all --workspace=@allweave/server 2>&1)
 	$npmExitCode = $LASTEXITCODE
 } finally {
 	$ErrorActionPreference = $previousErrorAction

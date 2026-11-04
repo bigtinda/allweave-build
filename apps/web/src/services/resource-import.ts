@@ -1,8 +1,8 @@
-import type { ResourceImportFile } from "@pi-console/protocol";
+import type { ResourceImportFile } from "@allweave/protocol";
 
 const maximumFileCount = 300;
 const maximumTotalBytes = 7 * 1024 * 1024;
-const excludedSegments = new Set([".git", ".pi", ".pi-console", "node_modules", "__macosx"]);
+const excludedSegments = new Set([".git", ".pi", ".allweave", "node_modules", "__macosx"]);
 
 function isExcluded(path: string): boolean {
 	return path.split(/[\\/]/u).some((segment) => {

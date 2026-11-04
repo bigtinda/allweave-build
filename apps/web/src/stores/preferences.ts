@@ -39,7 +39,7 @@ export const usePreferences = create<Preferences>()(
 			clearWallpaper: () => set({ wallpaper: "", wallpaperAccentColor: "" }),
 		}),
 		{
-			name: "pi-console-preferences",
+			name: "allweave-preferences",
 			version: 1,
 			migrate: (persistedState): Partial<Preferences> => migrateBrandPreferences(persistedState),
 		},

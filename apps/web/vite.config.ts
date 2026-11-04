@@ -6,7 +6,7 @@ export default defineConfig({
 	plugins: [react()],
 	resolve: {
 		alias: {
-			"@pi-console/protocol": fileURLToPath(new URL("../../packages/protocol/src/index.ts", import.meta.url)),
+			"@allweave/protocol": fileURLToPath(new URL("../../packages/protocol/src/index.ts", import.meta.url)),
 		},
 	},
 	build: {

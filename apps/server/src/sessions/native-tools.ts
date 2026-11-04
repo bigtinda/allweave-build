@@ -1,4 +1,4 @@
-import type { NativeTool, NativeToolResult } from "@pi-console/kernel";
+import type { NativeTool, NativeToolResult } from "@allweave/kernel";
 import type { AppPluginManager } from "../app-plugins.ts";
 import { parseAppPluginManifest } from "../app-plugins.ts";
 import { createBrowserTool } from "../browser.ts";

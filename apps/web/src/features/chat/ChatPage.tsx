@@ -1,3 +1,4 @@
+import type { ChatMessage, ModelOption, SessionDetail, SessionSummary, Workspace } from "@allweave/protocol";
 import {
 	Alert,
 	Box,
@@ -15,7 +16,6 @@ import {
 	Tooltip,
 	useMediaQuery,
 } from "@mui/material";
-import type { ChatMessage, ModelOption, SessionDetail, SessionSummary, Workspace } from "@pi-console/protocol";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch as BranchIcon, Check, Copy, Undo2 } from "lucide-react";
 import type { CSSProperties, MutableRefObject } from "react";
@@ -944,7 +944,7 @@ export function ChatPage({
 											</Button>
 										}
 									>
-										会话状态未能保存。可以从 Pi transcript 重建这段会话后继续。
+										会话状态未能保存。可以从会话记录重建这段会话后继续。
 									</Alert>
 								)}
 								{session.error && session.messages.at(-1)?.error !== session.error && (

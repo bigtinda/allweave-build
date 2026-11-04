@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { join, type PlatformPath, posix, win32 } from "node:path";
-import { withPathMutation } from "@pi-console/kernel";
+import { withPathMutation } from "@allweave/kernel";
 import type { GitChange, GitChanges, GitDiff } from "../../shared/src/protocol.ts";
 import { HttpError, workspacePath } from "./security.ts";
 

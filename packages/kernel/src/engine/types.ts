@@ -1,6 +1,6 @@
 import type { ExtensionRegistry } from "../extensions/registry.ts";
 
-/** Minimal native model/tool contracts. They intentionally avoid Pi runtime types. */
+/** Minimal native model/tool contracts. They intentionally avoid runtime-specific types. */
 
 export interface NativeToolCall {
 	id: string;

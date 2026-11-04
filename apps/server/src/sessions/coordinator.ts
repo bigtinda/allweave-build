@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { KernelSession } from "@pi-console/kernel";
+import { KernelSession } from "@allweave/kernel";
 import type {
 	AccessMode,
 	ChatImage,
@@ -21,12 +21,12 @@ import { captureGitSnapshot, changedGitFiles, type GitSnapshot } from "../git.ts
 import type { ProviderManager } from "../providers.ts";
 import { HttpError } from "../security.ts";
 import type { WorkspaceAccess } from "../workspaces/workspace-access.ts";
+import { RuntimeEngine } from "./agent-engine.ts";
 import type { EventHub, SessionEventListener } from "./event-hub.ts";
 import type { EventProjector, SessionMutation } from "./event-projector.ts";
-import { PiEngine } from "./pi-engine.ts";
-import type { RuntimeEvent } from "./pi-events.ts";
-import type { AgentRuntime, RuntimeFactory } from "./pi-runtime.adapter.ts";
 import { finishRunUsage } from "./run-usage.ts";
+import type { AgentRuntime, RuntimeFactory } from "./runtime.adapter.ts";
+import type { RuntimeEvent } from "./runtime-events.ts";
 import { SessionRuntimeRegistry } from "./runtime-registry.ts";
 import { type ApprovalStore, ToolAuthorization } from "./tool-authorization.ts";
 
@@ -46,7 +46,7 @@ export interface SessionCoordinatorOptions {
  * Owns the running state of the sessions: one run per session, the conflict
  * rules, the run errors, the status transitions and the event publication.
  * The projection itself belongs to the EventProjector, the approvals to the
- * ToolAuthorization and the Pi session to the runtime registry.
+ * ToolAuthorization and the kernel session to the runtime registry.
  */
 export class SessionCoordinator {
 	private directory: string;
@@ -58,7 +58,7 @@ export class SessionCoordinator {
 	private appPlugins?: AppPluginManager;
 	private providers?: ProviderManager;
 	private runtimes: SessionRuntimeRegistry;
-	private engines = new Map<string, PiEngine>();
+	private engines = new Map<string, RuntimeEngine>();
 	private actors = new Map<string, KernelSession>();
 	private authorizer: ToolAuthorization;
 	private busy = new Set<string>();
@@ -199,10 +199,10 @@ export class SessionCoordinator {
 		});
 	}
 
-	private engine(id: string): PiEngine {
+	private engine(id: string): RuntimeEngine {
 		let engine = this.engines.get(id);
 		if (!engine) {
-			engine = new PiEngine(() => this.agent(id));
+			engine = new RuntimeEngine(() => this.agent(id));
 			this.engines.set(id, engine);
 		}
 		return engine;
@@ -518,7 +518,7 @@ export class SessionCoordinator {
 		await run;
 	}
 
-	/** Rebuild the workbench state from the Pi transcript after a failed projection. */
+	/** Rebuild the workbench state from the session transcript after a failed projection. */
 	async recover(id: string): Promise<SessionDetail> {
 		this.get(id);
 		if (this.busy.has(id) || this.updating.has(id) || this.refreshing.has(id))

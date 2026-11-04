@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { access, lstat, mkdir, open as openFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, type PlatformPath, posix, win32 } from "node:path";
-import { withPathMutation } from "@pi-console/kernel";
+import { withPathMutation } from "@allweave/kernel";
 import type { FileContent, FileEntry, Workspace } from "../../../shared/src/protocol.ts";
 import { type GitOperations, gitRoot, localGitOperations } from "../git.ts";
 import { contained, HttpError, workspacePath } from "../security.ts";
@@ -9,7 +9,7 @@ import { officePreview } from "./office-preview.ts";
 
 const maxEditableFileBytes = 1024 * 1024;
 const maxLargeFilePreviewBytes = 256 * 1024;
-const hiddenFileNames = new Set(["node_modules", ".git", ".pi", ".pi-console", ".env"]);
+const hiddenFileNames = new Set(["node_modules", ".git", ".pi", ".allweave", ".env"]);
 
 /** API-level file operations for one workspace. Paths are workspace-relative. */
 export interface WorkspaceFiles {
@@ -31,7 +31,7 @@ export interface WorkspaceToolPath {
 	paths: PlatformPath;
 }
 
-/** File operations used by Pi tools. Inputs keep the existing tool-relative semantics. */
+/** File operations used by host tools. Inputs keep the existing tool-relative semantics. */
 export interface WorkspaceTools {
 	check(path: string, allowMissing?: boolean, signal?: AbortSignal): Promise<WorkspaceToolPath>;
 	readBuffer(path: string, signal?: AbortSignal): Promise<Buffer>;

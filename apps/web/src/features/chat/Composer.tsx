@@ -510,6 +510,26 @@ export function Composer({
 							</Select>
 						</span>
 					</Tooltip>
+					{busy && text.trim() && (
+						<Button
+							variant="outlined"
+							size="small"
+							disabled={pending || !connected}
+							onClick={() => {
+								const message = text;
+								setPending(true);
+								void api(`/sessions/${session.id}/steer`, { text: message })
+									.then(() => {
+										setText("");
+										setFeedback("已插入，将在下一轮生效。");
+									})
+									.catch((error) => onError(error instanceof Error ? error.message : String(error)))
+									.finally(() => setPending(false));
+							}}
+						>
+							插入消息
+						</Button>
+					)}
 					{busy && (
 						<Button
 							className="send-button"
